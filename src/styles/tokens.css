@@ -1,0 +1,26 @@
+/* Design tokens lifted from the Bronner case guide HTML.
+   Keep this file as the single source of truth for colors/type. */
+
+:root {
+  --paper: #e9eae4;
+  --paper-2: #f4f5f0;
+  --paper-3: #fbfbf8;
+  --ink: #14161a;
+  --ink-2: #4c5158;
+  --ink-3: #767c83;
+  --rule: #c7cac1;
+  --rule-soft: #d8dad2;
+  --four: #17565a;
+  --four-soft: #dce7e5;
+  --two: #8c3226;
+  --two-soft: #f0dfda;
+  --gold: #9c7a22;
+  --gold-soft: #efe6cc;
+  --hit: #ffe9a8;
+  --rail: 260px;
+  --maxw: 1500px;
+  --read: 72ch;
+  --font-display: 'Bricolage Grotesque', 'Helvetica Neue', Arial, sans-serif;
+  --font-body: 'Newsreader', Georgia, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}

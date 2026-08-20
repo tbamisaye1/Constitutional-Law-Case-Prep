@@ -1,0 +1,1134 @@
+/* Shell + interactive workspace styles.
+   Tokens stay in tokens.css. Open-source pieces (Radix, cmdk, TipTap)
+   are unstyled by default; we paint them with paper/ink so it does not
+   look like a purple AI dashboard. */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--ink);
+  color: var(--paper-2);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  height: 58px;
+  border-bottom: 1px solid #000;
+}
+
+.topbar .brand {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar .brand span {
+  color: #8e969c;
+  font-weight: 400;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #363b41;
+  background: #22262b;
+  color: #dde1e4;
+  cursor: pointer;
+}
+
+.icon-btn.danger {
+  background: transparent;
+  border-color: var(--rule);
+  color: var(--ink-3);
+}
+
+.icon-btn.danger:hover {
+  color: var(--two);
+  border-color: var(--two);
+}
+
+.searchbtn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: #22262b;
+  border: 1px solid #363b41;
+  color: #aeb5bb;
+  font-size: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  min-width: 150px;
+}
+
+.searchbtn kbd {
+  margin-left: auto;
+  background: #14161a;
+  border: 1px solid #3c4249;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  color: #8e969c;
+}
+
+.shell-body {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  min-height: calc(100vh - 58px);
+}
+
+.app-shell.rail-closed .shell-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.rail {
+  position: sticky;
+  top: 58px;
+  height: calc(100vh - 58px);
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.rail-scroll,
+.rail-viewport {
+  height: 100%;
+}
+
+.rail-viewport {
+  padding: 22px 14px 48px;
+}
+
+.rail-grp {
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 20px 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.rail-grp:first-child {
+  margin-top: 0;
+}
+
+.rail-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--ink-2);
+  font-size: 15px;
+  padding: 7px 10px;
+  border-left: 2px solid transparent;
+  line-height: 1.35;
+}
+
+.rail-link:hover {
+  color: var(--ink);
+  background: var(--paper-2);
+}
+
+.rail-link.on {
+  color: var(--ink);
+  border-left-color: var(--ink);
+  background: var(--paper-2);
+  font-weight: 500;
+}
+
+.rail-icon {
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+
+.rail-bar {
+  width: 6px;
+  padding: 2px;
+}
+
+.rail-thumb {
+  background: var(--rule);
+  border-radius: 4px;
+}
+
+.main {
+  padding: 28px 28px 100px;
+  min-width: 0;
+  background: var(--paper);
+}
+
+.workspace-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.workspace h1 {
+  font-size: clamp(28px, 4vw, 40px);
+  margin: 0 0 8px;
+}
+
+.lede {
+  color: var(--ink-2);
+  max-width: 66ch;
+  margin: 0;
+  font-size: 17px;
+}
+
+.btn-ink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ink);
+  color: var(--paper-2);
+  border: none;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  color: var(--ink-2);
+  margin-right: 6px;
+}
+
+.tag-q1 {
+  border-color: var(--four);
+  color: var(--four);
+  background: var(--four-soft);
+}
+
+.tag-q2 {
+  border-color: var(--two);
+  color: var(--two);
+  background: var(--two-soft);
+}
+
+.callout {
+  border-left: 4px solid var(--rule);
+  padding: 15px 18px;
+  margin: 22px 0;
+  background: var(--paper-2);
+}
+
+.callout-lab {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 7px;
+  color: var(--ink-3);
+}
+
+.callout-note {
+  border-left-color: var(--gold);
+  background: var(--gold-soft);
+}
+
+.callout-note .callout-lab {
+  color: var(--gold);
+}
+
+.callout-warn {
+  border-left-color: var(--two);
+  background: var(--two-soft);
+}
+
+.callout-warn .callout-lab {
+  color: var(--two);
+}
+
+.case-card {
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--rule);
+  padding: 18px 20px;
+  margin: 0 0 16px;
+}
+
+.case-card-q1 {
+  border-left-color: var(--four);
+}
+
+.case-card-q2 {
+  border-left-color: var(--two);
+}
+
+.cite {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.hero-tags {
+  margin-bottom: 10px;
+}
+
+.hero-title {
+  margin: 8px 0 10px;
+  max-width: 16ch;
+  font-size: clamp(32px, 5vw, 52px);
+}
+
+.hero-sub {
+  margin-bottom: 8px;
+  font-style: italic;
+}
+
+.section-title {
+  margin: 36px 0 14px;
+  font-size: 24px;
+}
+
+.qs {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr;
+  margin: 24px 0 0;
+}
+
+@media (min-width: 900px) {
+  .qs {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.qs > div {
+  border: 1px solid var(--ink);
+  padding: 18px 20px;
+  background: var(--paper-2);
+}
+
+.qs > div:first-child {
+  border-top: 4px solid var(--four);
+}
+
+.qs > div:last-child {
+  border-top: 4px solid var(--two);
+}
+
+.qs .n {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.quick-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 820px) {
+  .quick-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.quick-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--ink);
+  background: var(--paper-2);
+  padding: 16px 18px;
+  min-height: 120px;
+}
+
+.quick-card:hover {
+  background: var(--paper-3);
+}
+
+.quick-card-top {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-2);
+}
+
+.quick-card strong {
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+
+.quick-card span {
+  color: var(--ink-2);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.placeholder-box {
+  border: 1px dashed var(--rule);
+  padding: 28px 22px;
+  background: var(--paper-3);
+  color: var(--ink-2);
+  margin-top: 20px;
+}
+
+/* Radix tabs */
+.ui-tabs-list {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.ui-tabs-trigger {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-3);
+  padding: 10px 14px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.ui-tabs-trigger[data-state='active'] {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+.ui-tabs-content {
+  outline: none;
+}
+
+/* Notes split (legacy 2-pane) + OneNote 3-pane */
+.notes-split,
+.library-split,
+.args-split {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--rule);
+  background: var(--paper-2);
+  min-height: 520px;
+}
+
+.notes-split {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
+/* OneNote three-pane shell */
+.onenote-shell {
+  display: grid;
+  grid-template-columns: 240px 220px minmax(0, 1fr);
+  border: 1px solid var(--rule);
+  background: var(--paper-2);
+  min-height: 560px;
+}
+
+.onenote-pane-label {
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.onenote-tree {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+  min-width: 0;
+}
+
+.onenote-tree-body {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 0;
+}
+
+.onenote-tree-actions {
+  border-top: 1px solid var(--rule-soft);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.onenote-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: var(--ink-2);
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  padding: 7px 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.onenote-add:hover {
+  background: var(--paper-2);
+  color: var(--ink);
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 8px;
+  height: 32px;
+  cursor: pointer;
+  color: var(--ink-2);
+  font-size: 14.5px;
+}
+
+.tree-row:hover {
+  background: var(--paper-2);
+  color: var(--ink);
+}
+
+.tree-row.on {
+  background: var(--paper-2);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.tree-chevron {
+  border: none;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.section-tab {
+  width: 4px;
+  height: 18px;
+  border-radius: 1px;
+  flex: 0 0 auto;
+  margin-left: 4px;
+}
+
+.tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onenote-pages {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+  min-width: 0;
+}
+
+.onenote-pages-scroll,
+.onenote-pages-viewport {
+  flex: 1;
+  height: 100%;
+  min-height: 400px;
+}
+
+.onenote-pages-viewport {
+  padding: 6px 0 8px;
+}
+
+.onenote-empty {
+  padding: 16px 14px;
+  color: var(--ink-3);
+  font-size: 14px;
+  margin: 0;
+}
+
+.page-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid var(--rule-soft);
+  background: transparent;
+  padding: 12px 14px;
+  cursor: pointer;
+  color: inherit;
+}
+
+.page-card:hover {
+  background: var(--paper-2);
+}
+
+.page-card.on {
+  background: var(--paper-2);
+  box-shadow: inset 3px 0 0 var(--ink);
+}
+
+.page-card strong {
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+.page-preview {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.page-add {
+  border-top: 1px solid var(--rule-soft);
+}
+
+.onenote-canvas {
+  padding: 14px 16px 24px;
+  min-width: 0;
+  background: var(--paper-2);
+}
+
+.library-split {
+  grid-template-columns: 300px minmax(0, 1fr);
+  margin-top: 8px;
+}
+
+.args-split {
+  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
+}
+
+.notes-list {
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.notes-list-scroll,
+.notes-list-viewport {
+  height: 100%;
+  min-height: 520px;
+}
+
+.notes-list-viewport {
+  padding: 14px 10px 28px;
+}
+
+.notes-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--ink-2);
+  padding: 8px 10px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+
+.notes-item:hover {
+  background: var(--paper-2);
+  color: var(--ink);
+}
+
+.notes-item.on {
+  background: var(--paper-2);
+  color: var(--ink);
+  border-left-color: var(--ink);
+  font-weight: 500;
+}
+
+.notes-main,
+.library-detail {
+  padding: 16px 18px 28px;
+  min-width: 0;
+}
+
+.notes-title-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin-bottom: 10px;
+  padding: 0;
+}
+
+.notes-title-input:focus {
+  outline: none;
+}
+
+.case-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid var(--rule-soft);
+  background: var(--paper);
+  padding: 14px 14px;
+  cursor: pointer;
+  color: inherit;
+}
+
+.case-row:hover {
+  background: var(--paper-2);
+}
+
+.case-row.on {
+  background: var(--paper-2);
+  box-shadow: inset 3px 0 0 var(--ink);
+}
+
+.case-row-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.case-row strong {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.library-list {
+  border-right: 1px solid var(--rule);
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.args-outline {
+  list-style: none;
+  margin: 0;
+  padding: 12px;
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.args-row {
+  display: grid;
+  grid-template-columns: 16px 24px minmax(0, 1fr) 34px;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.args-grip {
+  color: var(--ink-3);
+}
+
+.args-num {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.args-input {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 16px;
+  padding: 8px 8px;
+  color: var(--ink);
+}
+
+.args-input:focus {
+  outline: none;
+  border-color: var(--rule);
+  background: var(--paper-2);
+}
+
+/* TipTap */
+.note-editor {
+  border: 1px solid var(--rule);
+  background: var(--paper-3);
+}
+
+.note-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--rule-soft);
+  background: var(--paper-2);
+}
+
+.note-toolbar-gap {
+  flex: 1;
+}
+
+.note-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.note-tool:hover {
+  background: var(--paper);
+  border-color: var(--rule);
+}
+
+.note-tool.on {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+  color: var(--ink);
+}
+
+.note-prose {
+  min-height: 280px;
+  padding: 18px 20px 28px;
+  outline: none;
+  font-size: 17px;
+  line-height: 1.62;
+  max-width: none;
+}
+
+.note-prose p {
+  margin: 0 0 0.85em;
+  max-width: none;
+}
+
+.note-prose h2 {
+  font-size: 22px;
+  margin: 0.4em 0 0.5em;
+}
+
+.note-prose ul,
+.note-prose ol {
+  padding-left: 1.3em;
+  margin: 0 0 0.85em;
+}
+
+.note-prose blockquote {
+  margin: 0 0 0.85em;
+  padding-left: 14px;
+  border-left: 3px solid var(--gold);
+  color: var(--ink-2);
+}
+
+.note-prose p.is-editor-empty:first-child::before {
+  color: var(--ink-3);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* cmdk */
+.cmdk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(20, 22, 26, 0.55);
+  backdrop-filter: blur(3px);
+  padding: 12vh 16px 16px;
+}
+
+.cmdk-panel {
+  max-width: 640px;
+  margin: 0 auto;
+  background: var(--paper-2);
+  border: 1px solid var(--ink);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.cmdk-panel [cmdk-input] {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  padding: 18px 20px;
+  font-size: 18px;
+  font-family: var(--font-body);
+  background: transparent;
+  color: var(--ink);
+}
+
+.cmdk-panel [cmdk-input]:focus {
+  outline: none;
+}
+
+.cmdk-panel [cmdk-list] {
+  max-height: 360px;
+  overflow: auto;
+  padding: 8px 0 12px;
+}
+
+.cmdk-panel [cmdk-group-heading] {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 10px 18px 6px;
+}
+
+.cmdk-panel [cmdk-item] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.cmdk-panel [cmdk-item][data-selected='true'] {
+  background: var(--gold-soft);
+}
+
+.cmdk-muted {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.cmdk-panel [cmdk-empty] {
+  padding: 24px 18px;
+  color: var(--ink-3);
+}
+
+/* Upload */
+.dropzone {
+  border: 1px dashed var(--ink-2);
+  background: var(--paper-2);
+  padding: 42px 24px;
+  text-align: center;
+  color: var(--ink-2);
+}
+
+.dropzone.on {
+  border-color: var(--four);
+  background: var(--four-soft);
+  color: var(--ink);
+}
+
+.linkish {
+  color: var(--four);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.drop-hint {
+  font-size: 11px;
+  margin-top: 8px;
+  color: var(--ink-3);
+}
+
+.file-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  border: 1px solid var(--rule);
+}
+
+.file-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule-soft);
+  max-width: none;
+}
+
+.file-list li:last-child {
+  border-bottom: none;
+}
+
+/* Agent bits kept from earlier */
+.grounding-badge {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+}
+
+.grounding-grounded {
+  border-color: var(--four);
+  color: var(--four);
+  background: var(--four-soft);
+}
+
+.grounding-partial {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: var(--gold-soft);
+}
+
+.grounding-abstained,
+.grounding-no_evidence {
+  border-color: var(--ink-3);
+  color: var(--ink-2);
+  background: var(--paper-3);
+}
+
+.grounding-unverified {
+  border-color: var(--two);
+  color: var(--two);
+  background: var(--two-soft);
+}
+
+.agent-form {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 720px;
+}
+
+.agent-label {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.agent-form textarea {
+  font-family: var(--font-body);
+  font-size: 16.5px;
+  padding: 14px 16px;
+  border: 1px solid var(--ink);
+  background: var(--paper-2);
+  color: var(--ink);
+  resize: vertical;
+}
+
+.agent-ask {
+  align-self: flex-start;
+  background: var(--ink);
+  color: var(--paper-2);
+  border: none;
+  padding: 10px 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.agent-result {
+  margin-top: 28px;
+  border: 1px solid var(--rule);
+  background: var(--paper-2);
+  padding: 18px 20px;
+  max-width: 720px;
+}
+
+.agent-result-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.agent-meta {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.agent-notes {
+  color: var(--ink-2);
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+
+.agent-reply {
+  white-space: pre-wrap;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.agent-evidence {
+  margin-top: 18px;
+  border-top: 1px solid var(--rule-soft);
+  padding-top: 12px;
+}
+
+.agent-evidence h3 {
+  font-size: 18px;
+  margin: 0 0 10px;
+}
+
+.agent-evidence li {
+  margin-bottom: 12px;
+  max-width: none;
+}
+
+@media (max-width: 980px) {
+  .notes-split,
+  .library-split,
+  .args-split,
+  .onenote-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .notes-list,
+  .library-list,
+  .args-outline,
+  .onenote-tree,
+  .onenote-pages {
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+    max-height: 240px;
+  }
+
+  .onenote-tree-body {
+    max-height: 200px;
+    overflow: auto;
+  }
+
+  .shell-body {
+    grid-template-columns: 1fr;
+  }
+
+  .rail {
+    position: static;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .search-lbl {
+    display: none;
+  }
+}
