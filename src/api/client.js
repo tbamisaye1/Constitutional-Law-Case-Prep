@@ -38,8 +38,17 @@ export async function ingestPdf(file) {
     body: form,
   });
   if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(detail || `ingest failed: ${res.status}`);
+    const text = await res.text();
+    let detail = text || `ingest failed: ${res.status}`;
+    try {
+      const body = JSON.parse(text);
+      if (body.detail) {
+        detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+      }
+    } catch {
+      /* use raw text */
+    }
+    throw new Error(detail);
   }
   return res.json();
 }

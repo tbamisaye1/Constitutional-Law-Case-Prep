@@ -24,8 +24,11 @@ export function UploadPage() {
   const [hover, setHover] = useState(false)
   const [files, setFiles] = useState([])
   const [busy, setBusy] = useState(false)
+  const hostedDemo =
+    typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app')
 
   async function onFiles(list) {
+    if (hostedDemo) return
     const picked = Array.from(list || [])
     if (!picked.length) return
 
@@ -70,14 +73,28 @@ export function UploadPage() {
         <div>
           <h1>Upload</h1>
           <p className="lede">
-            Drop precedent PDFs here. Each file is sent to the backend, chunked, and added to the
-            corpus Ask AI searches. Run the FastAPI server locally for uploads to persist.
+            {hostedDemo
+              ? 'PDF upload is disabled on the hosted demo. Run the app locally to index new cases.'
+              : 'Drop precedent PDFs here. Each file is chunked and added to the corpus Ask AI searches.'}
           </p>
         </div>
       </header>
 
+      {hostedDemo ? (
+        <Callout label="Hosted demo" tone="warn">
+          <p style={{ margin: 0 }}>
+            <strong>case-law-agent.vercel.app</strong> cannot save uploads (read-only server). For
+            Katz-style tests, run locally: backend{' '}
+            <span className="mono">uvicorn app.main:app --port 8000</span>, frontend{' '}
+            <span className="mono">npm run dev</span>, then open{' '}
+            <span className="mono">http://localhost:5173/upload</span>.
+          </p>
+        </Callout>
+      ) : null}
+
       <div
         className={hover ? 'dropzone on' : 'dropzone'}
+        style={hostedDemo ? { opacity: 0.45, pointerEvents: 'none' } : undefined}
         onDragOver={(e) => {
           e.preventDefault()
           setHover(true)
@@ -133,12 +150,12 @@ export function UploadPage() {
             that case.
           </p>
         </Callout>
-      ) : (
-        <Callout label="Local only" tone="note">
+      ) : hostedDemo ? null : (
+        <Callout label="Local dev" tone="note">
           <p style={{ margin: 0 }}>
-            PDF upload needs the backend running locally (
-            <span className="mono">uvicorn app.main:app --port 8000</span>
-            ). The hosted demo cannot persist new uploads yet.
+            Start the FastAPI backend on port 8000 before uploading (
+            <span className="mono">uvicorn app.main:app --reload --port 8000</span>
+            ).
           </p>
         </Callout>
       )}
