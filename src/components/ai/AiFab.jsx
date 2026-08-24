@@ -29,7 +29,7 @@ export function AiFab() {
       onClick={() =>
         openBubble(
           { surface: surfaceFromPath(), selection: '', case_id: null, page: null, side: 'both' },
-          { top: window.innerHeight - 380, left: window.innerWidth - 380 }
+          { top: 0, left: 0 }
         )
       }
     >

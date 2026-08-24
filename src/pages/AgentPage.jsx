@@ -5,7 +5,7 @@ import { chatPrep } from '../api/client'
 
 /**
  * Optional agent room with visible grounding status.
- * Empty corpus → abstain (good). Never treat a fluent reply as gospel for OA.
+ * Main flow: floating Ask AI bubble on every page (see AiSelectionBubble).
  */
 export function AgentPage() {
   const [question, setQuestion] = useState('')
@@ -33,8 +33,8 @@ export function AgentPage() {
     <section>
       <h1 style={{ fontSize: 'clamp(28px, 4vw, 40px)', marginBottom: 8 }}>Agent (optional)</h1>
       <p style={{ color: 'var(--ink-2)', maxWidth: '66ch' }}>
-        While reading, highlight text and use the <strong>Ask AI</strong> bubble (or the floating
-        button). This page is the deeper chat room with grounding status when the backend is running.
+        Use the floating <strong>Ask AI</strong> button on any page for sample questions and grounded
+        answers. This page is a full-width chat room with the same backend.
       </p>
 
       <Callout label="Verify before OA" tone="note">
@@ -53,7 +53,7 @@ export function AgentPage() {
           rows={4}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="e.g. What did Tuggle hold about pole-camera duration? Quote the opinion."
+          placeholder="Ask in plain English — or use the floating Ask AI button for sample prompts."
         />
         <button type="submit" className="agent-ask" disabled={loading}>
           {loading ? 'Running…' : 'Ask (grounded)'}

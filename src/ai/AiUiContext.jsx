@@ -1,9 +1,11 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { chatPrep } from '../api/client'
+import { groundingStatusFromReply } from './samplePrompts'
 import { MATTER } from '../data/seed'
 
 /**
  * Selection context for the Ask AI bubble.
- * askAi returns a stub until the backend chat route is wired.
+ * Calls POST /chat (retrieve → reason → verify) when the backend is running.
  */
 
 const AiUiContext = createContext(null)
@@ -40,39 +42,47 @@ export function AiUiProvider({ children }) {
     setLoading(false)
   }, [])
 
-  const askAi = useCallback(async () => {
-    const user_prompt = prompt.trim()
-    if (!user_prompt) return
-    setLoading(true)
-    setReply(null)
+  const runPrompt = useCallback(
+    async (userPrompt) => {
+      const user_prompt = (userPrompt ?? prompt).trim()
+      if (!user_prompt) return
+      setPrompt(user_prompt)
+      setLoading(true)
+      setReply(null)
 
-    // Stub until LangGraph / POST /ai/selection is wired.
-    await new Promise((r) => setTimeout(r, 600))
-    const payload = {
-      ...ctx,
-      user_prompt,
-    }
-    setReply({
-      grounding_status: 'unverified',
-      stub: true,
-      text:
-        'AI backend is not connected yet. When we build it, this bubble will send SelectionContext to the agent (retrieve → reason → verify) and show a grounded answer here.\n\n' +
-        `Surface: ${payload.surface}\n` +
-        `Side: ${payload.side}\n` +
-        (payload.case_id ? `Case: ${payload.case_id}\n` : '') +
-        (payload.page != null ? `Page/section: ${payload.page}\n` : '') +
-        (payload.selection
-          ? `Selection: “${payload.selection.slice(0, 180)}${payload.selection.length > 180 ? '…' : ''}”\n`
-          : '') +
-        `Your prompt: ${user_prompt}`,
-      proposed_actions: [
-        { id: 'save_annotation', label: 'Save as annotation', enabled: false },
-        { id: 'append_pet', label: 'Add to petitioner notes', enabled: false },
-        { id: 'append_resp', label: 'Add to respondent notes', enabled: false },
-      ],
-    })
+      try {
+        const data = await chatPrep(user_prompt, ctx.matter_id || MATTER.id)
+        const status = groundingStatusFromReply(data.grounding_status, data.reply)
+        setReply({
+          grounding_status: status,
+          text: data.reply,
+          grounding_notes: data.grounding_notes,
+          evidence: data.evidence,
+          claims_verified: data.claims_verified,
+          claims_total: data.claims_total,
+        })
+      } catch (err) {
+        setReply({
+          grounding_status: 'no_evidence',
+          text:
+            `Could not reach the agent backend.\n\n${err.message || 'Request failed'}\n\n` +
+            'Start it with: uvicorn app.main:app --reload --port 8000\n' +
+            'Then: python demo/bootstrap_moot_index.py (once, for indexed cases)',
+        })
+      } finally {
+        setLoading(false)
+      }
+    },
+    [ctx.matter_id, prompt]
+  )
+
+  const askAi = useCallback(() => runPrompt(prompt), [prompt, runPrompt])
+
+  const clearReply = useCallback(() => {
+    setReply(null)
     setLoading(false)
-  }, [ctx, prompt])
+    setPrompt('')
+  }, [])
 
   const value = useMemo(
     () => ({
@@ -87,8 +97,10 @@ export function AiUiProvider({ children }) {
       openBubble,
       closeBubble,
       askAi,
+      runPrompt,
+      clearReply,
     }),
-    [open, anchor, ctx, prompt, loading, reply, openBubble, closeBubble, askAi]
+    [open, anchor, ctx, prompt, loading, reply, openBubble, closeBubble, askAi, runPrompt, clearReply]
   )
 
   return <AiUiContext.Provider value={value}>{children}</AiUiContext.Provider>
