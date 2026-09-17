@@ -33,7 +33,8 @@ export function CaseAtBarPanel({ lib }) {
       <div className="case-at-bar-intro">
         <p>
           Upload the record (or opinion excerpt) you are arguing from. Select text to highlight,
-          add page notes, and keep a free-form working page beside it.
+          add page notes, and keep a free-form working page beside it. The same PDF is indexed for
+          Ask AI, so the agent can cite this Instant Case alongside other corpus sources.
         </p>
         <div className="view-toggle case-at-bar-modes" role="tablist" aria-label="Case at bar mode">
           <button

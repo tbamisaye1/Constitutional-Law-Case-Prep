@@ -57,11 +57,15 @@ export async function listMatters() {
   return res.json();
 }
 
-export async function chatPrep(message, matterId = "bronner-2026") {
+export async function chatPrep(message, matterId = "bronner-2026", groundingSource = "documents") {
   const res = await fetch(`${BASE}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, matter_id: matterId }),
+    body: JSON.stringify({
+      message,
+      matter_id: matterId,
+      grounding_source: groundingSource === "web_plus" ? "web_plus" : "documents",
+    }),
   });
   if (!res.ok) {
     const detail = await res.text();

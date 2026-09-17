@@ -1,6 +1,6 @@
 /**
  * Sample prompts for the floating Ask AI bubble.
- * Framed around uploaded / indexed articles only.
+ * Two modes: documents (corpus only) and web_plus (corpus + web search).
  */
 
 export const SAMPLE_PROMPT_GROUPS = [
@@ -33,6 +33,27 @@ export const SAMPLE_PROMPT_GROUPS = [
   },
 ]
 
+/** Web mode samples: corpus when useful, otherwise live search. */
+export const WEB_SAMPLE_PROMPT_GROUPS = [
+  {
+    label: 'Outside the PDFs (web search)',
+    hint: 'Definitions and background the index will not have',
+    questions: [
+      'What is a radiological dirty bomb?',
+      'In plain English, what does "exigent circumstances" mean in Fourth Amendment cases?',
+      'What is the mosaic theory of the Fourth Amendment?',
+    ],
+  },
+  {
+    label: 'Corpus first, web if needed',
+    hint: 'Prefers uploaded articles; searches when the corpus is thin',
+    questions: [
+      'Using my uploaded articles if they help, explain whether GPS tracking needs a warrant — and define GPS tracking if the PDFs do not.',
+      'Summarize what my indexed articles say about Carpenter, then briefly note any later Supreme Court cases that discuss it.',
+    ],
+  },
+]
+
 /** Moot-prep shortcuts when the user has highlighted text from an uploaded file. */
 export const SELECTION_QUICK = [
   {
@@ -49,6 +70,25 @@ export const SELECTION_QUICK = [
     id: 'cite',
     label: 'Which article?',
     prompt: 'Which uploaded article(s) does this passage come from? Cite source and page if available.',
+  },
+]
+
+export const WEB_SELECTION_QUICK = [
+  {
+    id: 'explain',
+    label: 'Explain',
+    prompt:
+      'Explain this passage in plain language. Prefer the uploaded articles; use web search only for terms the PDFs do not define.',
+  },
+  {
+    id: 'define',
+    label: 'Define terms',
+    prompt: 'Define any technical or legal terms in this passage. Use web search if the uploaded articles do not define them.',
+  },
+  {
+    id: 'cite',
+    label: 'Sources',
+    prompt: 'Which uploaded articles or web pages support this? Cite PDF source/page or title + URL.',
   },
 ]
 

@@ -2458,6 +2458,44 @@
   font-weight: 600;
 }
 
+.ai-mode-row {
+  display: flex;
+  border: 1px solid var(--rule);
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+.ai-mode-row button {
+  flex: 1;
+  border: none;
+  background: var(--paper);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 7px 8px;
+  cursor: pointer;
+}
+
+.ai-mode-row button + button {
+  border-left: 1px solid var(--rule);
+}
+
+.ai-mode-row button.on {
+  background: var(--ink);
+  color: var(--paper-2);
+}
+
+.ai-ev-url {
+  display: block;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ink-2);
+  word-break: break-all;
+  margin: 2px 0 6px;
+}
+
 .ai-bubble-scroll {
   flex: 1 1 0;
   min-height: 0;

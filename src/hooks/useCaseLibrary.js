@@ -11,6 +11,8 @@ import {
 import {
   deleteDocument,
   downloadDocument,
+  ingestPdf,
+  removeIngestSource,
   syncChanges,
   uploadDocument,
 } from '../api/client'
@@ -320,9 +322,13 @@ async function hydrateBlobs() {
     }
   }
 
-  if (!added) return
-  memory = { ...memory, blobs: next }
-  emit()
+  if (added) {
+    memory = { ...memory, blobs: next }
+    emit()
+  }
+  // Instant Case / library PDFs must also live in FAISS for Ask AI, including
+  // ones attached before this wiring existed.
+  void indexPendingAskAiFiles()
 }
 
 /**
@@ -362,6 +368,55 @@ async function uploadFileBytes(meta, blob) {
     setMemory({
       saveError: `${meta.name} is saved in this browser but not on the backend. ${error?.message || ''}`.trim(),
     })
+  }
+}
+
+/**
+ * Chunk a library / Case-at-bar PDF into the FAISS index Ask AI searches.
+ *
+ * Storage (Blob / IndexedDB) and retrieval (FAISS) are different paths. Without
+ * this call, Instant Case PDFs are readable but invisible to Ask AI.
+ *
+ * @param {object} meta The filesMeta row.
+ * @param {Blob} blob PDF bytes.
+ */
+async function indexFileForAskAi(meta, blob) {
+  if (!blob || meta.askAiIndexed) return
+
+  try {
+    const file = new File([blob], meta.name, {
+      type: blob.type || 'application/pdf',
+    })
+    await ingestPdf(file)
+    memory = {
+      ...memory,
+      store: {
+        ...memory.store,
+        filesMeta: memory.store.filesMeta.map((file) =>
+          file.id === meta.id ? { ...file, askAiIndexed: true } : file
+        ),
+      },
+    }
+    emit()
+    persistSoon()
+  } catch (error) {
+    console.warn(`Could not index ${meta.name} for Ask AI`, error)
+    setMemory({
+      saveError: `${meta.name} is readable, but Ask AI could not index it yet. ${error?.message || ''}`.trim(),
+    })
+  }
+}
+
+/**
+ * One-shot: index any already-attached PDFs that never made it into FAISS
+ * (e.g. Instant Case uploads from before this wiring).
+ */
+async function indexPendingAskAiFiles() {
+  for (const meta of memory.store.filesMeta) {
+    if (meta.askAiIndexed) continue
+    const blob = memory.blobs[meta.id]
+    if (!blob) continue
+    await indexFileForAskAi(meta, blob)
   }
 }
 
@@ -490,10 +545,14 @@ export function useCaseLibrary() {
     // cross-device access, not the file.
     for (const file of added) {
       await uploadFileBytes(file, blobPatch[file.id])
+      // Same idea for Ask AI: readable first, then chunk into FAISS so Instant
+      // Case / library PDFs are searchable without a second Upload-page drop.
+      await indexFileForAskAi(file, blobPatch[file.id])
     }
   }, [])
 
   const removeFile = useCallback(async (fileId) => {
+    const meta = memory.store.filesMeta.find((f) => f.id === fileId)
     await idbDeleteFile(fileId)
     const blobs = { ...memory.blobs }
     delete blobs[fileId]
@@ -515,6 +574,14 @@ export function useCaseLibrary() {
         // The tombstone still syncs through /sync, so the other device will
         // drop the file. Only the stored bytes may linger.
         console.warn('Could not delete the stored PDF on the backend', error)
+      }
+    }
+
+    if (meta?.askAiIndexed && meta?.name) {
+      try {
+        await removeIngestSource(meta.name)
+      } catch (error) {
+        console.warn(`Could not remove ${meta.name} from the Ask AI index`, error)
       }
     }
   }, [])

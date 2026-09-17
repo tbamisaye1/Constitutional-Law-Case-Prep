@@ -6,6 +6,10 @@ import { MATTER } from '../data/seed'
 /**
  * Selection context for the Ask AI bubble.
  * Calls POST /chat (retrieve → reason → verify) when the backend is running.
+ *
+ * grounding_source:
+ *   documents — FAISS RAG only (default)
+ *   web_plus  — uploaded articles + OpenRouter web search
  */
 
 const AiUiContext = createContext(null)
@@ -21,6 +25,7 @@ export function AiUiProvider({ children }) {
     page: null,
     side: 'both',
   })
+  const [groundingSource, setGroundingSource] = useState('documents')
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
   const [reply, setReply] = useState(null)
@@ -42,6 +47,13 @@ export function AiUiProvider({ children }) {
     setLoading(false)
   }, [])
 
+  const switchGroundingSource = useCallback((next) => {
+    const mode = next === 'web_plus' ? 'web_plus' : 'documents'
+    setGroundingSource(mode)
+    setReply(null)
+    setLoading(false)
+  }, [])
+
   const runPrompt = useCallback(
     async (userPrompt) => {
       const user_prompt = (userPrompt ?? prompt).trim()
@@ -51,10 +63,11 @@ export function AiUiProvider({ children }) {
       setReply(null)
 
       try {
-        const data = await chatPrep(user_prompt, ctx.matter_id || MATTER.id)
+        const data = await chatPrep(user_prompt, ctx.matter_id || MATTER.id, groundingSource)
         const status = groundingStatusFromReply(data.grounding_status, data.reply)
         setReply({
           grounding_status: status,
+          grounding_source: data.grounding_source || groundingSource,
           text: data.reply,
           grounding_notes: data.grounding_notes,
           evidence: data.evidence,
@@ -64,6 +77,7 @@ export function AiUiProvider({ children }) {
       } catch (err) {
         setReply({
           grounding_status: 'no_evidence',
+          grounding_source: groundingSource,
           text:
             `Could not reach the agent backend.\n\n${err.message || 'Request failed'}\n\n` +
             'Start it with: uvicorn app.main:app --reload --port 8000\n' +
@@ -73,7 +87,7 @@ export function AiUiProvider({ children }) {
         setLoading(false)
       }
     },
-    [ctx.matter_id, prompt]
+    [ctx.matter_id, prompt, groundingSource]
   )
 
   const askAi = useCallback(() => runPrompt(prompt), [prompt, runPrompt])
@@ -90,6 +104,8 @@ export function AiUiProvider({ children }) {
       anchor,
       ctx,
       setCtx,
+      groundingSource,
+      switchGroundingSource,
       prompt,
       setPrompt,
       loading,
@@ -100,7 +116,21 @@ export function AiUiProvider({ children }) {
       runPrompt,
       clearReply,
     }),
-    [open, anchor, ctx, prompt, loading, reply, openBubble, closeBubble, askAi, runPrompt, clearReply]
+    [
+      open,
+      anchor,
+      ctx,
+      groundingSource,
+      switchGroundingSource,
+      prompt,
+      loading,
+      reply,
+      openBubble,
+      closeBubble,
+      askAi,
+      runPrompt,
+      clearReply,
+    ]
   )
 
   return <AiUiContext.Provider value={value}>{children}</AiUiContext.Provider>

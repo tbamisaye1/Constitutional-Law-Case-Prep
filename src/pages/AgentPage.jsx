@@ -9,9 +9,12 @@ import { chatPrep } from '../api/client'
  */
 export function AgentPage() {
   const [question, setQuestion] = useState('')
+  const [groundingSource, setGroundingSource] = useState('documents')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+
+  const webPlus = groundingSource === 'web_plus'
 
   async function onAsk(e) {
     e.preventDefault()
@@ -20,7 +23,7 @@ export function AgentPage() {
     setError('')
     setResult(null)
     try {
-      const data = await chatPrep(question.trim())
+      const data = await chatPrep(question.trim(), 'bronner-2026', groundingSource)
       setResult(data)
     } catch (err) {
       setError(err.message || 'Request failed')
@@ -39,12 +42,39 @@ export function AgentPage() {
 
       <Callout label="Verify before OA" tone="note">
         <p style={{ margin: 0 }}>
-          Replies are only as good as the indexed corpus. Check quotes and cites yourself before
-          relying on them in oral argument.
+          Uploaded articles mode stays corpus-only. Web mode prefers your PDFs and can also search the
+          web. Check quotes and cites yourself before relying on them in oral argument.
         </p>
       </Callout>
 
       <form className="agent-form" onSubmit={onAsk}>
+        <div className="ai-mode-row" role="tablist" aria-label="Ask AI mode" style={{ marginBottom: 12, maxWidth: 420 }}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!webPlus}
+            className={!webPlus ? 'on' : ''}
+            onClick={() => {
+              setGroundingSource('documents')
+              setResult(null)
+            }}
+          >
+            Uploaded articles
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={webPlus}
+            className={webPlus ? 'on' : ''}
+            onClick={() => {
+              setGroundingSource('web_plus')
+              setResult(null)
+            }}
+          >
+            Web
+          </button>
+        </div>
+
         <label className="mono agent-label" htmlFor="agent-q">
           Question
         </label>
@@ -53,10 +83,14 @@ export function AgentPage() {
           rows={4}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Ask in plain English — or use the floating Ask AI button for sample prompts."
+          placeholder={
+            webPlus
+              ? 'Ask from your articles and the web…'
+              : 'Ask in plain English — or use the floating Ask AI button for sample prompts.'
+          }
         />
         <button type="submit" className="agent-ask" disabled={loading}>
-          {loading ? 'Running…' : 'Ask (grounded)'}
+          {loading ? 'Running…' : webPlus ? 'Ask (articles + web)' : 'Ask (grounded)'}
         </button>
       </form>
 
@@ -69,7 +103,11 @@ export function AgentPage() {
       {result ? (
         <div className="agent-result">
           <div className="agent-result-head">
-            <GroundingBadge status={result.grounding_status} />
+            <GroundingBadge
+              status={result.grounding_status}
+              articleMode={!webPlus}
+              webPlus={webPlus || result.grounding_source === 'web_plus'}
+            />
             <span className="mono agent-meta">
               claims {result.claims_verified}/{result.claims_total} verified
             </span>
@@ -88,6 +126,13 @@ export function AgentPage() {
                       [{ev.id}] {ev.source_type} · {ev.source}
                       {ev.page != null ? ` p.${ev.page}` : ''}
                     </span>
+                    {ev.url ? (
+                      <div>
+                        <a href={ev.url} target="_blank" rel="noreferrer">
+                          {ev.url}
+                        </a>
+                      </div>
+                    ) : null}
                     <div>{ev.preview}</div>
                   </li>
                 ))}
