@@ -1,11 +1,14 @@
 /**
  * The workspace key that ties this browser's prep to rows in Postgres.
  *
- * There is no login. The key is generated once, kept in localStorage, and sent
- * on every API call as X-Workspace-Id. Copy it into another browser and you
- * see the same notes there, which is how you move between a laptop and an
- * iPad today. It is not a password: anyone who has the key can read that
- * workspace, so treat it like a private share link.
+ * There is no login. Notes, annotations, and Instant Case PDFs are scoped to
+ * this key. Copy it into another browser and you see the same prep; that is how
+ * a laptop and an iPad stay in sync today. It is not a password: anyone who has
+ * the key can read that workspace, so treat it like a private share link.
+ *
+ * Production can pin one key with VITE_WORKSPACE_ID so every visitor of the
+ * hosted Bronner matter shares the same Instant Case and notes. Without that
+ * env var, each browser mints its own UUID on first visit.
  */
 
 const KEY = 'case-prep-workspace-id'
@@ -34,13 +37,30 @@ function newId() {
 }
 
 /**
- * This browser's workspace key, creating one on first run.
+ * Env-pinned workspace for the hosted app, when set at build time.
+ *
+ * Returns null when unset or malformed. Callers fall back to a per-browser key.
+ */
+export function getPinnedWorkspaceId() {
+  const raw = (import.meta.env.VITE_WORKSPACE_ID || '').trim()
+  return UUID_PATTERN.test(raw) ? raw : null
+}
+
+/**
+ * This browser's workspace key.
+ *
+ * Order of preference:
+ * 1. VITE_WORKSPACE_ID when the build pinned one (production Bronner matter)
+ * 2. The key already saved in localStorage
+ * 3. A freshly minted UUID, written to localStorage
  *
  * Returns null when localStorage is unavailable (private mode with storage
- * blocked, or an embedded webview). Callers treat null as "no sync" and keep
- * working against IndexedDB, which is why this never throws.
+ * blocked). Callers treat null as "no sync" and keep working against IndexedDB.
  */
 export function getWorkspaceId() {
+  const pinned = getPinnedWorkspaceId()
+  if (pinned) return pinned
+
   try {
     const existing = localStorage.getItem(KEY)
     if (existing && UUID_PATTERN.test(existing)) return existing
@@ -60,8 +80,12 @@ export function getWorkspaceId() {
  * Returns true when the key was accepted. The caller has to reload afterwards:
  * the in-memory store still holds the previous workspace's rows, and merging
  * two workspaces in place would push one device's notes into the other.
+ *
+ * No-ops when the build pinned VITE_WORKSPACE_ID, because that key is the
+ * shared production workspace and should not be overwritten from the UI.
  */
 export function setWorkspaceId(candidate) {
+  if (getPinnedWorkspaceId()) return false
   const trimmed = (candidate || '').trim()
   if (!UUID_PATTERN.test(trimmed)) return false
   try {
@@ -71,4 +95,8 @@ export function setWorkspaceId(candidate) {
     console.warn('Could not save the workspace key', error)
     return false
   }
+}
+
+export function isWorkspacePinned() {
+  return Boolean(getPinnedWorkspaceId())
 }
