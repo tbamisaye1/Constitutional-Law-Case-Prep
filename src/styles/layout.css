@@ -972,6 +972,53 @@
   border-bottom: none;
 }
 
+.corpus-panel {
+  margin-top: 28px;
+}
+
+.corpus-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.corpus-panel-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.corpus-empty,
+.corpus-error {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.corpus-list li {
+  align-items: center;
+}
+
+.corpus-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.corpus-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.corpus-meta {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
 /* Agent bits kept from earlier */
 .grounding-badge {
   display: inline-block;

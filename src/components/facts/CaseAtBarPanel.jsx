@@ -3,6 +3,7 @@ import { CaseFilesPanel } from '../library/CaseFilesPanel'
 import { PdfViewer } from '../library/PdfViewer'
 import { AnnotationPanel } from '../library/AnnotationPanel'
 import { NoteEditor } from '../NoteEditor'
+import { SyncBanner } from '../SyncBanner'
 import { CASE_AT_BAR_ID, CASE_AT_BAR_LABEL } from '../../data/caseAtBar'
 
 /**
@@ -52,11 +53,12 @@ export function CaseAtBarPanel({ lib }) {
         </div>
       </div>
 
-      {lib.saveError ? <p className="save-banner error">{lib.saveError}</p> : null}
-      <p className="save-banner mono">
-        Saved in this browser only (survives refresh). Not uploaded to the backend yet.
-        {lib.lastSavedAt ? ` Last write ${new Date(lib.lastSavedAt).toLocaleTimeString()}.` : ''}
-      </p>
+      <SyncBanner
+        sync={lib.sync}
+        saveError={lib.saveError}
+        lastSavedAt={lib.lastSavedAt}
+        onSyncNow={lib.syncNow}
+      />
 
       <div hidden={mode !== 'read'}>
         <div className="library-read-stack case-at-bar-read">

@@ -1,7 +1,8 @@
 import { Callout } from '../components/CaseCard'
 import { NoteEditor } from '../components/NoteEditor'
-import { ingestPdf } from '../api/client'
-import { useState } from 'react'
+import { ingestPdf, listIngestSources, removeIngestSource } from '../api/client'
+import { Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 
 export function OpeningsPage() {
   const [html, setHtml] = useState(
@@ -20,15 +21,36 @@ export function OpeningsPage() {
   )
 }
 
+function sourceLabel(source, kind) {
+  if (kind === 'bootstrap') {
+    return source.replace(/\s+\(Oyez summary\)$/, '')
+  }
+  return source
+}
+
 export function UploadPage() {
   const [hover, setHover] = useState(false)
   const [files, setFiles] = useState([])
+  const [corpus, setCorpus] = useState([])
+  const [corpusError, setCorpusError] = useState('')
   const [busy, setBusy] = useState(false)
-  const hostedDemo =
-    typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app')
+  const [removing, setRemoving] = useState('')
+
+  const refreshCorpus = useCallback(async () => {
+    try {
+      const data = await listIngestSources()
+      setCorpus(data.sources || [])
+      setCorpusError('')
+    } catch (err) {
+      setCorpusError(err.message || 'Could not load search index')
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshCorpus()
+  }, [refreshCorpus])
 
   async function onFiles(list) {
-    if (hostedDemo) return
     const picked = Array.from(list || [])
     if (!picked.length) return
 
@@ -52,6 +74,7 @@ export function UploadPage() {
               : f
           )
         )
+        await refreshCorpus()
       } catch (err) {
         setFiles((prev) =>
           prev.map((f) =>
@@ -65,6 +88,23 @@ export function UploadPage() {
     setBusy(false)
   }
 
+  async function onRemoveSource(source) {
+    if (removing || busy) return
+    const label = sourceLabel(source, source.endsWith('(Oyez summary)') ? 'bootstrap' : 'upload')
+    if (!window.confirm(`Remove "${label}" from the Ask AI search index?`)) return
+
+    setRemoving(source)
+    try {
+      await removeIngestSource(source)
+      setFiles((prev) => prev.filter((f) => f.name !== source))
+      await refreshCorpus()
+    } catch (err) {
+      window.alert(err.message || 'Remove failed')
+    } finally {
+      setRemoving('')
+    }
+  }
+
   const indexed = files.filter((f) => f.status === 'indexed').length
 
   return (
@@ -73,28 +113,14 @@ export function UploadPage() {
         <div>
           <h1>Upload</h1>
           <p className="lede">
-            {hostedDemo
-              ? 'PDF upload is disabled on the hosted demo. Run the app locally to index new cases.'
-              : 'Drop precedent PDFs here. Each file is chunked and added to the corpus Ask AI searches.'}
+            Drop precedent PDFs here. Each file is chunked and added to the corpus Ask AI searches.
+            Remove any source below to drop it from context.
           </p>
         </div>
       </header>
 
-      {hostedDemo ? (
-        <Callout label="Hosted demo" tone="warn">
-          <p style={{ margin: 0 }}>
-            <strong>case-law-agent.vercel.app</strong> cannot save uploads (read-only server). For
-            Katz-style tests, run locally: backend{' '}
-            <span className="mono">uvicorn app.main:app --port 8000</span>, frontend{' '}
-            <span className="mono">npm run dev</span>, then open{' '}
-            <span className="mono">http://localhost:5173/upload</span>.
-          </p>
-        </Callout>
-      ) : null}
-
       <div
         className={hover ? 'dropzone on' : 'dropzone'}
-        style={hostedDemo ? { opacity: 0.45, pointerEvents: 'none' } : undefined}
         onDragOver={(e) => {
           e.preventDefault()
           setHover(true)
@@ -143,6 +169,43 @@ export function UploadPage() {
         </ul>
       ) : null}
 
+      <div className="corpus-panel">
+        <div className="corpus-panel-head">
+          <h2>In search index</h2>
+          <button type="button" className="btn-soft" disabled={busy || Boolean(removing)} onClick={refreshCorpus}>
+            Refresh
+          </button>
+        </div>
+        {corpusError ? (
+          <p className="corpus-error mono">{corpusError}</p>
+        ) : corpus.length === 0 ? (
+          <p className="corpus-empty">No sources indexed yet.</p>
+        ) : (
+          <ul className="file-list corpus-list">
+            {corpus.map((row) => (
+              <li key={row.source}>
+                <div className="corpus-row-main">
+                  <span className="corpus-name">{sourceLabel(row.source, row.kind)}</span>
+                  <span className="mono corpus-meta">
+                    {row.chunks} chunk{row.chunks === 1 ? '' : 's'}
+                    {row.kind === 'bootstrap' ? ' · demo summary' : ' · upload'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="icon-btn soft"
+                  aria-label={`Remove ${row.source} from search index`}
+                  disabled={busy || removing === row.source}
+                  onClick={() => onRemoveSource(row.source)}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {indexed > 0 ? (
         <Callout label="Ready" tone="note">
           <p style={{ margin: 0 }}>
@@ -150,15 +213,7 @@ export function UploadPage() {
             that case.
           </p>
         </Callout>
-      ) : hostedDemo ? null : (
-        <Callout label="Local dev" tone="note">
-          <p style={{ margin: 0 }}>
-            Start the FastAPI backend on port 8000 before uploading (
-            <span className="mono">uvicorn app.main:app --reload --port 8000</span>
-            ).
-          </p>
-        </Callout>
-      )}
+      ) : null}
     </section>
   )
 }

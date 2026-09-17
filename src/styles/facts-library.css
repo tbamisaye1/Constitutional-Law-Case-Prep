@@ -151,6 +151,25 @@
   border-color: color-mix(in srgb, var(--two) 40%, transparent);
 }
 
+/* Sync tones. Deliberately quiet: this line reports where the work is saved,
+   so it should be readable at a glance without competing with the record. */
+.save-banner.sync-ok {
+  border-color: color-mix(in srgb, var(--four) 30%, var(--rule-soft));
+}
+
+.save-banner.sync-info {
+  border-color: color-mix(in srgb, var(--ink-3) 30%, var(--rule-soft));
+}
+
+.save-banner.sync-warn {
+  color: var(--two);
+  border-color: color-mix(in srgb, var(--two) 35%, transparent);
+}
+
+.save-banner .anno-jump {
+  margin-left: 8px;
+}
+
 .case-at-bar-intro {
   display: flex;
   flex-wrap: wrap;
