@@ -4,6 +4,7 @@ import { Search, Pencil, BookOpen } from 'lucide-react'
 import { NoteEditor } from '../components/NoteEditor'
 import { useGuide } from '../hooks/useGuide'
 import { useTextSelectionAi } from '../hooks/useTextSelectionAi'
+import { GUIDE_PAGE_LEDE } from '../data/guideCopy'
 import * as ScrollArea from '@radix-ui/react-scroll-area'
 
 /**
@@ -67,11 +68,7 @@ export function GuidePage() {
       <header className="workspace-head">
         <div>
           <h1>Bronner guide</h1>
-          <p className="lede">
-            Full explanations from your HTML case guide: orientation, doctrine stories, statutes,
-            both questions applied to Bronner. Edit any section; structured Case facts / Library stay
-            for prep atoms.
-          </p>
+          <p className="lede">{GUIDE_PAGE_LEDE}</p>
         </div>
         <div className="head-actions">
           <button

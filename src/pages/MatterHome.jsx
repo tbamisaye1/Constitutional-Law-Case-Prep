@@ -4,6 +4,7 @@ import { Callout, Tag } from '../components/CaseCard'
 import { getHealth } from '../api/client'
 import { ArrowRight, NotebookPen, Library, Scale, ListChecks, BookOpen } from 'lucide-react'
 import { GUIDE_ORIENT, GUIDE_META } from '../data/bronnerGuideSeed'
+import { GUIDE_HOME_BASELINE } from '../data/guideCopy'
 
 /**
  * Matter home: Bronner guide orientation + room entry points.
@@ -52,9 +53,9 @@ export function MatterHome() {
 
       <Callout label="Guide baseline" tone="note">
         <p style={{ margin: 0 }}>
-          Read the full Bronner explanations in{' '}
-          <Link to="/guide">Bronner guide</Link> (TOC + every section from your HTML). Case facts /
-          library hold the structured prep atoms. API:{' '}
+          {GUIDE_HOME_BASELINE.beforeLink}
+          <Link to="/guide">Bronner guide</Link>
+          {GUIDE_HOME_BASELINE.afterLink}
           <span className="mono">{apiStatus}</span>
         </p>
       </Callout>

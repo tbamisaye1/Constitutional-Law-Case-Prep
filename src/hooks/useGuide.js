@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import guideSections from '../data/guideSections.json'
+import { guideSections } from '../data/guideCopy'
 import { onPageHide, readJson, writeJson } from '../lib/persist'
 
 const KEY = 'case-prep-guide-edits-v1'

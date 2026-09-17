@@ -4,7 +4,7 @@ import { Command } from 'cmdk'
 import { FileText, Library, NotebookPen, Scale, Home, Bot, Upload, Mic, BookOpen } from 'lucide-react'
 import { NAV } from '../data/seed'
 import { LIBRARY_CASES } from '../data/casesSeed'
-import guideSections from '../data/guideSections.json'
+import { guideSections } from '../data/guideCopy'
 
 const ICONS = {
   Home,

@@ -76,29 +76,29 @@ export const SEED_PAGES = {
     {
       id: 'pg-all-facts',
       title: 'All facts',
-      html: '<h2>All facts</h2><p>Prefer the Case facts room for searchable cards. This page is a scratch pad.</p><ul><li>93 days of pole-camera surveillance</li><li>Four Ring cameras on public poles</li><li>Oath scheduled July 4, 2025</li><li>GTMO transfer July 7, 2025</li></ul>',
+      html: '<h2>All facts</h2><p>Use the Case facts room for searchable cards and record citations.</p><ul><li>Agents used four Ring cameras on public utility poles to record Bronner’s home for 93 days without a warrant.</li><li>United States Citizenship and Immigration Services approved his naturalization and scheduled the oath for July 4, 2025.</li><li>The government transferred him to Guantanamo on July 7, 2025, where he remained without seeing the sealed evidence against him.</li></ul>',
     },
     {
       id: 'pg-pet-facts',
       title: 'Petitioner Facts',
-      html: '<h2>Petitioner facts</h2><ul><li>LPR on the cusp of citizenship</li><li>Good moral character already found</li><li>Arraigned, bond, then military transfer</li></ul>',
+      html: '<h2>Petitioner facts</h2><ul><li>Bronner was a lawful permanent resident whose naturalization had already been approved.</li><li>The government had found that he possessed good moral character and scheduled his oath three days before his transfer to Guantanamo.</li><li>An Article III court arraigned him and released him on bond before the executive re-arrested him and placed him in military custody.</li></ul>',
     },
     {
       id: 'pg-memo',
       title: 'Facts for memorisation',
-      html: '<h2>Cold facts</h2><ul><li>93 days</li><li>Four cameras</li><li>July 4 / July 7</li><li>12 months · sealed evidence</li></ul>',
+      html: '<h2>Cold facts</h2><ul><li>Four Ring cameras recorded for 93 consecutive days without a warrant.</li><li>Bronner’s citizenship oath was scheduled for July 4, 2025, and his transfer to Guantanamo occurred on July 7.</li><li>He spent twelve months in military custody without seeing the sealed evidence against him.</li></ul>',
     },
   ],
   'sec-cases': [
     {
       id: 'pg-katz',
       title: 'Katz v. United States',
-      html: '<h2>Katz</h2><p>Deep case work lives in Case library. Use this page for personal quips.</p>',
+      html: '<h2>Katz</h2><p>Katz asks whether a person expected privacy and whether society recognizes that expectation as reasonable. Bronner uses the test to argue that 93 days of searchable footage exposed a private pattern even though individual movements were visible. Open the Case library for the full case card and its application to both sides.</p>',
     },
     {
       id: 'pg-carpenter',
       title: 'Carpenter v. United States',
-      html: '<h2>Carpenter</h2><p>Aggregation of CSLI can be a search. Watch the limiting sentence for pole cameras.</p>',
+      html: '<h2>Carpenter</h2><p>Carpenter held that obtaining at least seven days of historical cell-site location information (CSLI) is a search because the aggregated record reveals a detailed chronicle of movement. Bronner compares that record to 93 days of camera footage; the government answers that fixed cameras observed only exposed areas and did not follow him everywhere. Open the Case library for the full case card.</p>',
     },
   ],
   'sec-issue1': [
@@ -110,24 +110,24 @@ export const SEED_PAGES = {
     {
       id: 'pg-quotes-resp',
       title: 'Quotes for Respondent',
-      html: '<h2>Quotes for respondent</h2><ul><li></li></ul>',
+      html: '<h2>Quotes for respondent</h2><p>Add exact quotations with a case name and page citation. Start with the public-vantage rule in Ciraolo and the duration discussion in Tuggle.</p>',
     },
     {
       id: 'pg-q1-apply',
       title: 'Applied to Bronner (Q1)',
-      html: '<h2>Q1 apply</h2><p>What each fact does on the Fourth Amendment. Expand from the guide as you prep.</p><ul><li>93 days / duration</li><li>Public pole / vantage</li><li>Pattern of life (R. 7)</li></ul>',
+      html: '<h2>Applying the Fourth Amendment</h2><p>Bronner argues that four cameras, 93 days of recording, zoom, infrared, motion detection, and storage produced a searchable pattern of domestic life. The government starts with Ciraolo and Tuggle because the cameras stood on public poles and viewed a porch, steps, driveway, and door exposed to nearby streets. Use the Bronner guide’s Issue 1 application section for the complete split and record citations.</p>',
     },
   ],
   'sec-issue2': [
     {
       id: 'pg-youngstown',
       title: 'Youngstown categories',
-      html: '<h2>Youngstown</h2><p>Jackson concurrence method over labels.</p><ul><li>Cat 1</li><li>Cat 2</li><li>Cat 3</li></ul>',
+      html: '<h2>Youngstown categories</h2><p>Justice Jackson measures presidential power against Congress’s position. Category 1 is strongest because Congress authorized the action, Category 2 is uncertain because Congress was silent, and Category 3 is weakest because the President acted against Congress’s expressed or implied will.</p><p>In Bronner, the majority reads the Authorization for Use of Military Force, the National Defense Authorization Act, and the Anti-Terrorist Act as authorization. The dissent reads Congress’s detention limits as opposition, or at best silence. See the Bronner guide’s Youngstown framework for the statutory steps.</p>',
     },
     {
       id: 'pg-q2-apply',
       title: 'Applied to Bronner (Q2)',
-      html: '<h2>Q2 apply</h2><p>Facts that push exceeded authority vs within authority. Expand from the guide q2apply split.</p>',
+      html: '<h2>Applying Article II</h2><p>The government argues that Congress authorized military detention through the Authorization for Use of Military Force and later detention statutes, placing the President in Youngstown Category 1. Bronner argues that Congress withheld authority over a lawful resident arrested in the United States, placing the order in Category 3 or, at best, Category 2.</p><p>Hamdi may support detention tied to authorized force, but it also requires notice and a fair chance to rebut the classification. Bronner had spent twelve months at Guantanamo without seeing the evidence, after an Article III court arraigned him and released him on bond. See the Bronner guide’s Issue 2 application section for the full argument on both sides.</p>',
     },
   ],
   'sec-args': [
@@ -144,7 +144,7 @@ export const SEED_PAGES = {
     {
       id: 'pg-rebuttal',
       title: 'Rebuttal',
-      html: '<h2>Rebuttal</h2><ul><li></li></ul>',
+      html: '<h2>Rebuttal</h2><p>Add each opposing claim with the record fact or case that answers it. Keep the Fourth Amendment and Article II responses separate so the authority is easy to retrieve during argument.</p>',
     },
   ],
   'sec-oa': [

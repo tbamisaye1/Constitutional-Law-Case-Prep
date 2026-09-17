@@ -54,19 +54,19 @@ export const SEED_NOTE_PAGES = [
     id: 'issue1',
     title: 'Issue 1 — Fourth Amendment',
     section: 'Issue notes',
-    html: '<h2>Issue 1 notes</h2><p>The Fourth Amendment turn is whether the pole cameras were a <em>search</em>.</p><ul><li>Start from Katz two-step</li><li>Map duration / aggregation arguments from Carpenter</li><li>Read Tuggle and Moore-Bush for the circuit split</li></ul>',
+    html: '<h2>Issue 1 notes</h2><p>The Fourth Amendment question is whether 93 days of pole-camera recording counted as a search. Katz supplies the expectation-of-privacy test, and Carpenter explains why aggregation can reveal a private whole from public movements. Tuggle and Moore-Bush show the competing approaches to long-term pole-camera surveillance. Use the Bronner guide’s Issue 1 sections for the full rules and record application.</p>',
   },
   {
     id: 'issue2',
     title: 'Issue 2 — Article II',
     section: 'Issue notes',
-    html: '<h2>Issue 2 notes</h2><p>Who said he could? Youngstown categories first.</p><ul><li>Jackson concurrence method</li><li>Milligan / Quirin tension on military custody</li></ul>',
+    html: '<h2>Issue 2 notes</h2><p>Youngstown asks whether Congress authorized Bronner’s military detention, left the question unresolved, or opposed it. The government reads the Authorization for Use of Military Force, the National Defense Authorization Act, and the Anti-Terrorist Act together as authorization. Bronner argues that Congress withheld authority to detain a lawful resident arrested in the United States, while Milligan, Quirin, and Hamdi define who may enter military custody and what review is due. Use the Bronner guide’s Youngstown and Issue 2 application sections for the complete analysis.</p>',
   },
   {
     id: 'pet-structure',
     title: 'Petitioner structure',
     section: 'My Arguments',
-    html: '<h2>Petitioner structure</h2><ol><li>Opening theme</li><li>Q1 roadmap</li><li>Q2 roadmap</li><li>Hinge</li></ol><p>Replace this with your real outline.</p>',
+    html: '<h2>Petitioner structure</h2><ol><li>Open with Bronner’s approved naturalization, the warrantless 93-day recording, and the transfer to Guantanamo.</li><li>Explain why the combined surveillance created a search under Katz and Carpenter.</li><li>Apply Youngstown to show that Congress did not authorize this military detention.</li><li>Use Hamdi to require notice and a meaningful chance to answer the sealed evidence.</li></ol>',
   },
   {
     id: 'quotes-pet',
@@ -78,6 +78,6 @@ export const SEED_NOTE_PAGES = [
     id: 'facts-memo',
     title: 'Facts for memorisation',
     section: 'AMCA Case Facts',
-    html: '<h2>Facts cold</h2><ul><li>93 days of pole-camera surveillance</li><li>Naturalization approved; oath scheduled July 4, 2025</li><li>Transferred to GTMO July 7, 2025</li></ul>',
+    html: '<h2>Facts cold</h2><ul><li>Four Ring cameras recorded Bronner’s home for 93 consecutive days without a warrant.</li><li>His naturalization was approved, with the oath scheduled for July 4, 2025.</li><li>The government transferred him to Guantanamo on July 7, where he remained without seeing the sealed evidence against him.</li></ul>',
   },
 ]

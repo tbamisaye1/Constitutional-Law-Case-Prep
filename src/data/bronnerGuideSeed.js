@@ -46,7 +46,7 @@ export const GUIDE_LIBRARY_CASES = [
     "tag": null,
     "usefulness": "useful",
     "holding": "Two holdings. (1) Title III § 2511(3), which said nothing in the Act limits the President's power to protect against overthrow, is merely a disclaimer of congressional intent — not a grant of authority. (2) The Fourth Amendment requires prior judicial approval for domestic security surveillance of this type.",
-    "rule": "",
+    "rule": "A statutory disclaimer does not create presidential power. Domestic-security surveillance ordinarily requires advance approval from a neutral judge, which matters because Bronner challenges surveillance initiated and controlled by executive officers without a warrant.",
     "usePetitioner": "The dissent's warrant argument, and the closest thing in the case file to a bridge between the two questions : the deference the government asks for on Article II is the deference Keith refused on the Fourth Amendment.",
     "useRespondent": "",
     "suggestedFile": "United States v. U.S. District Court (Keith).pdf",
@@ -97,7 +97,7 @@ export const GUIDE_LIBRARY_CASES = [
     "tag": null,
     "usefulness": "core",
     "holding": "A search — unanimously in result, on three different theories.",
-    "rule": "",
+    "rule": "Katz supplemented rather than displaced the original trespass rule. Government commits a search when it physically intrudes on a constitutionally protected person, house, paper, or effect to obtain information; the separate privacy-expectation test covers searches without a trespass.",
     "usePetitioner": "Not cited in the Fourteenth Circuit's opinions, but it is the source of nearly everything in them. If you want to understand why \"duration\" became a Fourth Amendment argument at all, this is where it starts.",
     "useRespondent": "",
     "suggestedFile": "United States v. Jones.pdf",
@@ -113,8 +113,8 @@ export const GUIDE_LIBRARY_CASES = [
     "issue": 1,
     "tag": "priority",
     "usefulness": "core",
-    "holding": "A search. Accessing at least seven days of historical CSLI requires a warrant. The Court expressly declined to decide whether a shorter period would.",
-    "rule": "",
+    "holding": "A search. Accessing at least seven days of historical cell-site location information (CSLI) requires a warrant. The Court expressly declined to decide whether a shorter period would.",
+    "rule": "The government generally needs a warrant to obtain a comprehensive record of a person's movements from historical cell-site location information. Bronner argues that 93 days of pole-camera footage created the same kind of revealing record, while the government stresses that Carpenter was narrow and involved location data collected wherever the defendant traveled.",
     "usePetitioner": "The center of gravity for Question 1. The majority reads it as a case about a specialized device and enormous scale; the dissent reads it as a case about aggregation whose logic doesn't care what hardware produced the record.",
     "useRespondent": "The center of gravity for Question 1. The majority reads it as a case about a specialized device and enormous scale; the dissent reads it as a case about aggregation whose logic doesn't care what hardware produced the record.",
     "suggestedFile": "Carpenter v. United States.pdf",
@@ -131,7 +131,7 @@ export const GUIDE_LIBRARY_CASES = [
     "tag": null,
     "usefulness": "trap",
     "holding": "Not a search. \"The government's use of a technology in public use, while occupying a place it was lawfully entitled to be, to observe plainly visible happenings, did not run afoul of the Fourth Amendment.\"",
-    "rule": "",
+    "rule": "Continuous pole-camera observation of areas exposed to public view is not a Fourth Amendment search under existing Supreme Court doctrine, even when it lasts many months. Tuggle matters because Bronner's majority uses that public-view rule, while Bronner argues the duration and combined camera features reveal more than an ordinary observer could see.",
     "usePetitioner": "The majority's authority for \"duration alone does not transform.\" Understand what that citation is doing: it is a circuit court applying a theory it declined to adopt, reaching a result it said it disliked, and inviting Congress or the Supreme Court to fix it.",
     "useRespondent": "",
     "suggestedFile": "United States v. Tuggle.pdf",
@@ -148,13 +148,13 @@ export const GUIDE_LIBRARY_CASES = [
     "tag": null,
     "usefulness": "useful",
     "holding": "A warrantless search in violation of the Fourth Amendment. Convictions reversed.",
-    "rule": "",
-    "usePetitioner": "The only pole-camera decision favoring suppression among the cases cited. But Tafoya's facts are meaningfully better than Bronner's : the camera saw a fenced backyard invisible from the street, and the Colorado court repeatedly grounds its analysis in curtilage. Bronner's cameras captured a porch, steps, driveway, and door all visible from nearby streets. Anyone relying on Tafoya has to rely on it",
+    "rule": "Long-term, continuous pole-camera surveillance can violate a reasonable expectation of privacy when it reveals activity within the home's curtilage that ordinary passersby could not see. For Bronner, Tafoya supports treating duration and technological capacity together, although Bronner's exposed front areas make his facts less favorable.",
+    "usePetitioner": "The only pole-camera decision favoring suppression among the cases cited. Tafoya involved a fenced backyard hidden from street view, while Bronner's cameras captured a porch, steps, driveway, and door visible from nearby streets. Bronner therefore needs Tafoya's reasoning about prolonged, continuous observation, not a claim that the physical settings were identical.",
     "useRespondent": "",
     "suggestedFile": "People v. Tafoya.pdf",
     "guideFacts": "An informant told Colorado Springs police that Rafael Tafoya's house was a drug stash house. Police mounted a camera on a utility pole across the street — no warrant — that could pan, tilt, and zoom on command while officers watched live, and recorded continuously for over three months , with footage stored indefinitely . Because of its elevated angle it recorded a backyard enclosed by a six-foot wooden privacy fence with a gate. Officers watched Tafoya let a car through the gate, close it, and crouch at the front-left tire; men later carried a spare tire from the garage to a truck. Police stopped the truck and found $98,000 in the tire.",
-    "guideReasoning": "Prong one was easy: the area was curtilage, set back from the street, and fenced with a gate he closed. Subjective expectation established.",
-    "guideUse": "The only pole-camera decision favoring suppression among the cases cited. But Tafoya's facts are meaningfully better than Bronner's : the camera saw a fenced backyard invisible from the street, and the Colorado court repeatedly grounds its analysis in curtilage. Bronner's cameras captured a porch, steps, driveway, and door all visible from nearby streets. Anyone relying on Tafoya has to rely on its reasoning rather than its outcome — which is a real move, since duration/continuity/nature does not logically require a fence, but it is a move, not a given."
+    "guideReasoning": "Tafoya showed a subjective expectation of privacy by enclosing the home's curtilage with a six-foot fence and closing its gate. The court then considered the surveillance's duration, continuity, and technological capacity together and held that more than three months of recorded observation exposed information ordinary passersby could not collect. Bronner invokes that combined analysis, although his cameras faced areas visible from nearby streets.",
+    "guideUse": "The only pole-camera decision favoring suppression among the cases cited. Tafoya involved a fenced backyard hidden from street view, while Bronner's cameras captured a porch, steps, driveway, and door visible from nearby streets. Bronner therefore needs Tafoya's reasoning about prolonged, continuous observation, not a claim that the physical settings were identical."
   },
   {
     "id": "moore-bush",
@@ -164,13 +164,13 @@ export const GUIDE_LIBRARY_CASES = [
     "issue": 1,
     "tag": "split",
     "usefulness": "core",
-    "holding": "",
-    "rule": "",
+    "holding": "The en banc First Circuit affirmed denial of suppression because the officers relied in good faith on then-existing precedent. The judges divided evenly over whether eight months of pole-camera surveillance was itself a Fourth Amendment search, so no constitutional rationale commanded a majority.",
+    "rule": "Moore-Bush supplies competing approaches rather than one controlling Fourth Amendment rule. Judge Lynch treated the camera as prolonged observation of exposed areas; Chief Judge Barron treated the aggregated record as a search under Carpenter's reasoning. Bronner's two opinions use those opposing approaches.",
     "usePetitioner": "The majority below cites Lynch; the dissent cites Barron. It is the clearest available evidence that the question is unsettled — a full federal appellate court, on nearly these facts, divided evenly on the constitutional question while agreeing on the outcome.",
     "useRespondent": "The majority below cites Lynch; the dissent cites Barron. It is the clearest available evidence that the question is unsettled — a full federal appellate court, on nearly these facts, divided evenly on the constitutional question while agreeing on the outcome.",
     "suggestedFile": "United States v. Moore-Bush.pdf",
     "guideFacts": "ATF investigated Nia Moore-Bush for selling illegal firearms and trafficking heroin. A cooperating witness bought four guns at the house; a traffic stop recovered 921 bags of heroin. About a week later, agents installed a pole camera on a utility pole outside 120 Hadley Street, Springfield, Massachusetts. It showed the right side of the house, the attached garage, a side door, and the driveway — not the front door — and a tree partially obstructed the view much of the time. It recorded for eight months .",
-    "guideReasoning": "",
+    "guideReasoning": "The en banc court agreed that suppression was unavailable under the good-faith exception, but it split on the constitutional question. Judge Lynch reasoned that the camera recorded only what could be seen from a lawful public vantage point. Chief Judge Barron reasoned that eight months of searchable footage exposed a detailed pattern of domestic life that ordinary observation could not reproduce.",
     "guideUse": "The majority below cites Lynch; the dissent cites Barron. It is the clearest available evidence that the question is unsettled — a full federal appellate court, on nearly these facts, divided evenly on the constitutional question while agreeing on the outcome."
   },
   {
@@ -183,8 +183,8 @@ export const GUIDE_LIBRARY_CASES = [
     "usefulness": "useful",
     "holding": "The seizures were lawful. The President may meet an armed rebellion without waiting for Congress to \"baptize it with a name.\" A war forced upon the nation is a war whether or not declared.",
     "rule": "Inherent presidential authority to respond to an attack in progress , and the principle that a state of war can exist as a matter of fact rather than declaration.",
-    "usePetitioner": "The majority uses it for the proposition that detention is an incident of war and the principle applies to modern terrorism. The dissent narrows it on two grounds: it arose from open hostilities between organized forces , and it did not involve long-term detention of residents seized far from any battlefield . The dissent's deeper point is temporal — a blockade ends when a war ends, and the \"War o",
-    "useRespondent": "The majority uses it for the proposition that detention is an incident of war and the principle applies to modern terrorism. The dissent narrows it on two grounds: it arose from open hostilities between organized forces , and it did not involve long-term detention of residents seized far from any battlefield . The dissent's deeper point is temporal — a blockade ends when a war ends, and the \"War o",
+    "usePetitioner": "The majority uses it to argue that detention is an incident of war and that the principle extends to modern terrorism. The dissent answers that Prize Cases involved open hostilities between organized forces, not long-term detention of a resident seized far from a battlefield. Its temporal point matters too: a Civil War blockade ended with the war, while the asserted war on terrorism has no clear endpoint.",
+    "useRespondent": "The majority uses it to argue that detention is an incident of war and that the principle extends to modern terrorism. The dissent answers that Prize Cases involved open hostilities between organized forces, not long-term detention of a resident seized far from a battlefield. Its temporal point matters too: a Civil War blockade ended with the war, while the asserted war on terrorism has no clear endpoint.",
     "suggestedFile": "The Prize Cases.pdf",
     "guideFacts": "After Fort Sumter, and before Congress acted, Lincoln proclaimed a blockade of Southern ports. Navy ships seized merchant vessels as prizes. The owners sued, arguing there was no war because Congress had not declared one, so the seizures were unlawful.",
     "guideReasoning": "The President has no power to initiate war, but when war is thrust upon the country he is bound to resist force by force . He does not initiate the war; he meets it, and the question of what degree of force the crisis demands is one he must decide.",
@@ -199,12 +199,12 @@ export const GUIDE_LIBRARY_CASES = [
     "tag": null,
     "usefulness": "core",
     "holding": "The military commission had no jurisdiction. Milligan was entitled to release.",
-    "rule": "",
+    "rule": "Military tribunals cannot replace civilian courts for a civilian who is not part of enemy forces when the ordinary courts are open and functioning. Bronner uses that limit because he was arrested in the United States after appearing in an Article III court, but the government says his alleged support for enemy forces places him outside Milligan's rule.",
     "usePetitioner": "Structurally Bronner's best case: a civilian, where courts are open, pulled into military process. The majority distinguishes it on a single ground — Milligan was not part of or supporting enemy forces . Everything on Question 2 turns on whether that distinction holds, which turns on whether the belligerency label has been tested by anyone.",
     "useRespondent": "",
     "suggestedFile": "Ex parte Milligan.pdf",
     "guideFacts": "Lambdin Milligan, an Indiana civilian and Confederate sympathizer, was arrested during the Civil War, tried by a military commission, and sentenced to hang for conspiring to free Confederate prisoners. Indiana was never a theater of war; its federal authority was never opposed and its courts were open and operating throughout.",
-    "guideReasoning": "1. The commission wasn't a court. It was not \"ordained and established by Congress,\" and its members were not judges appointed during good behavior.",
+    "guideReasoning": "The commission was not a constitutional court, and Congress had not authorized it to try Milligan while Indiana's civilian courts remained open. Martial rule may operate where war actually closes the courts, but necessity could not justify replacing functioning courts in Indiana. That limit matters to Bronner because the government moved him from an Article III prosecution into military custody.",
     "guideUse": "Structurally Bronner's best case: a civilian, where courts are open, pulled into military process. The majority distinguishes it on a single ground — Milligan was not part of or supporting enemy forces . Everything on Question 2 turns on whether that distinction holds, which turns on whether the belligerency label has been tested by anyone."
   },
   {
@@ -233,7 +233,7 @@ export const GUIDE_LIBRARY_CASES = [
     "tag": null,
     "usefulness": "useful",
     "holding": "The delegation was valid.",
-    "rule": "It establishes that Congress may delegate more broadly in foreign affairs . It does not establish unilateral presidential power, and you have Jackson's own words for that: he wrote in Youngstown footnote 2 that Curtiss-Wright \"involved, not the question of the President's power to act without congressional authority, but the question of his right to act under and in accord with an Act of Congress\"; that \"much of the Court's opinion is dictum\"; and that while it intimated the President might act ",
+    "rule": "Curtiss-Wright permits broader congressional delegation in foreign affairs; it does not grant unlimited unilateral presidential power. Justice Jackson later explained that the case involved presidential action under an Act of Congress, not action without or against Congress. That distinction matters because Bronner disputes whether Congress authorized his detention.",
     "usePetitioner": "The majority cites it for \"plenary and exclusive\" power as \"sole organ.\" Jackson's footnote is the complete answer, and it comes from a case the majority itself relies on.",
     "useRespondent": "",
     "suggestedFile": "United States v. Curtiss-Wright Export Corp..pdf",
@@ -250,7 +250,7 @@ export const GUIDE_LIBRARY_CASES = [
     "tag": null,
     "usefulness": "core",
     "holding": "The military commission was lawfully constituted and the petitioners were properly triable before it.",
-    "rule": "",
+    "rule": "An unlawful belligerent may be tried by military commission even if captured in the United States and even if the person is a citizen. The classification depended on proven conduct as an enemy saboteur, which matters because Bronner disputes whether an executive accusation alone can place him in the same category.",
     "usePetitioner": "The government's strongest case, because it defeats two intuitive arguments at once: arrest on U.S. soil doesn't matter, and citizenship doesn't matter.",
     "useRespondent": "",
     "suggestedFile": "Ex parte Quirin.pdf",
@@ -272,7 +272,7 @@ export const GUIDE_LIBRARY_CASES = [
     "useRespondent": "The battlefield. The majority places the President in Category 1; the dissent says Category 3, \"at best\" Category 2. The majority also cites it for the proposition — which nobody disputes — that no granted power may be exercised in a way that deprives individuals of constitutional rights.",
     "suggestedFile": "Youngstown Sheet & Tube Co. v. Sawyer.pdf",
     "guideFacts": "During the Korean War, a nationwide steel strike threatened war production. Truman ordered the Secretary of Commerce to seize and operate the mills. He reported to Congress twice; Congress did nothing. Congress had considered and rejected giving presidents seizure authority when it passed the Taft-Hartley Act in 1947, and had provided three other statutory mechanisms for comparable situations, none of which Truman used.",
-    "guideReasoning": "",
+    "guideReasoning": "The steel seizure could not be traced to a statute or to the President's commander-in-chief power. Justice Jackson's concurrence organized presidential power into three categories based on Congress's position: authorization, silence, or opposition. Bronner turns on that method because the majority reads the Authorization for Use of Military Force and later statutes as approval, while the dissent reads Congress's limits as opposition.",
     "guideUse": "The battlefield. The majority places the President in Category 1; the dissent says Category 3, \"at best\" Category 2. The majority also cites it for the proposition — which nobody disputes — that no granted power may be exercised in a way that deprives individuals of constitutional rights."
   },
   {
@@ -284,12 +284,12 @@ export const GUIDE_LIBRARY_CASES = [
     "tag": null,
     "usefulness": "useful",
     "holding": "An evidentiary hearing is not required before termination. The existing procedures satisfied due process.",
-    "rule": "",
+    "rule": "Due process depends on three considerations: the private interest at stake, the risk of error and value of added safeguards, and the government's interest and administrative burden. In Bronner, physical liberty weighs heavily, and the dispute is whether national-security secrecy justifies withholding the evidence from him.",
     "usePetitioner": "Both opinions apply it, via Hamdi . Everything depends on factor one — Hamdi says freedom from physical restraint is \"the most elemental of liberty interests\" — and on whether the government's asserted burden (disclosure would compromise national security) is treated as an ordinary administrative cost or as something categorically different.",
     "useRespondent": "",
     "suggestedFile": "Mathews v. Eldridge.pdf",
     "guideFacts": "George Eldridge received Social Security disability benefits. A state agency reviewed his file, sent him a questionnaire, obtained reports from his physician and a psychiatric consultant, and tentatively concluded his disability had ended. He was given a summary of the evidence and an opportunity to respond in writing. Benefits were terminated. He was entitled to a full evidentiary hearing afterward , with retroactive relief if he won.",
-    "guideReasoning": "",
+    "guideReasoning": "The Court balanced Eldridge's interest in uninterrupted benefits, the risk that written medical procedures would produce an error, and the government's cost of a hearing before every termination. Because the decision turned mainly on medical records and a full hearing remained available afterward, a pre-termination hearing added little accuracy at substantial cost. Hamdi later adapted this balancing test to military detention, which is why it governs Bronner's demand for notice and a chance to answer the evidence.",
     "guideUse": "Both opinions apply it, via Hamdi . Everything depends on factor one — Hamdi says freedom from physical restraint is \"the most elemental of liberty interests\" — and on whether the government's asserted burden (disclosure would compromise national security) is treated as an ordinary administrative cost or as something categorically different."
   },
   {
@@ -300,13 +300,13 @@ export const GUIDE_LIBRARY_CASES = [
     "issue": 2,
     "tag": null,
     "usefulness": "core",
-    "holding": "On authority: the AUMF authorized his detention. Detention of enemy combatants for the duration of the relevant conflict is a \"fundamental incident of waging war\" and therefore falls within \"necessary and appropriate force.\"",
-    "rule": "",
+    "holding": "On authority, the Authorization for Use of Military Force (AUMF) authorized Hamdi's detention. Detention of enemy combatants for the duration of the relevant conflict is a \"fundamental incident of waging war\" and therefore falls within \"necessary and appropriate force.\"",
+    "rule": "The AUMF permits detention of a person shown to have fought with enemy forces, but war powers are not a blank check. A citizen detainee must receive notice of the factual basis for the classification and a fair chance to rebut it before a neutral decisionmaker. Bronner uses that process rule even though he was not yet a citizen.",
     "usePetitioner": "The template for the likely outcome and the case both sides need. Note the two structural distinctions the government presses: Hamdi was a citizen , and he was captured in an active combat zone . Bronner is neither.",
     "useRespondent": "",
     "suggestedFile": "Hamdi v. Rumsfeld.pdf",
     "guideFacts": "Yaser Hamdi, born in Louisiana and raised in Saudi Arabia, was seized in Afghanistan by the Northern Alliance and turned over to the U.S. military, which alleged he was a Taliban fighter. He was taken to Guantanamo; when his American citizenship was discovered he was moved to a naval brig in Virginia. He was held without charge, without counsel, and without any hearing. The government's entire evidentiary submission was a short declaration from a Defense Department official — the \"Mobbs Declaration.\"",
-    "guideReasoning": "",
+    "guideReasoning": "The plurality read detention of battlefield combatants into Congress's authorization of necessary and appropriate force, but rejected the government's claim that separation of powers barred judicial review. Applying Mathews, it required notice of the factual basis for Hamdi's enemy-combatant classification and a meaningful chance to answer it before a neutral decisionmaker. Bronner tests how far both parts extend when detention rests on alleged material support, the arrest occurred in the United States, and the evidence remains sealed.",
     "guideUse": "The template for the likely outcome and the case both sides need. Note the two structural distinctions the government presses: Hamdi was a citizen , and he was captured in an active combat zone . Bronner is neither."
   },
   {
@@ -317,14 +317,14 @@ export const GUIDE_LIBRARY_CASES = [
     "issue": 2,
     "tag": null,
     "usefulness": "background",
-    "holding": "",
-    "rule": "",
-    "usePetitioner": "",
-    "useRespondent": "",
+    "holding": "As characterized by the opinions in Bronner, prolonged immigration detention does not automatically require a new bond hearing without a stronger showing that the existing procedures are constitutionally inadequate.",
+    "rule": "Banyee is persuasive rather than binding authority on due process in prolonged immigration detention. It matters only by analogy: Bronner's military detention and sealed evidence present a different liberty interest and a different risk of error.",
+    "usePetitioner": "Distinguish it. Bronner is held in military custody at Guantanamo on an untested belligerency label, not in ordinary immigration detention under established removal procedures.",
+    "useRespondent": "Use it for the narrower point that elapsed time alone does not create a categorical right to an additional hearing. The government still must address Hamdi's more specific process rule.",
     "suggestedFile": "Banyee v. Garland.pdf",
     "guideFacts": "Prolonged immigration detention and when due process requires additional procedure. Not binding on the Supreme Court, and the only source for it in your materials is how the two opinions below characterize it.",
-    "guideReasoning": "",
-    "guideUse": ""
+    "guideReasoning": "Use only the treatment given in the Bronner opinions because the underlying case is not otherwise developed in these materials. The analogy concerns when prolonged detention increases the process due; it does not resolve the President's authority to place Bronner in military custody.",
+    "guideUse": "A limited due-process comparison. It may support the government on duration alone, but Hamdi, Milligan, and Youngstown speak more directly to Bronner's military custody and access to a neutral tribunal."
   }
 ]
 
@@ -388,7 +388,7 @@ export const GUIDE_CASE_FACTS = {
   "tafoya": [
     {
       "id": "cf-tafoya-1",
-      "text": "An informant told Colorado Springs police that Rafael Tafoya's house was a drug stash house. Police mounted a camera on a utility pole across the street — no warrant — that could pan, tilt, and zoom on command while officers watched live, and recorded continuously for over three months , with footage stored indefinitely . Because of its elevated angle it recorded a backyard enclosed by a six-foot wooden privacy fence with a gate. Officers watched Tafoya let a car through the gate, close it, and crouch at the front-left tire; men later carried a spare tire from the garage to a truck. Police sto",
+      "text": "An informant identified Rafael Tafoya's house as a drug stash house. Without a warrant, police used a pole camera that could pan, tilt, and zoom to record continuously for more than three months. Its elevated angle showed a backyard enclosed by a six-foot privacy fence. Officers watched activity involving a vehicle and later stopped a truck, finding $98,000 inside a spare tire.",
       "useful": true,
       "note": "From Bronner guide — What happened"
     }
@@ -496,9 +496,9 @@ export const GUIDE_OPINIONS = {
       "justice": "",
       "joinedBy": "",
       "page": "",
-      "summary": "Two holdings. (1) Title III § 2511(3), which said nothing in the Act limits the President's power to protect against overthrow, is merely a disclaimer of congressional intent — not a grant of authority. (2) The Fourth Am",
+      "summary": "Title III's disclaimer did not grant presidential surveillance power, and the Fourth Amendment required advance judicial approval for this domestic-security wiretap.",
       "notes": "",
-      "bodyHtml": "<h2>United States v. U.S. District Court (Keith)</h2><p><strong>Holding.</strong> Two holdings. (1) Title III § 2511(3), which said nothing in the Act limits the President's power to protect against overthrow, is merely a disclaimer of congressional intent — not a grant of authority. (2) The Fourth Amendment requires prior judicial approval for domestic security surveillance of this type.</p><p><strong>Reasoning.</strong> The Court's core move is institutional, not factual: \"The Fourth Amendment does not contemplate the executive officers of Government as neutral and disinterested magistrates.\" Their duty is to enforce, investigate, and prosecute — so they should not be the sole judges of when to use constitutionally sensitive means. The historical judgment the Amendment accepts is that unreviewed executive discretion \"may yield too readily to pressures to obtain incriminating evidence.\"</p><p><strong>Rule.</strong> </p><p><strong>Role in Bronner.</strong> The dissent's warrant argument, and the closest thing in the case file to a bridge between the two questions : the deference the government asks for on Article II is the deference Keith refused on the Fourth Amendment.</p>",
+      "bodyHtml": "<h2>United States v. U.S. District Court (Keith)</h2><p><strong>Holding.</strong> Title III's disclaimer did not grant presidential surveillance power, and the Fourth Amendment required advance judicial approval for this domestic-security wiretap.</p><p><strong>Reasoning.</strong> Executive officers investigate and prosecute, so they cannot serve as neutral judges of when constitutionally sensitive surveillance is justified. The warrant process places that decision with a detached magistrate.</p><p><strong>Rule.</strong> A statutory disclaimer does not create presidential power. Domestic-security surveillance ordinarily requires advance approval from a neutral judge.</p><p><strong>Role in Bronner.</strong> Keith supports Bronner's argument that national-security concerns do not remove the warrant safeguard. It also links both issues because the executive asks for deference over surveillance and detention.</p>",
       "citedCaseIds": []
     }
   ],
@@ -522,7 +522,7 @@ export const GUIDE_OPINIONS = {
       "justice": "",
       "joinedBy": "",
       "page": "",
-      "summary": "A search. Where the government uses sense-enhancing technology not in general public use to obtain information regarding the interior of the home that could not otherwise be obtained without physical intrusion , that is ",
+      "summary": "Using technology not in general public use to obtain details of a home that otherwise would require physical intrusion is a search.",
       "notes": "",
       "bodyHtml": "<h2>Kyllo v. United States</h2><p><strong>Holding.</strong> A search. Where the government uses sense-enhancing technology not in general public use to obtain information regarding the interior of the home that could not otherwise be obtained without physical intrusion , that is a search and is presumptively unreasonable without a warrant.</p><p><strong>Reasoning.</strong> Scalia's concern was that technology \"shrinks the realm of guaranteed privacy\" — it lets the government get, from outside, what previously required going in. The Amendment must at minimum preserve the degree of privacy that existed when it was adopted.</p><p><strong>Rule.</strong> Two conditions do the work: interior of the home , and not in general public use . The second is the one everyone fights about, because it means Fourth Amendment protection contracts as consumer technology spreads . That is a known and much-criticized feature of the rule, not an accident.</p><p><strong>Role in Bronner.</strong> Both opinions rely on it and read it in opposite directions. Majority: Ring cameras are in general public use and penetrated no walls. Dissent: the aggregate use of motion tracking, zoom, infrared, and persistent recording revealed information about domestic rhythms, and \"all details are intimate details\" forecloses calling that trivial.</p>",
       "citedCaseIds": []
@@ -537,7 +537,7 @@ export const GUIDE_OPINIONS = {
       "page": "",
       "summary": "A search — unanimously in result, on three different theories.",
       "notes": "",
-      "bodyHtml": "<h2>United States v. Jones</h2><p><strong>Holding.</strong> A search — unanimously in result, on three different theories.</p><p><strong>Reasoning.</strong> Decided on old ground. The government physically occupied private property — an \"effect\" — for the purpose of obtaining information. That would have been a search in 1791. Katz's expectation test was added to , not substituted for, the trespass test. The Court expressly declined to reach whether Jones had a reasonable expectation of privacy.</p><p><strong>Rule.</strong> </p><p><strong>Role in Bronner.</strong> Not cited in the Fourteenth Circuit's opinions, but it is the source of nearly everything in them. If you want to understand why \"duration\" became a Fourth Amendment argument at all, this is where it starts.</p>",
+      "bodyHtml": "<h2>United States v. Jones</h2><p><strong>Holding.</strong> Installing a tracking device on a vehicle and using it to obtain information was a search.</p><p><strong>Reasoning.</strong> The government physically occupied Jones's vehicle, a protected effect, to gather information. Katz added a privacy-expectation test but did not erase the older trespass rule. Separate concurrences explained why long-term tracking may also violate a reasonable expectation of privacy.</p><p><strong>Rule.</strong> A physical intrusion on protected property to obtain information is a search. The concurrences also supply the aggregation theory that later shaped Carpenter.</p><p><strong>Role in Bronner.</strong> The cameras did not touch Bronner's property, so the majority's trespass holding is not enough for him. The concurrences explain his stronger claim that prolonged tracking can reveal a private whole from public movements.</p>",
       "citedCaseIds": []
     }
   ],
@@ -548,9 +548,9 @@ export const GUIDE_OPINIONS = {
       "justice": "",
       "joinedBy": "",
       "page": "",
-      "summary": "A search. Accessing at least seven days of historical CSLI requires a warrant. The Court expressly declined to decide whether a shorter period would.",
+      "summary": "Accessing at least seven days of historical cell-site location information (CSLI) is a search that ordinarily requires a warrant.",
       "notes": "",
-      "bodyHtml": "<h2>Carpenter v. United States</h2><p><strong>Holding.</strong> A search. Accessing at least seven days of historical CSLI requires a warrant. The Court expressly declined to decide whether a shorter period would.</p><p><strong>Reasoning.</strong> Two threads converge. From the Jones concurrences: individuals have a reasonable expectation of privacy in the whole of their physical movements , and the government's ability to compile a comprehensive chronicle of a life is the harm. From the third-party doctrine cases: a person does not surrender all Fourth Amendment protection by venturing into the public sphere .</p><p><strong>Rule.</strong> </p><p><strong>Role in Bronner.</strong> The center of gravity for Question 1. The majority reads it as a case about a specialized device and enormous scale; the dissent reads it as a case about aggregation whose logic doesn't care what hardware produced the record.</p>",
+      "bodyHtml": "<h2>Carpenter v. United States</h2><p><strong>Holding.</strong> Accessing at least seven days of historical cell-site location information (CSLI) is a search that ordinarily requires a warrant.</p><p><strong>Reasoning.</strong> The location record gave the government a detailed chronicle of Carpenter's movements. A person does not surrender all Fourth Amendment protection merely by moving through public or because a wireless carrier stores the data.</p><p><strong>Rule.</strong> The government generally needs a warrant to obtain a comprehensive record of a person's movements from historical CSLI. The Court left shorter periods and other technologies unresolved.</p><p><strong>Role in Bronner.</strong> Bronner compares 93 days of searchable camera footage to Carpenter's aggregated location record. The government answers that fixed cameras observed exposed areas and did not follow Bronner everywhere.</p>",
       "citedCaseIds": []
     }
   ],
@@ -563,7 +563,7 @@ export const GUIDE_OPINIONS = {
       "page": "",
       "summary": "Not a search. \"The government's use of a technology in public use, while occupying a place it was lawfully entitled to be, to observe plainly visible happenings, did not run afoul of the Fourth Amendment.\"",
       "notes": "",
-      "bodyHtml": "<h2>United States v. Tuggle</h2><p><strong>Holding.</strong> Not a search. \"The government's use of a technology in public use, while occupying a place it was lawfully entitled to be, to observe plainly visible happenings, did not run afoul of the Fourth Amendment.\"</p><p><strong>Reasoning.</strong> 1. The mosaic theory isn't binding. The court traces it from Maynard (D.C. Cir. 2010) through the Jones concurrences to Carpenter, notes that scholars say Carpenter \"effectively endorsed\" it, and then holds that the Supreme Court \"has not yet required lower courts to apply it.\" Several courts have rejected it as unworkable because constitutionality would hinge on duration.</p><p><strong>Rule.</strong> </p><p><strong>Role in Bronner.</strong> The majority's authority for \"duration alone does not transform.\" Understand what that citation is doing: it is a circuit court applying a theory it declined to adopt, reaching a result it said it disliked, and inviting Congress or the Supreme Court to fix it.</p>",
+      "bodyHtml": "<h2>United States v. Tuggle</h2><p><strong>Holding.</strong> Eighteen months of pole-camera recording of areas exposed to public view was not a search.</p><p><strong>Reasoning.</strong> The Seventh Circuit concluded that the Supreme Court had not required lower courts to apply the mosaic theory, which asks whether many lawful observations become a search when aggregated. The cameras used technology available to the public from lawful vantage points, although the court expressed concern about the breadth of the surveillance.</p><p><strong>Rule.</strong> Under Tuggle, duration alone does not convert observation of plainly visible activity into a search.</p><p><strong>Role in Bronner.</strong> The majority uses Tuggle for its public-view and duration rules. Bronner stresses that Tuggle is not Supreme Court authority and that its court invited higher courts or Congress to address prolonged surveillance.</p>",
       "citedCaseIds": []
     }
   ],
@@ -576,7 +576,7 @@ export const GUIDE_OPINIONS = {
       "page": "",
       "summary": "A warrantless search in violation of the Fourth Amendment. Convictions reversed.",
       "notes": "",
-      "bodyHtml": "<h2>People v. Tafoya</h2><p><strong>Holding.</strong> A warrantless search in violation of the Fourth Amendment. Convictions reversed.</p><p><strong>Reasoning.</strong> Prong one was easy: the area was curtilage, set back from the street, and fenced with a gate he closed. Subjective expectation established.</p><p><strong>Rule.</strong> </p><p><strong>Role in Bronner.</strong> The only pole-camera decision favoring suppression among the cases cited. But Tafoya's facts are meaningfully better than Bronner's : the camera saw a fenced backyard invisible from the street, and the Colorado court repeatedly grounds its analysis in curtilage. Bronner's cameras captured a porch, steps, driveway, and door all visible from nearby streets. Anyone relying on Tafoya has to rely on its reasoning rather than its outcome — which is a real move, since duration/continuity/nature does not logically require a fence, but it is a move, not a given.</p>",
+      "bodyHtml": "<h2>People v. Tafoya</h2><p><strong>Holding.</strong> More than three months of warrantless pole-camera surveillance of fenced residential curtilage was a search.</p><p><strong>Reasoning.</strong> Tafoya showed a subjective expectation of privacy by enclosing the yard and closing its gate. The court considered duration, continuity, and technological capacity together and concluded that the recording exposed information ordinary passersby could not collect.</p><p><strong>Rule.</strong> Long-term, continuous surveillance can violate a reasonable expectation of privacy when it reveals activity within protected curtilage hidden from ordinary view.</p><p><strong>Role in Bronner.</strong> Tafoya supports Bronner's combined-features argument, but its fenced backyard was more private than Bronner's exposed porch, steps, driveway, and door.</p>",
       "citedCaseIds": []
     }
   ],
@@ -587,9 +587,9 @@ export const GUIDE_OPINIONS = {
       "justice": "",
       "joinedBy": "",
       "page": "",
-      "summary": "",
+      "summary": "The en banc court affirmed on good-faith grounds and divided evenly over whether eight months of pole-camera surveillance was a search.",
       "notes": "",
-      "bodyHtml": "<h2>United States v. Moore-Bush</h2><p><strong>Holding.</strong> </p><p><strong>Reasoning.</strong> </p><p><strong>Rule.</strong> </p><p><strong>Role in Bronner.</strong> The majority below cites Lynch; the dissent cites Barron. It is the clearest available evidence that the question is unsettled — a full federal appellate court, on nearly these facts, divided evenly on the constitutional question while agreeing on the outcome.</p>",
+      "bodyHtml": "<h2>United States v. Moore-Bush</h2><p><strong>Holding.</strong> The en banc court affirmed denial of suppression because officers relied in good faith on existing precedent. The judges divided evenly over whether the surveillance itself was a search.</p><p><strong>Reasoning.</strong> Judge Lynch treated the camera as prolonged observation of areas exposed to public view. Chief Judge Barron treated eight months of searchable footage as an aggregated record of domestic life under Carpenter's reasoning.</p><p><strong>Rule.</strong> Moore-Bush offers two competing approaches, not one controlling constitutional rule.</p><p><strong>Role in Bronner.</strong> The Fourteenth Circuit majority follows Lynch and its dissent follows Barron. The split shows why Bronner's question remains unsettled.</p>",
       "citedCaseIds": []
     }
   ],
@@ -615,7 +615,7 @@ export const GUIDE_OPINIONS = {
       "page": "",
       "summary": "The military commission had no jurisdiction. Milligan was entitled to release.",
       "notes": "",
-      "bodyHtml": "<h2>Ex parte Milligan</h2><p><strong>Holding.</strong> The military commission had no jurisdiction. Milligan was entitled to release.</p><p><strong>Reasoning.</strong> 1. The commission wasn't a court. It was not \"ordained and established by Congress,\" and its members were not judges appointed during good behavior.</p><p><strong>Rule.</strong> </p><p><strong>Role in Bronner.</strong> Structurally Bronner's best case: a civilian, where courts are open, pulled into military process. The majority distinguishes it on a single ground — Milligan was not part of or supporting enemy forces . Everything on Question 2 turns on whether that distinction holds, which turns on whether the belligerency label has been tested by anyone.</p>",
+      "bodyHtml": "<h2>Ex parte Milligan</h2><p><strong>Holding.</strong> A military commission lacked jurisdiction to try Milligan while Indiana's civilian courts remained open.</p><p><strong>Reasoning.</strong> The commission was not a constitutional court, and necessity could not justify replacing functioning civilian courts outside a theater of war.</p><p><strong>Rule.</strong> Military tribunals cannot replace open civilian courts for a civilian who is not part of enemy forces.</p><p><strong>Role in Bronner.</strong> Bronner appeared in an Article III court before the government moved him into military custody. The government distinguishes Milligan by classifying Bronner as supporting enemy forces, so the reliability and review of that classification matter.</p>",
       "citedCaseIds": []
     }
   ],
@@ -654,7 +654,7 @@ export const GUIDE_OPINIONS = {
       "page": "",
       "summary": "The military commission was lawfully constituted and the petitioners were properly triable before it.",
       "notes": "",
-      "bodyHtml": "<h2>Ex parte Quirin</h2><p><strong>Holding.</strong> The military commission was lawfully constituted and the petitioners were properly triable before it.</p><p><strong>Reasoning.</strong> The law of war distinguishes lawful from unlawful belligerents. Lawful belligerents — uniformed forces — may be captured and held as prisoners of war. Unlawful belligerents — those who pass secretly through the lines in civilian dress to wage war by destruction of life or property — are additionally subject to trial and punishment by military tribunals for acts that render their belligerency unlawful.</p><p><strong>Rule.</strong> </p><p><strong>Role in Bronner.</strong> The government's strongest case, because it defeats two intuitive arguments at once: arrest on U.S. soil doesn't matter, and citizenship doesn't matter.</p>",
+      "bodyHtml": "<h2>Ex parte Quirin</h2><p><strong>Holding.</strong> The German-trained saboteurs could be tried by a military commission.</p><p><strong>Reasoning.</strong> The law of war distinguishes uniformed lawful belligerents from unlawful belligerents who enter secretly in civilian dress to destroy life or property. The latter may face military trial for the conduct that makes their belligerency unlawful.</p><p><strong>Rule.</strong> Capture on United States soil and citizenship do not prevent military process for a person proven to be an unlawful enemy belligerent.</p><p><strong>Role in Bronner.</strong> The government uses Quirin to answer arguments based only on Bronner's location or near-citizenship. Bronner answers that the Quirin petitioners' enemy conduct was established, while his classification rests on evidence he has not seen.</p>",
       "citedCaseIds": []
     }
   ],
@@ -667,7 +667,7 @@ export const GUIDE_OPINIONS = {
       "page": "",
       "summary": "Unconstitutional. 6–3.",
       "notes": "",
-      "bodyHtml": "<h2>Youngstown Sheet & Tube Co. v. Sawyer</h2><p><strong>Holding.</strong> Unconstitutional. 6–3.</p><p><strong>Reasoning.</strong> </p><p><strong>Rule.</strong> The organizing framework for every subsequent separation-of-powers dispute, and the specific principle that where Congress has legislated in a field and declined to confer the power the executive claims, courts scrutinize that claim with caution.</p><p><strong>Role in Bronner.</strong> The battlefield. The majority places the President in Category 1; the dissent says Category 3, \"at best\" Category 2. The majority also cites it for the proposition — which nobody disputes — that no granted power may be exercised in a way that deprives individuals of constitutional rights.</p>",
+      "bodyHtml": "<h2>Youngstown Sheet &amp; Tube Co. v. Sawyer</h2><p><strong>Holding.</strong> President Truman lacked authority to seize the steel mills.</p><p><strong>Reasoning.</strong> The seizure came from neither a statute nor the President's commander-in-chief power. Congress had supplied other responses to labor emergencies and had rejected seizure authority. Justice Jackson therefore assessed presidential power by asking what Congress had authorized, left unresolved, or opposed.</p><p><strong>Rule.</strong> Category 1 is strongest because Congress has authorized the action. Category 2 is uncertain because Congress has neither granted nor denied authority. Category 3 is weakest because the President acts against Congress's expressed or implied will.</p><p><strong>Role in Bronner.</strong> The majority puts the detention in Category 1 by reading the Authorization for Use of Military Force and later statutes together. The dissent puts it in Category 3, or at best Category 2, because Congress limited mandatory detention and never affirmatively authorized this detention of a lawful resident.</p>",
       "citedCaseIds": []
     }
   ],
@@ -680,7 +680,7 @@ export const GUIDE_OPINIONS = {
       "page": "",
       "summary": "An evidentiary hearing is not required before termination. The existing procedures satisfied due process.",
       "notes": "",
-      "bodyHtml": "<h2>Mathews v. Eldridge</h2><p><strong>Holding.</strong> An evidentiary hearing is not required before termination. The existing procedures satisfied due process.</p><p><strong>Reasoning.</strong> </p><p><strong>Rule.</strong> </p><p><strong>Role in Bronner.</strong> Both opinions apply it, via Hamdi . Everything depends on factor one — Hamdi says freedom from physical restraint is \"the most elemental of liberty interests\" — and on whether the government's asserted burden (disclosure would compromise national security) is treated as an ordinary administrative cost or as something categorically different.</p>",
+      "bodyHtml": "<h2>Mathews v. Eldridge</h2><p><strong>Holding.</strong> Due process did not require an evidentiary hearing before terminating Eldridge's disability benefits.</p><p><strong>Reasoning.</strong> The Court weighed Eldridge's interest, the risk of error and value of another safeguard, and the government's cost. Written medical procedures created a relatively low error risk, and a full hearing with retroactive relief remained available afterward.</p><p><strong>Rule.</strong> Due process balances the private interest, the risk of error and value of added procedure, and the government's interest and burden.</p><p><strong>Role in Bronner.</strong> Hamdi adapts this test to detention. Bronner's physical liberty and inability to see the evidence increase the first two weights; the government relies on national-security secrecy for the third.</p>",
       "citedCaseIds": []
     }
   ],
@@ -691,9 +691,9 @@ export const GUIDE_OPINIONS = {
       "justice": "",
       "joinedBy": "",
       "page": "",
-      "summary": "On authority: the AUMF authorized his detention. Detention of enemy combatants for the duration of the relevant conflict is a \"fundamental incident of waging war\" and therefore falls within \"necessary and appropriate for",
+      "summary": "The Authorization for Use of Military Force (AUMF) permitted detention of a battlefield combatant, but due process required notice and a fair chance to rebut the classification.",
       "notes": "",
-      "bodyHtml": "<h2>Hamdi v. Rumsfeld</h2><p><strong>Holding.</strong> On authority: the AUMF authorized his detention. Detention of enemy combatants for the duration of the relevant conflict is a \"fundamental incident of waging war\" and therefore falls within \"necessary and appropriate force.\"</p><p><strong>Reasoning.</strong> </p><p><strong>Rule.</strong> </p><p><strong>Role in Bronner.</strong> The template for the likely outcome and the case both sides need. Note the two structural distinctions the government presses: Hamdi was a citizen , and he was captured in an active combat zone . Bronner is neither.</p>",
+      "bodyHtml": "<h2>Hamdi v. Rumsfeld</h2><p><strong>Holding.</strong> The Authorization for Use of Military Force (AUMF) permitted detention of a person shown to have fought with Taliban forces. Due process still required notice of the factual basis and a fair chance to rebut the enemy-combatant classification before a neutral decisionmaker.</p><p><strong>Reasoning.</strong> Detaining battlefield combatants is a fundamental incident of using military force, but war powers are not a blank check. Applying Mathews, the plurality balanced Hamdi's physical liberty and the risk of mistaken classification against the government's wartime burdens.</p><p><strong>Rule.</strong> Statutory war authority may include detention, but a detainee must have a meaningful opportunity to contest the factual basis for that detention.</p><p><strong>Role in Bronner.</strong> The government uses Hamdi for detention authority. Bronner uses its process rule and distinguishes his arrest in the United States for alleged material support from Hamdi's capture in an active combat zone.</p>",
       "citedCaseIds": []
     }
   ],
@@ -704,9 +704,9 @@ export const GUIDE_OPINIONS = {
       "justice": "",
       "joinedBy": "",
       "page": "",
-      "summary": "",
+      "summary": "As characterized in Bronner, prolonged immigration detention does not automatically require a new bond hearing without a stronger showing that existing procedures are inadequate.",
       "notes": "",
-      "bodyHtml": "<h2>Banyee v. Garland</h2><p><strong>Holding.</strong> </p><p><strong>Reasoning.</strong> </p><p><strong>Rule.</strong> </p><p><strong>Role in Bronner.</strong> </p>",
+      "bodyHtml": "<h2>Banyee v. Garland</h2><p><strong>Holding.</strong> As characterized in Bronner, prolonged immigration detention does not automatically require a new bond hearing without a stronger showing that existing procedures are inadequate.</p><p><strong>Reasoning.</strong> Use the Bronner opinions' limited treatment because the underlying decision is not otherwise developed in these materials.</p><p><strong>Rule.</strong> Elapsed time matters to due process, but time alone does not establish which additional procedure is required.</p><p><strong>Role in Bronner.</strong> The government uses Banyee by analogy on prolonged detention. Bronner distinguishes ordinary immigration custody from military detention at Guantanamo based on sealed evidence and an untested belligerency label.</p>",
       "citedCaseIds": []
     }
   ]
@@ -733,7 +733,7 @@ export const GUIDE_FACTS = [
   },
   {
     "id": "f-oath",
-    "text": "Naturalization approved with good-moral-character finding; oath scheduled for July 4, 2025.",
+    "text": "United States Citizenship and Immigration Services approved Bronner's naturalization after finding good moral character. His oath was scheduled for July 4, 2025.",
     "subsection": "timeline",
     "side": "petitioner",
     "source": {
@@ -746,28 +746,28 @@ export const GUIDE_FACTS = [
       "hinge",
       "memorise"
     ],
-    "memoriseLine": "GMC found · oath July 4, 2025"
+    "memoriseLine": "Good moral character found; oath scheduled for July 4, 2025"
   },
   {
     "id": "f-gtmo",
-    "text": "Transferred to Guantanamo on July 7, 2025; twelve months without seeing the evidence against him.",
+    "text": "The government transferred Bronner to Guantanamo on July 7, 2025. He remained there for twelve months without seeing the evidence against him.",
     "subsection": "timeline",
     "side": "petitioner",
     "source": {
       "page": "8",
       "footnote": "",
-      "note": "GTMO transfer + secrecy"
+      "note": "Transfer to Guantanamo and sealed evidence"
     },
     "argumentTags": [
       "opening",
       "q2-youngstown",
       "memorise"
     ],
-    "memoriseLine": "GTMO July 7 · 12 months · no evidence shown"
+    "memoriseLine": "Transferred to Guantanamo July 7; twelve months without seeing the evidence"
   },
   {
     "id": "f-posture",
-    "text": "District court suppressed and granted habeas; Fourteenth Circuit reversed 2–1 (not a search; Youngstown Category 1).",
+    "text": "The district court suppressed the surveillance evidence and granted habeas relief. The Fourteenth Circuit reversed 2–1, holding that the cameras were not a search and that the President acted with congressional authorization under Youngstown Category 1.",
     "subsection": "posture",
     "side": "neutral",
     "source": {
@@ -783,7 +783,7 @@ export const GUIDE_FACTS = [
   },
   {
     "id": "f-exterior",
-    "text": "Cameras did not surveil after entry/departure; no wall penetration; government framed feed as enhanced observation of already-exposed activity.",
+    "text": "The cameras did not follow anyone after arrival or departure and did not penetrate the home's walls. The government describes the footage as enhanced observation of activity already exposed to public view.",
     "subsection": "q1",
     "side": "respondent",
     "source": {
@@ -832,7 +832,7 @@ export const GUIDE_FACTS = [
   },
   {
     "id": "f-footnotes",
-    "text": "Footnotes wall off independent PC, warrant-challenge, speedy trial, treaties: only the legal questions presented.",
+    "text": "Footnotes 8 and 9 remove several arguments from the case, including independent probable cause, challenges to the later warrants, speedy-trial claims, and treaty claims. The Court addresses only the two legal questions presented.",
     "subsection": "posture",
     "side": "neutral",
     "source": {
@@ -844,7 +844,7 @@ export const GUIDE_FACTS = [
       "opening",
       "rebuttal"
     ],
-    "memoriseLine": "fn 8–9: off-limits attacks"
+    "memoriseLine": "Footnotes 8–9 remove independent probable cause and other claims"
   },
   {
     "id": "f-tip",
@@ -898,7 +898,7 @@ export const GUIDE_FACTS = [
   },
   {
     "id": "f-accused",
-    "text": "AG classified Bronner as having a criminal record because he had been accused; he has no prior convictions.",
+    "text": "Attorney General Comerford classified Bronner as having a criminal record because he had been accused of a crime. Bronner has no prior convictions.",
     "subsection": "q2",
     "side": "petitioner",
     "source": {
@@ -959,7 +959,7 @@ export const GUIDE_RECORD_TIMELINE = [
     "kind": "record",
     "date": "Sept 2001",
     "label": "Sept 2001",
-    "note": "AUMF enacted — \"all necessary and appropriate force\" against those behind 9/11. R. 2; App. I (R. 20)",
+    "note": "Congress enacts the Authorization for Use of Military Force (AUMF), permitting \"all necessary and appropriate force\" against those responsible for the September 11 attacks. It becomes the government's main statutory basis for detention. R. 2; App. I (R. 20)",
     "page": "2;"
   },
   {
@@ -975,7 +975,7 @@ export const GUIDE_RECORD_TIMELINE = [
     "kind": "record",
     "date": "Dec 31, 2011",
     "label": "Dec 31, 2011",
-    "note": "NDAA FY2012 (P.L. 112-81) signed, §§ 1021–1022. Senate efforts to bar indefinite detention of Americans had already failed. R. 2–3",
+    "note": "The National Defense Authorization Act for Fiscal Year 2012 (NDAA), P.L. 112-81, is signed with detention provisions in §§ 1021–1022. Earlier Senate efforts to bar indefinite detention of Americans had failed, a history the government uses as evidence of congressional acceptance. R. 2–3",
     "page": "2–3"
   },
   {
@@ -983,7 +983,7 @@ export const GUIDE_RECORD_TIMELINE = [
     "kind": "record",
     "date": "2023 & 2025",
     "label": "2023 & 2025",
-    "note": "The Senate votes to repeal the AUMF. The House never takes it up. The AUMF stands. R. 3",
+    "note": "The Senate votes to repeal the AUMF in 2023 and again in 2025, but the House does not take up either measure. The AUMF therefore remains law, although the failed repeals do not themselves add detention authority. R. 3",
     "page": "3"
   },
   {
@@ -999,7 +999,7 @@ export const GUIDE_RECORD_TIMELINE = [
     "kind": "record",
     "date": "Early 2025",
     "label": "Early 2025",
-    "note": "Congress enacts the Anti-Terrorist Act after publicized violent crimes involving non-citizens. R. 3",
+    "note": "Congress enacts the Anti-Terrorist Act (ATA) after publicized violent crimes involving non-citizens. Its express detention rules and gaps shape whether Congress authorized Bronner's military custody. R. 3",
     "page": "3"
   },
   {
@@ -1007,7 +1007,7 @@ export const GUIDE_RECORD_TIMELINE = [
     "kind": "record",
     "date": "Feb 14, 2025",
     "label": "Feb 14, 2025",
-    "note": "President DeNolf signs Executive Order 15,000 (\"PAT\") . R. 3–4; App. VI (R. 25)",
+    "note": "President DeNolf signs Executive Order 15,000, titled Protection Against Terrorism (PAT). The order directs the Attorney General to use military custody under asserted constitutional and statutory authority. R. 3–4; App. VI (R. 25)",
     "page": "3–4;"
   },
   {
@@ -1047,7 +1047,7 @@ export const GUIDE_RECORD_TIMELINE = [
     "kind": "record",
     "date": "May 27, 2025",
     "label": "May 27, 2025",
-    "note": "NSA agents independently observe a warehouse meeting and decline to explain why they were watching. AUSA DeLeon wakes Magistrate Judge Olson; warrants issue. Parties stipulate the government relied primarily on the pole-camera footage . R. 7",
+    "note": "National Security Agency agents independently observe a warehouse meeting but do not explain why they were watching. Assistant United States Attorney DeLeon contacts Magistrate Judge Olson, who issues warrants. The parties stipulate that the government relied primarily on the pole-camera footage. R. 7",
     "page": "7"
   },
   {
@@ -1079,7 +1079,7 @@ export const GUIDE_RECORD_TIMELINE = [
     "kind": "record",
     "date": "May 31, 2025",
     "label": "May 31, 2025",
-    "note": "AG Comerford invokes PAT and ATA, classifying Bronner a \"removable non-citizen with a criminal record\" because he had been \"accused.\" He has no convictions. R. 8",
+    "note": "Attorney General Comerford invokes PAT and the ATA and classifies Bronner as a \"removable non-citizen with a criminal record\" because he had been accused. He has no convictions, which matters to the risk that the executive classification is wrong. R. 8",
     "page": "8"
   },
   {
@@ -1115,8 +1115,8 @@ export const GUIDE_DOCTRINE_TIMELINE = [
     "year": "1967",
     "caseId": "katz",
     "issue": 1,
-    "label": "A search. The government's activity violated the privacy on which Katz justifiab",
-    "note": "The shared frame. Both opinions below cite it in the first paragraph of their Fourth Amendment analysis. Note the structure of Katz's win: he was visible to everyone and still prevailed, because what "
+    "label": "Privacy, not physical trespass, determines whether government conduct is a search.",
+    "note": "Katz supplies the two-part expectation-of-privacy test. Bronner argues that his exposed movements still produced a private pattern when recorded continuously for 93 days."
   },
   {
     "id": "tl-keith",
@@ -1124,8 +1124,8 @@ export const GUIDE_DOCTRINE_TIMELINE = [
     "year": "1972",
     "caseId": "keith",
     "issue": 1,
-    "label": "Two holdings. (1) Title III § 2511(3), which said nothing in the Act limits the ",
-    "note": "The dissent's warrant argument, and the closest thing in the case file to a bridge between the two questions : the deference the government asks for on Article II is the deference Keith refused on the"
+    "label": "Domestic-security surveillance ordinarily requires advance approval from a neutral judge.",
+    "note": "Keith rejects executive officers as the sole judges of surveillance necessity. Bronner uses it to answer the government's request for national-security deference."
   },
   {
     "id": "tl-ciraolo",
@@ -1133,8 +1133,8 @@ export const GUIDE_DOCTRINE_TIMELINE = [
     "year": "1986",
     "caseId": "ciraolo",
     "issue": 1,
-    "label": "Not a search. 5–4, Burger, C.J. (Powell, J., dissenting, joined by Brennan, Mars",
-    "note": "Cited by the majority for the public-vantage principle. Not in your table of authorities as an attached case in the original set — it is now."
+    "label": "Naked-eye observation from a lawful public vantage point was not a search.",
+    "note": "Ciraolo supports the government because Bronner's porch, steps, and driveway were visible from nearby streets. Bronner distinguishes a brief observation from a 93-day recording."
   },
   {
     "id": "tl-kyllo",
@@ -1142,8 +1142,8 @@ export const GUIDE_DOCTRINE_TIMELINE = [
     "year": "2001",
     "caseId": "kyllo",
     "issue": 1,
-    "label": "A search. Where the government uses sense-enhancing technology not in general pu",
-    "note": "Both opinions rely on it and read it in opposite directions. Majority: Ring cameras are in general public use and penetrated no walls. Dissent: the aggregate use of motion tracking, zoom, infrared, an"
+    "label": "Technology not in general public use cannot expose details of a home's interior without a warrant.",
+    "note": "The government stresses that Ring cameras are common and did not penetrate walls. Bronner focuses on what motion tracking, zoom, infrared, storage, and continuous recording revealed together."
   },
   {
     "id": "tl-jones",
@@ -1151,8 +1151,8 @@ export const GUIDE_DOCTRINE_TIMELINE = [
     "year": "2012",
     "caseId": "jones",
     "issue": 1,
-    "label": "A search — unanimously in result, on three different theories.",
-    "note": "Not cited in the Fourteenth Circuit's opinions, but it is the source of nearly everything in them. If you want to understand why \"duration\" became a Fourth Amendment argument at all, this is where it "
+    "label": "Physical installation of a tracking device was a search; concurrences addressed prolonged tracking.",
+    "note": "Jones supplies the aggregation theory behind Bronner's duration argument, even though agents placed the cameras on public poles rather than his property."
   },
   {
     "id": "tl-carpenter",
@@ -1160,8 +1160,8 @@ export const GUIDE_DOCTRINE_TIMELINE = [
     "year": "2018",
     "caseId": "carpenter",
     "issue": 1,
-    "label": "A search. Accessing at least seven days of historical CSLI requires a warrant. T",
-    "note": "The center of gravity for Question 1. The majority reads it as a case about a specialized device and enormous scale; the dissent reads it as a case about aggregation whose logic doesn't care what hard"
+    "label": "Historical cell-site location information can reveal a private chronicle of public movements.",
+    "note": "Bronner compares 93 days of camera footage to Carpenter's aggregated location record. The government distinguishes fixed views of exposed areas from tracking a person everywhere."
   },
   {
     "id": "tl-prize-cases",
@@ -1169,8 +1169,8 @@ export const GUIDE_DOCTRINE_TIMELINE = [
     "year": "1863",
     "caseId": "prize-cases",
     "issue": 2,
-    "label": "The seizures were lawful. The President may meet an armed rebellion without wait",
-    "note": "The majority uses it for the proposition that detention is an incident of war and the principle applies to modern terrorism. The dissent narrows it on two grounds: it arose from open hostilities betwe"
+    "label": "The President may respond to an armed attack already in progress without awaiting a declaration of war.",
+    "note": "The government extends that response power to detention tied to terrorism. Bronner distinguishes open Civil War hostilities and emphasizes that his detention has no clear wartime endpoint."
   },
   {
     "id": "tl-milligan",
@@ -1179,7 +1179,7 @@ export const GUIDE_DOCTRINE_TIMELINE = [
     "caseId": "milligan",
     "issue": 2,
     "label": "The military commission had no jurisdiction. Milligan was entitled to release.",
-    "note": "Structurally Bronner's best case: a civilian, where courts are open, pulled into military process. The majority distinguishes it on a single ground — Milligan was not part of or supporting enemy force"
+    "note": "Milligan protects civilian courts when they remain open. Bronner was moved from an Article III prosecution to military custody, while the government says alleged enemy support distinguishes him."
   },
   {
     "id": "tl-costanzo",
@@ -1188,7 +1188,7 @@ export const GUIDE_DOCTRINE_TIMELINE = [
     "caseId": "costanzo",
     "issue": 2,
     "label": "It did not. Deportation on this ground may occur at any time after entry.",
-    "note": "The majority uses it for the proposition that legislative inaction can create a presumption of congressional acquiescence in executive practice, conceding that \"Costanzo involved immigration administr"
+    "note": "The majority cites Costanzo for congressional acquiescence through long, consistent executive practice. Bronner argues that a narrow immigration-construction case cannot turn legislative silence into detention authority."
   },
   {
     "id": "tl-united-states-v-curtiss-wright-export-corp",
@@ -1205,8 +1205,8 @@ export const GUIDE_DOCTRINE_TIMELINE = [
     "year": "1942",
     "caseId": "quirin",
     "issue": 2,
-    "label": "The military commission was lawfully constituted and the petitioners were proper",
-    "note": "The government's strongest case, because it defeats two intuitive arguments at once: arrest on U.S. soil doesn't matter, and citizenship doesn't matter."
+    "label": "Proven enemy saboteurs could face military process despite capture in the United States or citizenship.",
+    "note": "Quirin helps the government on location and citizenship. Bronner distinguishes its established acts of belligerency from his classification based on sealed evidence."
   },
   {
     "id": "tl-youngstown",
@@ -1215,7 +1215,7 @@ export const GUIDE_DOCTRINE_TIMELINE = [
     "caseId": "youngstown",
     "issue": 2,
     "label": "Unconstitutional. 6–3.",
-    "note": "The battlefield. The majority places the President in Category 1; the dissent says Category 3, \"at best\" Category 2. The majority also cites it for the proposition — which nobody disputes — that no gr"
+    "note": "Youngstown asks what Congress authorized, left unresolved, or opposed. The Bronner majority finds authorization; the dissent reads the statutory limits as opposition, or at least silence."
   },
   {
     "id": "tl-mathews",
@@ -1223,8 +1223,8 @@ export const GUIDE_DOCTRINE_TIMELINE = [
     "year": "1976",
     "caseId": "mathews",
     "issue": 2,
-    "label": "An evidentiary hearing is not required before termination. The existing procedur",
-    "note": "Both opinions apply it, via Hamdi . Everything depends on factor one — Hamdi says freedom from physical restraint is \"the most elemental of liberty interests\" — and on whether the government's asserte"
+    "label": "Due process balances the private interest, error risk, and government's burden.",
+    "note": "Bronner's physical liberty and inability to see the evidence weigh toward more process. The government places national-security secrecy on the other side of the balance."
   },
   {
     "id": "tl-hamdi",
@@ -1232,9 +1232,9 @@ export const GUIDE_DOCTRINE_TIMELINE = [
     "year": "2004",
     "caseId": "hamdi",
     "issue": 2,
-    "label": "On authority: the AUMF authorized his detention. Detention of enemy combatants f",
-    "note": "The template for the likely outcome and the case both sides need. Note the two structural distinctions the government presses: Hamdi was a citizen , and he was captured in an active combat zone . Bron"
+    "label": "The Authorization for Use of Military Force permitted battlefield detention but required meaningful review.",
+    "note": "The government uses Hamdi for detention authority. Bronner uses its notice-and-rebuttal rule and distinguishes capture abroad in active combat from arrest at home for alleged support."
   }
 ]
 
-export const GUIDE_RECORD_MAP_HTML = "<h2>Record map</h2><p>Guide uses PDF page numbers for R. cites. Confirm with coach before filing.</p><ul><li><strong>R. 1</strong> (printed —): Cover. Order of the Court; the two questions presented; AMCA attribution note</li><li><strong>R. 2</strong> (printed 1): Caption and panel; Barnhart writes, Sotelo concurs, Cassady/Cassidy dissents; the two claims; district court's holdings; jurisdiction (28 U.S.C. §§ 1331, 1343(3), 1291); facts stipulated, no material disputes, all issues legal and reviewed de novo, unraised issues not preserved ;</li><li><strong>R. 3</strong> (printed 2): § II.A. AUMF § 2(a) text; NDAA enacted, signed Dec. 31, 2011; § 1022 \"shall hold\" and the waiver; statute did not expressly forbid indefinite detention; § 1022(b)(1)–(2) text; failed Senate amendment; § 1021(d); the \"existing law\" clause (attributed here to § 1022(e)); unprivileg</li><li><strong>R. 4</strong> (printed 3): Obama signing statement; prior presidents including G.W. Bush; House Judiciary resolution not taken up; Senate AUMF repeal votes 2023 and 2025 ; § II.B ATA — § 4(a), § 4(b), § 4(b)(2); the gap for lawful residents; no time limit, no dangerousness finding, no counsel, no judicial </li><li><strong>R. 5</strong> (printed 4): The signing-ceremony quote (\"beyond any specific law or statutory framework\"); Guantanamo named; § II.D Bronner — age, entry at 15, Knerr, since 1995, green card 2010, business, taxes, two citizen children; naturalization approved Feb. 17, 2025, good moral character; oath set for</li><li><strong>R. 6</strong> (printed 5): Camera capabilities — auto-record of entries/exits, remote pan, 10x optical zoom, infrared night vision, time-stamped and stored; no warrant sought or obtained ; 93 consecutive days, 24 hours a day, motion-activated; pier house elevated ~4 ft; slat fence obscured most of the prop</li><li><strong>R. 7</strong> (printed 6): Zoom could not see interior items or identify occupants; blinds open → lights and movement near windows visible; the pattern-of-life list (pizza, Sparklets Tuesdays, Blue Apron Thursdays, Chewy, Omaha Steaks, Costco, Geek Squad, HVAC, masseuse twice weekly , Girl Scout cookies); </li><li><strong>R. 8</strong> (printed 7): § II.F. Search results — fentanyl patches, lollipops, spray, sales log; four boxes of lozenges in the car; warehouse: no drugs but sealed dirty-bomb documents Bronner has never reviewed ; his denials; May 29 booking; May 30 arraignment, not-guilty plea, release on bond, immediate</li><li><strong>R. 9</strong> (printed 8): § II.G. The clinic (Prof. Ayanna Grunwald) learns of the detention through a redacted filing; petition filed; the Article II theory; the two issues as framed by each side; Judge Fair rules for Bronner and stays; jurisdiction stipulated ; § III Fourth Amendment analysis opens with</li><li><strong>R. 10</strong> (printed 9): § III.A. Katz two-part inquiry; Ciraolo; cameras on public property; only the driveway, front steps, and porch surveilled; general interior activity only; blinds; \"duration alone does not transform\" citing Tuggle at 526; § III.B first impression; circuits uniformly contrary to on</li><li><strong>R. 11</strong> (printed 10): Cameras did not surveil after entry or departure; no wall penetration; \"enhanced observation of already-exposed activity\"; Moore-Bush at 361 (Lynch, J.); Carpenter distinguished — 93 days from fixed points vs. ~13,000 location points, targeted at an existing person of interest, c</li><li><strong>R. 12</strong> (printed 11): Government interests of the highest order; drug trafficking and domestic terror; four stationary cameras; \"similar to a stakeout\" ; no physical intrusion, no audio capture, no interior surveillance; conclusion that this was not a search; district court erred</li><li><strong>R. 13</strong> (printed 12): § IV Article II analysis; question framed; § IV.A — 10 U.S.C. § 948(a)(7); Bronner's conduct as material support; Prize Cases , 67 U.S. at 669 (\"baptize it with a name\"); Quirin , 317 U.S. at 37–38 (citizenship does not relieve an unlawful belligerent); § IV.B — Curtiss-Wright , </li><li><strong>R. 14</strong> (printed 13): Placement in Youngstown's first category; AUMF; NDAA § 1021(b)(2) covered-person definition and § 1021(c)(1) ; Youngstown , 343 U.S. at 635–38 (the three categories); Hamdi reading the AUMF to include detention; congressional refusal to bar indefinite detention; Costanzo , 287 U.</li><li><strong>R. 15</strong> (printed 14): The ATA \"further illuminates\"; ATA's broad grants + silence on lawful residents + preservation clauses → first category; § IV.C — no power may deprive constitutional rights; Mathews , 424 U.S. 319 (the three factors); Hamdi's notice-and-rebuttal requirement; habeas available and </li><li><strong>R. 16</strong> (printed 15): Dissent opens (Judge Cassidy). Kyllo's \"firm line at the entrance\"; three criticisms of the majority; the Police lyric; § I.A — Carpenter , 585 U.S. 296, \"comprehensive chronicle\" at 300; the dissent's own record cite, \"R. at 7\" ; Tuggle at 517–525 (courts and scholars embracing </li><li><strong>R. 17</strong> (printed 16): § I.B — Kyllo applied too narrowly; commonplace technology can still reveal domestic life; the four features in combination; \"rhythms of the household\" ; Moore-Bush (Barron, C.J.); Kyllo at 34 (\"shrinks the realm of guaranteed privacy\"); Tafoya, 494 P.3d at 620 (duration, continu</li><li><strong>R. 18</strong> (printed 17): Warrant requirement as the mechanism of neutral review, citing Keith , 407 U.S. 297; \"blueprint\" for evading review; no emergency or exigency; the failure to seek a warrant \"is fatal\"; Kyllo at 36–38; § II Article II analysis; Hamdi, 542 U.S. at 535 (\"not a blank check\"), extende</li><li><strong>R. 19</strong> (printed 18): Congress \"deliberately declined\"; legislative inaction is not an affirmative grant; Youngstown at 637–38 (scrutinize \"with caution\"); § 1022 + ATA § 4(b)(2) → third category, lowest ebb; § II.B — Quirin as saboteurs in a declared war , Milligan distinguished by Quirin, Hamdi tied</li><li><strong>R. 20</strong> (printed 18 (cont.)): Milligan on military jurisdiction where courts are open; Hamdi's process requirement; Mathews's three factors applied — liberty at Guantanamo after 12 months, error risk shown by the arraignment and bond release, sensitivity not demonstrated to preclude a neutral tribunal; Banyee</li><li><strong>R. 20</strong> (printed 19): Appendix I — AUMF preamble and § 2(a). Appendix II — 10 U.S.C. § 948(a)(7)(A)–(D)</li><li><strong>R. 21</strong> (printed 20): Appendix III — NDAA § 1021(a), (b)(1)–(2), (c)(1), (d), (e) . This is the authoritative location of the \"existing law\" clause</li><li><strong>R. 22</strong> (printed 21): Appendix IV — NDAA § 1022(a)(1)–(2), (a)(4) waiver, (b)(1)–(2) citizen and lawful-resident carve-outs. Note: there is no § 1022(e) in the appendix</li><li><strong>R. 23</strong> (printed 22): Appendix V begins — ATA §§ 1–3: purpose, definitions (unlawfully present, terrorism, territorial jurisdiction), findings</li><li><strong>R. 24</strong> (printed 23): ATA § 4 — (a) detention of persons present, (b)(1) offshore detention of the unlawfully present on presidential finding, (b)(2) citizens inside only, (c) neither limits nor expands, (d) effective date</li><li><strong>R. 25</strong> (printed 24): Appendix VI — EO 15,000: the recitals and asserted authorities, § 1 the AG's directive, § 2 Guantanamo and other sites, § 3 \"consistent with applicable law\"</li></ul>"
+export const GUIDE_RECORD_MAP_HTML = "<h2>Record map</h2><p>This map uses PDF page numbers for record citations. Confirm final citations with your coach before filing.</p><ul><li><strong>R. 1</strong>: Cover, order of the Court, the two questions presented, and the AMCA attribution note.</li><li><strong>R. 2</strong>: Caption and panel; the district court rulings; jurisdiction; stipulated facts; de novo review; and the rule that unraised issues are not preserved.</li><li><strong>R. 3</strong>: Authorization for Use of Military Force (AUMF) § 2(a); the National Defense Authorization Act for Fiscal Year 2012 (NDAA) §§ 1021–1022; the failed Senate amendment; and the disputed effect of Congress's detention language.</li><li><strong>R. 4</strong>: Presidential signing statements and practice; failed AUMF repeal efforts; the Anti-Terrorist Act (ATA) detention provisions; and the statutory gap concerning lawful residents.</li><li><strong>R. 5</strong>: Protection Against Terrorism (PAT), Executive Order 15,000; Guantanamo; and Bronner's history, family, naturalization approval, good-moral-character finding, and scheduled oath.</li><li><strong>R. 6</strong>: The anonymous tip; agents' decision not to seek a warrant; camera placement and capabilities; 93 days of motion-activated recording; and the layout around Bronner's home.</li><li><strong>R. 7</strong>: Limits on interior visibility; the recorded pattern of deliveries and visitors; the May 4 visit; independent warehouse observation; and the warrants based primarily on camera footage.</li><li><strong>R. 8</strong>: Search results; sealed dirty-bomb documents; Bronner's denials; arraignment and bond release; immediate re-arrest; the Attorney General's classification; and transfer to Guantanamo.</li><li><strong>R. 9</strong>: The clinic's discovery of the detention; habeas petition; competing Article II theories; the district court ruling; stipulated jurisdiction; and the start of Fourth Amendment analysis.</li><li><strong>R. 10</strong>: Katz and Ciraolo; public camera placement; the areas viewed; limited interior activity; and the majority's conclusion that duration alone does not transform observation into a search.</li><li><strong>R. 11</strong>: No tracking after departure or wall penetration; the majority's public-exposure frame; Moore-Bush; and the majority's reasons for distinguishing Carpenter.</li><li><strong>R. 12</strong>: The government interests asserted; the stakeout analogy; the absence of physical intrusion, audio, or interior surveillance; and the conclusion that no search occurred.</li><li><strong>R. 13</strong>: The Article II question; statutory definition of an unlawful enemy belligerent; alleged material support; Prize Cases; Quirin; and Curtiss-Wright.</li><li><strong>R. 14</strong>: The majority's Youngstown Category 1 analysis; AUMF and NDAA detention provisions; Hamdi; failed efforts to bar indefinite detention; and asserted congressional acquiescence.</li><li><strong>R. 15</strong>: The majority's ATA analysis; constitutional limits on granted power; the Mathews factors; Hamdi's notice-and-rebuttal rule; and the process the majority considered available.</li><li><strong>R. 16</strong>: The dissent's Fourth Amendment analysis; Kyllo and Carpenter; the comprehensive-chronicle concern; and Tuggle's discussion of aggregated surveillance.</li><li><strong>R. 17</strong>: The dissent's combined-technology analysis; Moore-Bush and Tafoya; and why duration, continuity, and camera capacity may reveal the rhythms of a household.</li><li><strong>R. 18</strong>: Keith and neutral warrant review; the absence of emergency or exigency; the start of the dissent's Article II analysis; and Hamdi's warning that war is not a blank check.</li><li><strong>R. 19</strong>: The dissent's view that Congress deliberately withheld authority; Youngstown Category 3 or, at best, Category 2; and distinctions among Quirin, Milligan, and Hamdi.</li><li><strong>R. 20 (opinion)</strong>: Milligan and open civilian courts; Hamdi's process requirement; application of the Mathews factors; and Banyee's limited immigration-detention analogy.</li><li><strong>R. 20 (Appendix I)</strong>: AUMF preamble and § 2(a), followed by 10 U.S.C. § 948a(7)(A)–(D).</li><li><strong>R. 21</strong>: NDAA § 1021(a), (b)(1)–(2), (c)(1), (d), and (e). This appendix is the authoritative location of the existing-law clause.</li><li><strong>R. 22</strong>: NDAA § 1022(a)(1)–(2), the waiver in (a)(4), and the citizen and lawful-resident carve-outs in (b)(1)–(2). The appendix contains no § 1022(e).</li><li><strong>R. 23</strong>: ATA §§ 1–3, including purpose, definitions, territorial jurisdiction, and congressional findings.</li><li><strong>R. 24</strong>: ATA § 4, including detention authority, offshore detention for unlawfully present people, the citizen-only rule for detention inside the United States, preservation language, and effective date.</li><li><strong>R. 25</strong>: Executive Order 15,000 (PAT), including asserted authorities, the Attorney General's directive, authorized detention sites, and the instruction to act consistently with applicable law.</li></ul>"
