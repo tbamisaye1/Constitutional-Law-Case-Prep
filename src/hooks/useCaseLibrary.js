@@ -15,6 +15,7 @@ import {
   removeIngestSource,
   syncChanges,
   uploadDocument,
+  uploadDocumentDirect,
 } from '../api/client'
 import { idbDeleteFile, idbGetFile, idbPutFile } from '../lib/fileStore'
 import { onPageHide, readJson, writeJson } from '../lib/persist'
@@ -345,7 +346,9 @@ async function uploadFileBytes(meta, blob) {
   if (memory.syncStatus === 'off' || !blob) return
 
   try {
-    await uploadDocument(blob, {
+    // Direct-to-Blob for every file: avoids Vercel's 4.5 MB API body cap so
+    // full opinions (Youngstown, Milligan) sync across devices.
+    await uploadDocumentDirect(blob, {
       documentId: meta.id,
       caseId: meta.caseId,
       name: meta.name,
@@ -361,12 +364,39 @@ async function uploadFileBytes(meta, blob) {
     }
     emit()
     persistSoon()
-  } catch (error) {
-    console.warn(`Could not upload ${meta.name}`, error)
-    // Worth showing: the file works here but will not appear on another
-    // device, and the size limit is something the user can act on.
+  } catch (directError) {
+    // Small files can still use the older proxied path when the token mint
+    // fails (missing BLOB_READ_WRITE_TOKEN locally, etc.).
+    if (blob.size <= 4 * 1024 * 1024) {
+      try {
+        await uploadDocument(blob, {
+          documentId: meta.id,
+          caseId: meta.caseId,
+          name: meta.name,
+        })
+        memory = {
+          ...memory,
+          store: {
+            ...memory.store,
+            filesMeta: memory.store.filesMeta.map((file) =>
+              file.id === meta.id ? { ...file, stored: true } : file
+            ),
+          },
+        }
+        emit()
+        persistSoon()
+        return
+      } catch (proxyError) {
+        console.warn(`Could not upload ${meta.name}`, proxyError)
+        setMemory({
+          saveError: `${meta.name} is saved in this browser but not on the backend. ${proxyError?.message || ''}`.trim(),
+        })
+        return
+      }
+    }
+    console.warn(`Could not upload ${meta.name}`, directError)
     setMemory({
-      saveError: `${meta.name} is saved in this browser but not on the backend. ${error?.message || ''}`.trim(),
+      saveError: `${meta.name} is saved in this browser but not on the backend. ${directError?.message || ''}`.trim(),
     })
   }
 }
@@ -508,6 +538,68 @@ export function useCaseLibrary() {
     (caseId) => snap.store.notesByCase[caseId] || emptyLayerNotes(),
     [snap.store.notesByCase]
   )
+
+  /**
+   * Attach one PDF blob under a case and return the new filesMeta row.
+   * Used by Ask AI cite → viewer jumps when the file lives in /ingest uploads
+   * but is not yet in IndexedDB.
+   */
+  const attachBlob = useCallback(async (caseId, name, blob, options = {}) => {
+    if (!caseId || !blob) return null
+    const fileName = name || 'document.pdf'
+    const already = memory.store.filesMeta.find(
+      (f) => f.caseId === caseId && f.name === fileName
+    )
+    if (already && memory.blobs[already.id]) {
+      return already
+    }
+
+    const id = already?.id || `pdf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    const typed = blob.slice(0, blob.size, blob.type || 'application/pdf')
+    try {
+      await idbPutFile({ id, caseId, name: fileName, blob: typed })
+    } catch (error) {
+      console.error('PDF save failed', error)
+      setMemory({
+        saveError: 'Could not store that PDF in this browser. Try a smaller file, or turn off private mode.',
+      })
+      return null
+    }
+
+    const meta = already
+      ? { ...already, size: typed.size, savedAt: Date.now() }
+      : {
+          id,
+          caseId,
+          name: fileName,
+          size: typed.size,
+          savedAt: Date.now(),
+          // Already in FAISS when pulled from /ingest/file.
+          askAiIndexed: options.askAiIndexed !== false,
+        }
+
+    setMemory({ blobs: { ...memory.blobs, [id]: typed }, saveError: '' })
+    updateStore(
+      (prev) => {
+        const filesMeta = already
+          ? prev.filesMeta.map((f) => (f.id === id ? meta : f))
+          : [meta, ...prev.filesMeta]
+        return {
+          ...prev,
+          filesMeta,
+          activeFileId: id,
+          pageByFile: { ...prev.pageByFile, [id]: prev.pageByFile[id] || 1 },
+        }
+      },
+      [metaKey('documents', id)]
+    )
+
+    await uploadFileBytes(meta, typed)
+    if (!meta.askAiIndexed) {
+      await indexFileForAskAi(meta, typed)
+    }
+    return meta
+  }, [])
 
   const attachFiles = useCallback(async (caseId, fileList) => {
     const files = Array.from(fileList || [])
@@ -789,6 +881,7 @@ export function useCaseLibrary() {
     setLayerNote,
     getLayerNotes,
     attachFiles,
+    attachBlob,
     removeFile,
     setPage,
     upsertAnnotation,

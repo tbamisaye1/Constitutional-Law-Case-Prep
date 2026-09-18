@@ -104,6 +104,18 @@ export async function removeIngestSource(source) {
 }
 
 /**
+ * Download a PDF that was saved during /ingest/pdf (Ask AI corpus store).
+ * Used when Case library / Articles need to open a cite that is indexed but
+ * not yet attached in this browser.
+ */
+export async function downloadIngestFile(filename) {
+  const safe = String(filename || "").split(/[/\\]/).pop();
+  const res = await fetch(`${BASE}/ingest/file/${encodeURIComponent(safe)}`);
+  if (!res.ok) throw new Error(await errorDetail(res, `Could not open ${safe}`));
+  return res.blob();
+}
+
+/**
  * Push local changes and pull whatever else moved, in one round trip.
  *
  * @param {number} since serverTime from the previous sync. 0 downloads everything.
@@ -133,6 +145,8 @@ export async function getSyncStatus() {
  * The caller has already written the file to IndexedDB, so a rejection here
  * leaves the PDF usable in this browser and only costs cross-device access.
  *
+ * Prefer uploadDocumentDirect for files near or over Vercel's 4.5 MB body cap.
+ *
  * @param {File|Blob} file The PDF.
  * @param {{documentId: string, caseId: string, name: string}} meta Ids the
  *   backend records against, matching the local filesMeta row.
@@ -150,6 +164,81 @@ export async function uploadDocument(file, { documentId, caseId, name }) {
   });
   if (!res.ok) throw new Error(await errorDetail(res, `upload failed: ${res.status}`));
   return res.json();
+}
+
+/**
+ * Upload PDF bytes straight to Vercel Blob, then register the row on the API.
+ *
+ * Skips the API request-body limit. Flow:
+ * 1. Ask the API for a short-lived client token scoped to this workspace
+ * 2. PUT the PDF to Blob with that token
+ * 3. POST /documents/complete so Postgres knows the file is stored
+ */
+export async function uploadDocumentDirect(file, { documentId, caseId, name }) {
+  const tokenRes = await fetch(`${BASE}/documents/blob-client-upload`, {
+    method: "POST",
+    headers: workspaceHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      type: "blob.generate-client-token",
+      payload: {
+        pathname: `case-law-agent/workspaces/pending/${documentId}/upload.pdf`,
+        clientPayload: JSON.stringify({ documentId, caseId, name }),
+        multipart: false,
+      },
+    }),
+  });
+  if (!tokenRes.ok) {
+    throw new Error(await errorDetail(tokenRes, `direct upload token failed: ${tokenRes.status}`));
+  }
+  const tokenBody = await tokenRes.json();
+  const clientToken = tokenBody.clientToken;
+  const pathname = tokenBody.pathname;
+  if (!clientToken || !pathname) {
+    throw new Error("Blob upload token response was incomplete.");
+  }
+
+  const putRes = await fetch(`https://blob.vercel-storage.com/${pathname}`, {
+    method: "PUT",
+    headers: {
+      authorization: `Bearer ${clientToken}`,
+      "x-api-version": "7",
+      "x-content-type": file.type || "application/pdf",
+      "x-content-length": String(file.size),
+      "x-add-random-suffix": "0",
+    },
+    body: file,
+  });
+  if (!putRes.ok) {
+    const detail = await putRes.text();
+    throw new Error(detail || `Blob PUT failed: ${putRes.status}`);
+  }
+  let stored = {};
+  try {
+    stored = await putRes.json();
+  } catch {
+    stored = {};
+  }
+  const blobUrl = stored.url || stored.downloadUrl || "";
+  if (!blobUrl) {
+    throw new Error("Blob accepted the upload but returned no URL.");
+  }
+
+  const completeRes = await fetch(`${BASE}/documents/complete`, {
+    method: "POST",
+    headers: workspaceHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      document_id: documentId,
+      case_id: caseId,
+      name,
+      size_bytes: file.size,
+      blob_pathname: pathname,
+      blob_url: blobUrl,
+    }),
+  });
+  if (!completeRes.ok) {
+    throw new Error(await errorDetail(completeRes, `complete upload failed: ${completeRes.status}`));
+  }
+  return completeRes.json();
 }
 
 /**
