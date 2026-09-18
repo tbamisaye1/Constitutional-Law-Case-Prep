@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Plus, Search, SlidersHorizontal } from 'lucide-react'
 import { FactCard, FactDetail } from '../components/facts/FactCard'
 import { MemoriseDeck } from '../components/facts/MemoriseDeck'
@@ -15,7 +16,14 @@ import * as ScrollArea from '@radix-ui/react-scroll-area'
 export function FactsPage() {
   const f = useFacts()
   const lib = useCaseLibrary()
+  const [params] = useSearchParams()
   const [filtersOpen, setFiltersOpen] = useState(false)
+
+  useEffect(() => {
+    if (params.get('view') === 'record' || params.get('file') || params.get('q')) {
+      f.setView('record')
+    }
+  }, [params]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeFilterCount = useMemo(() => {
     let n = 0

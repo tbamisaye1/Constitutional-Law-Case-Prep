@@ -1,10 +1,19 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Tree } from 'react-arborist'
-import { ChevronDown, ChevronRight, Folder, FolderOpen, Plus } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  FolderOpen,
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 
 /**
  * Left OneNote pane: section groups + sections.
  * Tree behavior from react-arborist (drag, open/close, keyboard).
+ * Rename: double-click, F2, or pencil. Delete: trash or Backspace.
  * https://github.com/brimdata/react-arborist
  */
 export function SectionTree({
@@ -15,9 +24,19 @@ export function SectionTree({
   onAddGroup,
   onAddSection,
   onRenameNode,
+  onDeleteNodes,
 }) {
   const wrapRef = useRef(null)
   const data = useMemo(() => tree, [tree])
+
+  function confirmAndDelete(ids, label) {
+    if (!ids?.length || !onDeleteNodes) return
+    const noun = ids.length === 1 ? `"${label}"` : `${ids.length} items`
+    if (!window.confirm(`Delete ${noun}? Pages in deleted sections are removed from this browser.`)) {
+      return
+    }
+    onDeleteNodes(ids)
+  }
 
   return (
     <div className="onenote-tree" ref={wrapRef}>
@@ -32,6 +51,11 @@ export function SectionTree({
           openByDefault
           selection={selectedSectionId || undefined}
           onRename={({ id, name }) => onRenameNode(id, name)}
+          onDelete={({ ids }) => {
+            const label =
+              ids.length === 1 ? findNodeName(tree, ids[0]) || 'this item' : `${ids.length} items`
+            confirmAndDelete(ids, label)
+          }}
           onMove={({ dragIds, parentId, index }) => {
             setTree((prev) => moveNodes(prev, dragIds, parentId, index))
           }}
@@ -50,8 +74,13 @@ export function SectionTree({
                   : 'tree-row'
               }
               onClick={() => {
+                if (node.isEditing) return
                 if (node.data.kind === 'group') node.toggle()
                 else onSelectSection(node.id)
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+                if (!node.isEditing) node.edit()
               }}
             >
               {node.data.kind === 'group' ? (
@@ -80,7 +109,39 @@ export function SectionTree({
                   <Folder size={15} strokeWidth={1.75} />
                 )
               ) : null}
-              <span className="tree-name">{node.data.name}</span>
+              {node.isEditing ? (
+                <RenameInput node={node} />
+              ) : (
+                <>
+                  <span className="tree-name">{node.data.name}</span>
+                  <span className="tree-row-actions">
+                    <button
+                      type="button"
+                      className="tree-action"
+                      aria-label={`Rename ${node.data.name}`}
+                      title="Rename"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        node.edit()
+                      }}
+                    >
+                      <Pencil size={13} strokeWidth={1.75} />
+                    </button>
+                    <button
+                      type="button"
+                      className="tree-action danger"
+                      aria-label={`Delete ${node.data.name}`}
+                      title="Delete"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        confirmAndDelete([node.id], node.data.name)
+                      }}
+                    >
+                      <Trash2 size={13} strokeWidth={1.75} />
+                    </button>
+                  </span>
+                </>
+              )}
             </div>
           )}
         </Tree>
@@ -99,6 +160,57 @@ export function SectionTree({
       </div>
     </div>
   )
+}
+
+function RenameInput({ node }) {
+  const input = useRef(null)
+
+  useEffect(() => {
+    input.current?.focus()
+    input.current?.select()
+  }, [])
+
+  function commit() {
+    const next = (input.current?.value || '').trim()
+    if (!next || next === node.data.name) {
+      node.reset()
+      return
+    }
+    node.submit(next)
+  }
+
+  return (
+    <input
+      ref={input}
+      className="tree-rename-input"
+      defaultValue={node.data.name}
+      aria-label="Section name"
+      onClick={(e) => e.stopPropagation()}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        e.stopPropagation()
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          node.reset()
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          commit()
+        }
+      }}
+    />
+  )
+}
+
+function findNodeName(nodes, id) {
+  for (const n of nodes) {
+    if (n.id === id) return n.name
+    if (n.children) {
+      const hit = findNodeName(n.children, id)
+      if (hit) return hit
+    }
+  }
+  return null
 }
 
 function findParentGroup(tree, sectionId) {

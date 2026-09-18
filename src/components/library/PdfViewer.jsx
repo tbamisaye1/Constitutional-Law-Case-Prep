@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, FileUp, Highlighter, Sparkles, ZoomIn, ZoomO
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 import { useAiUi } from '../../ai/AiUiContext'
+import { findQuoteOnPage } from '../../lib/pdfQuoteFocus'
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
 
@@ -11,6 +12,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.vers
  * PDF reader with text-select → highlight note.
  * Selection is captured relative to the page box so overlays survive zoom changes
  * (rects are stored as fractions of page width/height).
+ *
+ * Optional `focusQuote`: after the text layer renders, find that snippet, paint a
+ * temporary highlight, and scroll it into view (Ask AI cite → jump).
  */
 export function PdfViewer({
   file,
@@ -21,28 +25,71 @@ export function PdfViewer({
   highlights = [],
   onHighlight,
   caseId = null,
+  focusQuote = '',
+  emptyHint = '',
 }) {
   const [numPages, setNumPages] = useState(null)
   const [scale, setScale] = useState(1.05)
   const [error, setError] = useState('')
   const [pending, setPending] = useState(null)
+  const [focusRects, setFocusRects] = useState([])
   const stageRef = useRef(null)
+  const focusKeyRef = useRef('')
   const { openBubble } = useAiUi()
 
   useEffect(() => {
     setNumPages(null)
     setError('')
     setPending(null)
+    setFocusRects([])
+    focusKeyRef.current = ''
   }, [file])
 
   useEffect(() => {
     setPending(null)
-  }, [page])
+    setFocusRects([])
+    focusKeyRef.current = ''
+  }, [page, focusQuote])
 
   const pageHighlights = useMemo(
     () => highlights.filter((h) => h.page === page && Array.isArray(h.rects) && h.rects.length),
     [highlights, page]
   )
+
+  function applyFocusQuote() {
+    const needle = String(focusQuote || '').trim()
+    if (!needle || !file) return
+    const key = `${fileName || ''}|${page}|${needle.slice(0, 80)}`
+    if (focusKeyRef.current === key) return
+
+    const pageEl = stageRef.current?.querySelector('.react-pdf__Page')
+    if (!pageEl) return
+
+    const found = findQuoteOnPage(pageEl, needle)
+    if (!found) return
+
+    focusKeyRef.current = key
+    setFocusRects(found.rects)
+
+    try {
+      const first = found.range.getBoundingClientRect()
+      if (first && (first.height > 0 || first.width > 0)) {
+        const scroller = stageRef.current
+        if (scroller) {
+          const stageBox = scroller.getBoundingClientRect()
+          const delta = first.top - stageBox.top - scroller.clientHeight * 0.25
+          scroller.scrollTop += delta
+        } else {
+          found.range.startContainer?.parentElement?.scrollIntoView?.({
+            block: 'center',
+            behavior: 'smooth',
+          })
+        }
+      }
+    } catch {
+      // Highlight still paints even if scroll fails.
+    }
+  }
 
   function onMouseUp() {
     if (!onHighlight) return
@@ -103,13 +150,17 @@ export function PdfViewer({
       <div className="pdf-empty">
         <FileUp size={28} strokeWidth={1.5} />
         <p>
-          Open the PDF from your machine (browser cannot read your YUMC folder path directly).
-          {suggestedFile ? (
+          {emptyHint || (
             <>
-              {' '}
-              Look for <span className="mono">{suggestedFile}</span>.
+              Open the PDF from your machine (browser cannot read your YUMC folder path directly).
+              {suggestedFile ? (
+                <>
+                  {' '}
+                  Look for <span className="mono">{suggestedFile}</span>.
+                </>
+              ) : null}
             </>
-          ) : null}
+          )}
         </p>
       </div>
     )
@@ -174,6 +225,10 @@ export function PdfViewer({
               renderTextLayer
               renderAnnotationLayer
               loading={<p className="pdf-loading mono">Rendering page…</p>}
+              onRenderTextLayerSuccess={() => {
+                // Text layer paints after this callback; wait one frame so spans exist.
+                requestAnimationFrame(() => applyFocusQuote())
+              }}
             />
           </Document>
 
@@ -192,6 +247,18 @@ export function PdfViewer({
                 />
               ))
             )}
+            {focusRects.map((r, i) => (
+              <span
+                key={`focus-${i}`}
+                className="pdf-hl pdf-hl-focus"
+                style={{
+                  top: `${r.top * 100}%`,
+                  left: `${r.left * 100}%`,
+                  width: `${r.width * 100}%`,
+                  height: `${r.height * 100}%`,
+                }}
+              />
+            ))}
           </div>
 
           {pending ? (

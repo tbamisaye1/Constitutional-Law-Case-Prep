@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Maximize2, Plus, Search } from 'lucide-react'
 import { Tag } from '../components/CaseCard'
@@ -11,11 +11,14 @@ import { MatterTagBar } from '../components/library/MatterTagBar'
 import { PdfViewer } from '../components/library/PdfViewer'
 import { AnnotationPanel } from '../components/library/AnnotationPanel'
 import { useCaseLibrary } from '../hooks/useCaseLibrary'
+import { downloadIngestFile } from '../api/client'
+import { isBootstrapOyezSource } from '../lib/openEvidencePdf'
 import { USEFULNESS } from '../data/caseResearchSeed'
 import * as ScrollArea from '@radix-ui/react-scroll-area'
 
 /**
  * Case library: browse list OR deep-dive one case with full-width notes.
+ * Deep-link: /library?case=&file=&page=&q= (Ask AI cite jump).
  */
 export function LibraryPage() {
   const [params, setParams] = useSearchParams()
@@ -25,11 +28,20 @@ export function LibraryPage() {
   const [filter, setFilter] = useState('all')
   const [usefulFilter, setUsefulFilter] = useState('all')
   const [query, setQuery] = useState('')
-  const [pane, setPane] = useState('notes')
+  const [pane, setPane] = useState(
+    params.get('file') || params.get('page') || params.get('q') ? 'read' : 'notes'
+  )
   const [editing, setEditing] = useState(false)
   const [notesTab, setNotesTab] = useState('understand')
   const [openCite, setOpenCite] = useState(null)
   const [deepDive, setDeepDive] = useState(true)
+  const [pullError, setPullError] = useState('')
+  const [pulling, setPulling] = useState(false)
+
+  const paramFile = params.get('file')
+  const paramPage = Number(params.get('page') || 0)
+  const focusQuote = params.get('q') || ''
+  const missing = params.get('missing') || ''
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -46,12 +58,69 @@ export function LibraryPage() {
 
   const caseFiles = lib.filesMeta.filter((f) => f.caseId === selected?.id)
   const activeId =
-    lib.activeFileId && caseFiles.some((f) => f.id === lib.activeFileId)
+    (paramFile && caseFiles.some((f) => f.id === paramFile) && paramFile) ||
+    (lib.activeFileId && caseFiles.some((f) => f.id === lib.activeFileId)
       ? lib.activeFileId
-      : caseFiles[0]?.id || null
+      : caseFiles[0]?.id || null)
   const fileMeta = caseFiles.find((f) => f.id === activeId)
   const fileBlob = activeId ? lib.blobs[activeId] : null
-  const page = (activeId && lib.pageByFile[activeId]) || 1
+  const page =
+    (paramPage > 0 && (!paramFile || paramFile === activeId) ? paramPage : null) ||
+    (activeId && lib.pageByFile[activeId]) ||
+    1
+
+  useEffect(() => {
+    if (paramFile && caseFiles.some((f) => f.id === paramFile)) {
+      lib.setActiveFileId(paramFile)
+      setPane('read')
+      setDeepDive(true)
+    }
+    if (paramPage > 0 && (paramFile || activeId)) {
+      lib.setPage(paramFile || activeId, paramPage)
+      setPane('read')
+    }
+    if (focusQuote || missing) {
+      setPane('read')
+      setDeepDive(true)
+    }
+  }, [paramFile, paramPage, focusQuote, missing, selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!missing || !selected?.id) return
+    if (isBootstrapOyezSource(missing)) {
+      setPullError(
+        `Ask AI used a short Oyez summary here, not a PDF. Attach ${selected.suggestedFile || 'the opinion'} from YUMC/Year 2/Cases.`
+      )
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      setPulling(true)
+      setPullError('')
+      try {
+        const blob = await downloadIngestFile(missing)
+        if (cancelled) return
+        const meta = await lib.attachBlob(selected.id, missing, blob)
+        if (meta?.id) {
+          lib.setActiveFileId(meta.id)
+          if (paramPage > 0) lib.setPage(meta.id, paramPage)
+          const next = new URLSearchParams(params)
+          next.delete('missing')
+          next.set('file', meta.id)
+          if (paramPage > 0) next.set('page', String(paramPage))
+          setParams(next, { replace: true })
+          setPane('read')
+        }
+      } catch (error) {
+        if (!cancelled) setPullError(error?.message || `Could not load ${missing}`)
+      } finally {
+        if (!cancelled) setPulling(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [missing, selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function selectCase(id) {
     setParams({ case: id })
@@ -77,6 +146,25 @@ export function LibraryPage() {
 
   const citeFrom = openCite && lib.cases.find((c) => c.id === openCite.fromCaseId)
   const citeTo = openCite && lib.cases.find((c) => c.id === openCite.toCaseId)
+
+  const emptyHint =
+    missing || pullError ? (
+      <>
+        {pulling ? (
+          <>
+            Pulling <span className="mono">{missing}</span> from the Ask AI upload store…
+          </>
+        ) : pullError ? (
+          <>
+            {pullError} Attach <span className="mono">{missing || selected.suggestedFile}</span> below.
+          </>
+        ) : (
+          <>
+            Looking for <span className="mono">{missing}</span>…
+          </>
+        )}
+      </>
+    ) : undefined
 
   return (
     <section className={`workspace library-room editorial-room ${deepDive ? 'is-dive' : ''}`}>
@@ -271,7 +359,7 @@ export function LibraryPage() {
                 filesMeta={lib.filesMeta}
                 blobs={lib.blobs}
                 activeFileId={activeId}
-                suggestedFile={selected.suggestedFile}
+                suggestedFile={missing || selected.suggestedFile}
                 onSelect={(id) => lib.setActiveFileId(id)}
                 onAttach={lib.attachFiles}
                 onRemove={lib.removeFile}
@@ -282,8 +370,10 @@ export function LibraryPage() {
                   fileName={fileMeta?.name}
                   page={page}
                   caseId={selected.id}
+                  focusQuote={focusQuote}
+                  emptyHint={emptyHint}
                   onPageChange={(p) => activeId && lib.setPage(activeId, p)}
-                  suggestedFile={selected.suggestedFile}
+                  suggestedFile={missing || selected.suggestedFile}
                   highlights={lib.annotations.filter(
                     (a) =>
                       a.caseId === selected.id &&

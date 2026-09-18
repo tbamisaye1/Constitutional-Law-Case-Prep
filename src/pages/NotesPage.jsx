@@ -39,6 +39,7 @@ export function NotesPage() {
           onAddGroup={nb.addSectionGroup}
           onAddSection={nb.addSection}
           onRenameNode={nb.renameTreeNode}
+          onDeleteNodes={nb.deleteTreeNodes}
         />
 
         <PageList
@@ -66,7 +67,8 @@ export function NotesPage() {
             </>
           ) : (
             <div className="placeholder-box">
-              Select a section, then add a page. Double-click a name in the left tree to rename.
+              Select a section, then add a page. Hover a section to rename or delete it
+              (or double-click / F2 to rename, Backspace to delete).
             </div>
           )}
         </div>

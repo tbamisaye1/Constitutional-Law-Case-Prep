@@ -5,6 +5,7 @@ import { GuidePage } from './pages/GuidePage'
 import { NotesPage } from './pages/NotesPage'
 import { FactsPage } from './pages/FactsPage'
 import { LibraryPage } from './pages/LibraryPage'
+import { ArticlesPage } from './pages/ArticlesPage'
 import { ArgumentsPage } from './pages/ArgumentsPage'
 import { OpeningsPage, UploadPage } from './pages/WorkspaceExtras'
 import { AgentPage } from './pages/AgentPage'
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/guide" element={<GuidePage />} />
           <Route path="/facts" element={<FactsPage />} />
           <Route path="/library" element={<LibraryPage />} />
+          <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/notes" element={<NotesPage />} />
           <Route path="/arguments" element={<ArgumentsPage />} />
           <Route path="/openings" element={<OpeningsPage />} />

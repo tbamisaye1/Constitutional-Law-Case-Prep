@@ -125,8 +125,32 @@ export function useNotebook() {
   }, [])
 
   const renameTreeNode = useCallback((id, name) => {
-    setTree((prev) => renameInTree(prev, id, name))
+    const trimmed = (name || '').trim()
+    if (!trimmed) return
+    setTree((prev) => renameInTree(prev, id, trimmed))
   }, [])
+
+  const deleteTreeNodes = useCallback(
+    (ids) => {
+      if (!ids?.length) return
+      const idSet = new Set(ids)
+      const removedSectionIds = collectSectionIds(tree, idSet)
+      const nextTree = removeFromTree(tree, idSet)
+      const nextPages = { ...pagesBySection }
+      for (const sid of removedSectionIds) delete nextPages[sid]
+
+      const nextSectionId =
+        sectionId && !removedSectionIds.has(sectionId)
+          ? sectionId
+          : findFirstSectionId(nextTree)
+
+      setTree(nextTree)
+      setPagesBySection(nextPages)
+      setSectionId(nextSectionId)
+      setPageId(nextSectionId ? nextPages[nextSectionId]?.[0]?.id || null : null)
+    },
+    [tree, pagesBySection, sectionId]
+  )
 
   const pagePreviews = pages.map((p) => ({
     ...p,
@@ -148,6 +172,7 @@ export function useNotebook() {
     addSection,
     addSectionGroup,
     renameTreeNode,
+    deleteTreeNodes,
   }
 }
 
@@ -168,4 +193,28 @@ function renameInTree(nodes, id, name) {
     if (n.children) return { ...n, children: renameInTree(n.children, id, name) }
     return n
   })
+}
+
+/** Section ids removed when deleting the given node ids (includes nested sections). */
+function collectSectionIds(nodes, idSet) {
+  const out = new Set()
+  function walk(list, ancestorHit) {
+    for (const n of list) {
+      const hit = ancestorHit || idSet.has(n.id)
+      if (n.kind === 'section' && hit) out.add(n.id)
+      if (n.children?.length) walk(n.children, hit)
+    }
+  }
+  walk(nodes, false)
+  return out
+}
+
+function removeFromTree(nodes, idSet) {
+  const next = []
+  for (const n of nodes) {
+    if (idSet.has(n.id)) continue
+    if (n.children) next.push({ ...n, children: removeFromTree(n.children, idSet) })
+    else next.push(n)
+  }
+  return next
 }

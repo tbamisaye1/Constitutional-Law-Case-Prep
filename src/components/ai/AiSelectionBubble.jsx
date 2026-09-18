@@ -1,7 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Sparkles, X } from 'lucide-react'
 import { GroundingBadge } from '../GroundingBadge'
 import { useAiUi } from '../../ai/AiUiContext'
+import { useCaseLibrary } from '../../hooks/useCaseLibrary'
+import { downloadIngestFile } from '../../api/client'
+import { openEvidencePdf } from '../../lib/openEvidencePdf'
 import {
   SAMPLE_PROMPT_GROUPS,
   WEB_SAMPLE_PROMPT_GROUPS,
@@ -13,6 +17,7 @@ import {
 /**
  * Floating AI bubble.
  * Mode switch: Uploaded articles (RAG only) | Web (corpus + OpenRouter search).
+ * Corpus evidence cards open the PDF viewer on the cited page + quote.
  */
 export function AiSelectionBubble() {
   const {
@@ -30,6 +35,10 @@ export function AiSelectionBubble() {
     runPrompt,
     clearReply,
   } = useAiUi()
+  const navigate = useNavigate()
+  const lib = useCaseLibrary()
+  const [openingId, setOpeningId] = useState('')
+  const [openError, setOpenError] = useState('')
 
   const focusRef = useRef(null)
   const webPlus = groundingSource === 'web_plus'
@@ -45,6 +54,30 @@ export function AiSelectionBubble() {
       focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
   }, [open, loading, reply])
+
+  useEffect(() => {
+    setOpenError('')
+    setOpeningId('')
+  }, [reply])
+
+  async function onOpenEvidence(ev) {
+    if (!ev || ev.source_type === 'web') return
+    setOpeningId(ev.id)
+    setOpenError('')
+    try {
+      const result = await openEvidencePdf({
+        evidence: ev,
+        lib,
+        navigate,
+        downloadIngestFile,
+      })
+      if (!result.ok && result.error) setOpenError(result.error)
+    } catch (error) {
+      setOpenError(error?.message || 'Could not open that PDF.')
+    } finally {
+      setOpeningId('')
+    }
+  }
 
   if (!open) return null
 
@@ -190,15 +223,29 @@ export function AiSelectionBubble() {
 
             {corpusEvidence.length ? (
               <div className="ai-bubble-evidence ai-bubble-evidence-first">
-                <div className="ai-sample-label mono">Retrieved from uploaded articles</div>
+                <div className="ai-sample-label mono">Retrieved from Ask AI corpus</div>
+                <p className="ai-ev-hint mono">
+                  Click a PDF cite to open it. Oyez summaries are text-only until you attach the
+                  opinion.
+                </p>
+                {openError ? <p className="ai-ev-error">{openError}</p> : null}
                 {corpusEvidence.slice(0, 4).map((ev) => (
-                  <div key={ev.id} className="ai-ev-card">
+                  <button
+                    key={ev.id}
+                    type="button"
+                    className="ai-ev-card"
+                    disabled={Boolean(openingId)}
+                    onClick={() => onOpenEvidence(ev)}
+                  >
                     <div className="mono ai-ev-src">
                       [{ev.id}] {ev.source}
                       {ev.page != null ? ` · p.${ev.page}` : ''}
                     </div>
                     <p>{ev.preview}</p>
-                  </div>
+                    <span className="mono ai-ev-open">
+                      {openingId === ev.id ? 'Opening…' : 'Open in viewer →'}
+                    </span>
+                  </button>
                 ))}
               </div>
             ) : null}
@@ -207,7 +254,7 @@ export function AiSelectionBubble() {
               <div className="ai-bubble-evidence">
                 <div className="ai-sample-label mono">From the web</div>
                 {webEvidence.slice(0, 4).map((ev) => (
-                  <div key={ev.id} className="ai-ev-card">
+                  <div key={ev.id} className="ai-ev-card ai-ev-card-static">
                     <div className="mono ai-ev-src">
                       [{ev.id}] {ev.source}
                     </div>

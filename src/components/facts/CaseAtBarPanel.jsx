@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { CaseFilesPanel } from '../library/CaseFilesPanel'
 import { PdfViewer } from '../library/PdfViewer'
 import { AnnotationPanel } from '../library/AnnotationPanel'
@@ -9,18 +10,40 @@ import { CASE_AT_BAR_ID, CASE_AT_BAR_LABEL } from '../../data/caseAtBar'
 /**
  * Upload / read the record PDF, highlight, annotate, and keep working notes.
  * Reuses library PDF storage under a reserved case id.
+ * Deep-link: /facts?view=record&file=&page=&q=
  */
 export function CaseAtBarPanel({ lib }) {
+  const [params] = useSearchParams()
   const [mode, setMode] = useState('read') // read | notes
+  const paramFile = params.get('file')
+  const paramPage = Number(params.get('page') || 0)
+  const focusQuote = params.get('q') || ''
+
   const caseFiles = lib.filesMeta.filter((f) => f.caseId === CASE_AT_BAR_ID)
   const activeId =
-    lib.activeFileId && caseFiles.some((f) => f.id === lib.activeFileId)
+    (paramFile && caseFiles.some((f) => f.id === paramFile) && paramFile) ||
+    (lib.activeFileId && caseFiles.some((f) => f.id === lib.activeFileId)
       ? lib.activeFileId
-      : caseFiles[0]?.id || null
+      : caseFiles[0]?.id || null)
   const fileMeta = caseFiles.find((f) => f.id === activeId)
   const fileBlob = activeId ? lib.blobs[activeId] : null
-  const page = (activeId && lib.pageByFile[activeId]) || 1
+  const page =
+    (paramPage > 0 && (!paramFile || paramFile === activeId) ? paramPage : null) ||
+    (activeId && lib.pageByFile[activeId]) ||
+    1
   const notes = lib.getLayerNotes(CASE_AT_BAR_ID)
+
+  useEffect(() => {
+    if (paramFile && caseFiles.some((f) => f.id === paramFile)) {
+      lib.setActiveFileId(paramFile)
+      setMode('read')
+    }
+    if (paramPage > 0 && (paramFile || activeId)) {
+      lib.setPage(paramFile || activeId, paramPage)
+      setMode('read')
+    }
+    if (focusQuote) setMode('read')
+  }, [paramFile, paramPage, focusQuote]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function jumpToAnnotation(a) {
     if (a.fileId) lib.setActiveFileId(a.fileId)
@@ -80,6 +103,7 @@ export function CaseAtBarPanel({ lib }) {
               fileName={fileMeta?.name}
               page={page}
               caseId={CASE_AT_BAR_ID}
+              focusQuote={focusQuote}
               onPageChange={(p) => activeId && lib.setPage(activeId, p)}
               suggestedFile="Upload the case at bar PDF above"
               highlights={lib.annotations.filter(

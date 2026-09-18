@@ -535,9 +535,58 @@
 }
 
 .tree-name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tree-row-actions {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.tree-row:hover .tree-row-actions,
+.tree-row.on .tree-row-actions {
+  display: inline-flex;
+}
+
+.tree-action {
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  padding: 3px;
+  display: inline-flex;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tree-action:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.tree-action.danger:hover {
+  color: #8c3226;
+  background: color-mix(in srgb, #8c3226 12%, transparent);
+}
+
+.tree-rename-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  margin: 0;
+  padding: 0 6px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
 }
 
 .onenote-pages {

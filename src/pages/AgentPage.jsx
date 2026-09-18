@@ -1,18 +1,24 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Callout } from '../components/CaseCard'
 import { GroundingBadge } from '../components/GroundingBadge'
-import { chatPrep } from '../api/client'
+import { chatPrep, downloadIngestFile } from '../api/client'
+import { useCaseLibrary } from '../hooks/useCaseLibrary'
+import { openEvidencePdf } from '../lib/openEvidencePdf'
 
 /**
  * Optional agent room with visible grounding status.
  * Main flow: floating Ask AI bubble on every page (see AiSelectionBubble).
  */
 export function AgentPage() {
+  const navigate = useNavigate()
+  const lib = useCaseLibrary()
   const [question, setQuestion] = useState('')
   const [groundingSource, setGroundingSource] = useState('documents')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [openingId, setOpeningId] = useState('')
 
   const webPlus = groundingSource === 'web_plus'
 
@@ -29,6 +35,16 @@ export function AgentPage() {
       setError(err.message || 'Request failed')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function onOpenEvidence(ev) {
+    if (!ev || ev.source_type === 'web') return
+    setOpeningId(ev.id)
+    try {
+      await openEvidencePdf({ evidence: ev, lib, navigate, downloadIngestFile })
+    } finally {
+      setOpeningId('')
     }
   }
 
@@ -122,18 +138,39 @@ export function AgentPage() {
               <ul>
                 {result.evidence.map((ev) => (
                   <li key={ev.id}>
-                    <span className="mono">
-                      [{ev.id}] {ev.source_type} · {ev.source}
-                      {ev.page != null ? ` p.${ev.page}` : ''}
-                    </span>
-                    {ev.url ? (
-                      <div>
-                        <a href={ev.url} target="_blank" rel="noreferrer">
-                          {ev.url}
-                        </a>
-                      </div>
-                    ) : null}
-                    <div>{ev.preview}</div>
+                    {ev.source_type === 'web' ? (
+                      <>
+                        <span className="mono">
+                          [{ev.id}] {ev.source_type} · {ev.source}
+                          {ev.page != null ? ` p.${ev.page}` : ''}
+                        </span>
+                        {ev.url ? (
+                          <div>
+                            <a href={ev.url} target="_blank" rel="noreferrer">
+                              {ev.url}
+                            </a>
+                          </div>
+                        ) : null}
+                        <div>{ev.preview}</div>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="ai-ev-card"
+                        disabled={Boolean(openingId)}
+                        onClick={() => onOpenEvidence(ev)}
+                        style={{ width: '100%', textAlign: 'left' }}
+                      >
+                        <span className="mono">
+                          [{ev.id}] {ev.source_type} · {ev.source}
+                          {ev.page != null ? ` p.${ev.page}` : ''}
+                        </span>
+                        <div>{ev.preview}</div>
+                        <span className="mono ai-ev-open">
+                          {openingId === ev.id ? 'Opening…' : 'Open in viewer →'}
+                        </span>
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>

@@ -17,6 +17,7 @@ export const NAV = [
       { to: '/guide', text: 'Bronner guide', icon: 'BookOpen' },
       { to: '/facts', text: 'Case facts', icon: 'ListChecks' },
       { to: '/library', text: 'Case library', icon: 'Library' },
+      { to: '/articles', text: 'Articles', icon: 'FileText' },
     ],
   },
   {
