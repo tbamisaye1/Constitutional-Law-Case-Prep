@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SEED_PAGES, SEED_TREE, SECTION_COLORS } from '../data/notebookSeed'
 import { onPageHide, readJson, writeJson } from '../lib/persist'
+import {
+  findPage,
+  firstPageId,
+  insertAfter,
+  mapPages,
+  movePages,
+  pickPageAfterDelete,
+  removePage,
+} from '../lib/pageTree'
 
 const STORAGE_KEY = 'case-prep-notebook-v3'
 
@@ -17,9 +26,16 @@ function stripHtml(html) {
     .trim()
 }
 
+function withPreviews(nodes) {
+  return mapPages(nodes || [], (p) => ({
+    ...p,
+    preview: stripHtml(p.html).slice(0, 90),
+  }))
+}
+
 /**
  * Local-first notebook store: section-group tree + pages per section.
- * Mirrors OneNote until a real notes API exists.
+ * Pages are a nestable tree (reorder + subpages). Mirrors OneNote until a notes API exists.
  */
 export function useNotebook() {
   const initial = useMemo(() => loadState(), [])
@@ -28,7 +44,7 @@ export function useNotebook() {
   const [sectionId, setSectionId] = useState(() => findFirstSectionId(initial.tree))
   const [pageId, setPageId] = useState(() => {
     const firstSec = findFirstSectionId(initial.tree)
-    return initial.pagesBySection[firstSec]?.[0]?.id || null
+    return firstPageId(initial.pagesBySection[firstSec] || [])
   })
 
   const skipFirstWrite = useRef(true)
@@ -47,13 +63,12 @@ export function useNotebook() {
   )
 
   const pages = pagesBySection[sectionId] || []
-  const activePage = pages.find((p) => p.id === pageId) || pages[0] || null
+  const activePage = findPage(pages, pageId) || findPage(pages, firstPageId(pages)) || null
 
   const selectSection = useCallback(
     (id) => {
       setSectionId(id)
-      const first = (pagesBySection[id] || [])[0]
-      setPageId(first?.id || null)
+      setPageId(firstPageId(pagesBySection[id] || []))
     },
     [pagesBySection]
   )
@@ -65,7 +80,7 @@ export function useNotebook() {
       if (!activePage) return
       setPagesBySection((prev) => ({
         ...prev,
-        [sectionId]: (prev[sectionId] || []).map((p) =>
+        [sectionId]: mapPages(prev[sectionId] || [], (p) =>
           p.id === activePage.id ? { ...p, html } : p
         ),
       }))
@@ -78,7 +93,7 @@ export function useNotebook() {
       if (!activePage) return
       setPagesBySection((prev) => ({
         ...prev,
-        [sectionId]: (prev[sectionId] || []).map((p) =>
+        [sectionId]: mapPages(prev[sectionId] || [], (p) =>
           p.id === activePage.id ? { ...p, title } : p
         ),
       }))
@@ -86,38 +101,79 @@ export function useNotebook() {
     [activePage, sectionId]
   )
 
+  /**
+   * Add below the current page (same parent level), or at the top of the section
+   * when nothing is selected / the section is empty.
+   */
   const addPage = useCallback(() => {
     if (!sectionId) return
     const id = `pg-${Date.now()}`
     const page = { id, title: 'Untitled page', html: '<p></p>' }
+    const afterId = activePage?.id || null
     setPagesBySection((prev) => ({
       ...prev,
-      [sectionId]: [page, ...(prev[sectionId] || [])],
+      [sectionId]: insertAfter(prev[sectionId] || [], afterId, page),
     }))
     setPageId(id)
-  }, [sectionId])
+  }, [sectionId, activePage])
 
-  const addSection = useCallback(
-    (parentGroupId) => {
-      const id = `sec-${Date.now()}`
-      const color = SECTION_COLORS[Math.floor(Math.random() * SECTION_COLORS.length)]
-      const section = { id, name: 'New section', kind: 'section', color }
+  const deletePage = useCallback(
+    (id) => {
+      if (!sectionId || !id) return
+      const list = pagesBySection[sectionId] || []
+      const target = findPage(list, id)
+      if (!target) return
+      const label = target.title || 'this page'
+      const childCount = countDescendants(target)
+      const extra =
+        childCount > 0
+          ? ` This also deletes ${childCount} subpage${childCount === 1 ? '' : 's'}.`
+          : ''
+      if (!window.confirm(`Delete “${label}”?${extra} This cannot be undone.`)) return
 
-      setTree((prev) => {
-        if (!parentGroupId) {
-          return [...prev, section]
-        }
-        return prev.map((node) => {
-          if (node.id !== parentGroupId) return node
-          return { ...node, children: [...(node.children || []), section] }
-        })
-      })
-      setPagesBySection((prev) => ({ ...prev, [id]: [] }))
-      setSectionId(id)
-      setPageId(null)
+      const nextId = pickPageAfterDelete(list, id)
+      const { tree: nextList } = removePage(list, id)
+      setPagesBySection((prev) => ({
+        ...prev,
+        [sectionId]: nextList,
+      }))
+      // Reselect if we deleted the active page or one of its ancestors.
+      if (findPage([target], pageId)) {
+        setPageId(nextId)
+      }
     },
-    []
+    [sectionId, pagesBySection, pageId]
   )
+
+  const reorderPages = useCallback(
+    (dragIds, parentId, index) => {
+      if (!sectionId) return
+      setPagesBySection((prev) => ({
+        ...prev,
+        [sectionId]: movePages(prev[sectionId] || [], dragIds, parentId, index),
+      }))
+    },
+    [sectionId]
+  )
+
+  const addSection = useCallback((parentGroupId) => {
+    const id = `sec-${Date.now()}`
+    const color = SECTION_COLORS[Math.floor(Math.random() * SECTION_COLORS.length)]
+    const section = { id, name: 'New section', kind: 'section', color }
+
+    setTree((prev) => {
+      if (!parentGroupId) {
+        return [...prev, section]
+      }
+      return prev.map((node) => {
+        if (node.id !== parentGroupId) return node
+        return { ...node, children: [...(node.children || []), section] }
+      })
+    })
+    setPagesBySection((prev) => ({ ...prev, [id]: [] }))
+    setSectionId(id)
+    setPageId(null)
+  }, [])
 
   const addSectionGroup = useCallback(() => {
     const id = `grp-${Date.now()}`
@@ -147,33 +203,38 @@ export function useNotebook() {
       setTree(nextTree)
       setPagesBySection(nextPages)
       setSectionId(nextSectionId)
-      setPageId(nextSectionId ? nextPages[nextSectionId]?.[0]?.id || null : null)
+      setPageId(nextSectionId ? firstPageId(nextPages[nextSectionId] || []) : null)
     },
     [tree, pagesBySection, sectionId]
   )
-
-  const pagePreviews = pages.map((p) => ({
-    ...p,
-    preview: stripHtml(p.html).slice(0, 90),
-  }))
 
   return {
     tree,
     setTree,
     sectionId,
     pageId: activePage?.id || null,
-    pages: pagePreviews,
+    pages: withPreviews(pages),
     activePage,
     selectSection,
     selectPage,
     updatePageHtml,
     renamePage,
     addPage,
+    deletePage,
+    reorderPages,
     addSection,
     addSectionGroup,
     renameTreeNode,
     deleteTreeNodes,
   }
+}
+
+function countDescendants(node) {
+  let n = 0
+  for (const c of node.children || []) {
+    n += 1 + countDescendants(c)
+  }
+  return n
 }
 
 function findFirstSectionId(nodes) {

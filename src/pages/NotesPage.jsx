@@ -24,8 +24,9 @@ export function NotesPage() {
         <div>
           <h1>Notes</h1>
           <p className="lede">
-            {NOTEBOOK_META.title}: section groups → sections → pages. Nested bullets use Tab /
-            Shift+Tab. Saves in this browser until the API exists.
+            {NOTEBOOK_META.title}: section groups → sections → pages (drag to reorder or nest as
+            subpages). Nested bullets use Tab / Shift+Tab. Saves in this browser until the API
+            exists.
           </p>
         </div>
       </header>
@@ -47,6 +48,8 @@ export function NotesPage() {
           activePageId={nb.pageId}
           onSelectPage={nb.selectPage}
           onAddPage={nb.addPage}
+          onDeletePage={nb.deletePage}
+          onMovePages={nb.reorderPages}
           sectionName={sectionName}
         />
 

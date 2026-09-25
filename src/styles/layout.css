@@ -597,15 +597,12 @@
   min-width: 0;
 }
 
-.onenote-pages-scroll,
-.onenote-pages-viewport {
+.onenote-pages-body {
   flex: 1;
   height: 100%;
   min-height: 400px;
-}
-
-.onenote-pages-viewport {
   padding: 6px 0 8px;
+  overflow: hidden;
 }
 
 .onenote-empty {
@@ -615,14 +612,51 @@
   margin: 0;
 }
 
+.page-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--rule-soft);
+  position: relative;
+  cursor: grab;
+  box-sizing: border-box;
+  height: 100%;
+}
+
+.page-row:active {
+  cursor: grabbing;
+}
+
+.page-chevron,
+.page-chevron-spacer {
+  flex-shrink: 0;
+  width: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  padding: 0;
+  cursor: pointer;
+}
+
+.page-chevron-spacer {
+  cursor: default;
+}
+
+.page-row.on {
+  background: var(--paper-2);
+  box-shadow: inset 3px 0 0 var(--ink);
+}
+
 .page-card {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   text-align: left;
   border: none;
-  border-bottom: 1px solid var(--rule-soft);
   background: transparent;
   padding: 12px 14px;
   cursor: pointer;
@@ -634,8 +668,29 @@
 }
 
 .page-card.on {
-  background: var(--paper-2);
-  box-shadow: inset 3px 0 0 var(--ink);
+  background: transparent;
+  box-shadow: none;
+}
+
+.page-delete {
+  flex-shrink: 0;
+  opacity: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  padding: 0 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.page-row:hover .page-delete,
+.page-row.on .page-delete {
+  opacity: 1;
+}
+
+.page-delete:hover {
+  color: var(--two, #a33);
 }
 
 .page-card strong {
