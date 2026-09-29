@@ -114,7 +114,8 @@ export function UploadPage() {
           <h1>Upload</h1>
           <p className="lede">
             Drop precedent PDFs here. Each file is chunked and added to the corpus Ask AI searches.
-            Remove any source below to drop it from context.
+            Large files (over ~4 MB) upload straight to Blob so Vercel&apos;s API body cap does not
+            block them. Remove any source below to drop it from context.
           </p>
         </div>
       </header>

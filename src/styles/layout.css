@@ -201,6 +201,32 @@
   white-space: nowrap;
 }
 
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-ghost:hover {
+  background: var(--paper-2);
+}
+
+.args-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .tag {
   display: inline-block;
   font-family: var(--font-mono);
@@ -839,14 +865,55 @@
   padding: 12px;
   border-right: 1px solid var(--rule);
   background: var(--paper);
+  overflow: auto;
+  max-height: 70vh;
 }
 
-.args-row {
+.args-empty {
+  margin: 12px 8px;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.args-section {
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 8px 6px 10px;
+  margin-bottom: 8px;
+  cursor: default;
+}
+
+.args-section.on {
+  border-color: var(--rule);
+  background: var(--paper-2);
+}
+
+.args-section-head {
   display: grid;
-  grid-template-columns: 16px 24px minmax(0, 1fr) 34px;
+  grid-template-columns: 24px minmax(0, 1fr) 34px;
   gap: 6px;
   align-items: center;
-  padding: 6px 0;
+}
+
+.args-section-input {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.args-prongs {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0 0 0 18px;
+}
+
+.args-row,
+.args-prong-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 34px;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 0;
 }
 
 .args-grip {
@@ -871,7 +938,26 @@
 .args-input:focus {
   outline: none;
   border-color: var(--rule);
-  background: var(--paper-2);
+  background: var(--paper-3);
+}
+
+.args-add-prong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0 24px;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.args-add-prong:hover {
+  color: var(--ink);
 }
 
 /* TipTap */

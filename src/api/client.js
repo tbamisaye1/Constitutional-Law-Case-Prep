@@ -74,16 +74,108 @@ export async function chatPrep(message, matterId = "bronner-2026", groundingSour
   return res.json();
 }
 
+/**
+ * Vercel rejects API bodies over 4.5 MB. Stay under that for the proxied path;
+ * larger PDFs go browser → Blob → /ingest/from-blob.
+ */
+const INGEST_PROXY_LIMIT_BYTES = 3.5 * 1024 * 1024;
+
 /** Upload a PDF; backend chunks it and merges into the FAISS index for Ask AI. */
 export async function ingestPdf(file) {
+  if (file.size > INGEST_PROXY_LIMIT_BYTES) {
+    return ingestPdfDirect(file);
+  }
+
   const form = new FormData();
   form.append("file", file);
   const res = await fetch(`${BASE}/ingest/pdf`, {
     method: "POST",
     body: form,
   });
+  if (res.status === 413) {
+    // Older deploys or multipart overhead can still 413 near the cap.
+    return ingestPdfDirect(file);
+  }
   if (!res.ok) throw new Error(await errorDetail(res, `ingest failed: ${res.status}`));
   return res.json();
+}
+
+/**
+ * Index a large PDF without sending bytes through the API function body.
+ *
+ * 1. Mint a Blob client token from /ingest/blob-client-upload
+ * 2. PUT the PDF straight to Blob
+ * 3. Tell the API to download that URL and merge into FAISS
+ */
+export async function ingestPdfDirect(file) {
+  const name = file.name || "upload.pdf";
+  const tokenRes = await fetch(`${BASE}/ingest/blob-client-upload`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type: "blob.generate-client-token",
+      payload: {
+        pathname: `case-law-agent/ingest/${name}`,
+        clientPayload: JSON.stringify({ name }),
+        multipart: false,
+      },
+    }),
+  });
+  if (!tokenRes.ok) {
+    throw new Error(
+      await errorDetail(
+        tokenRes,
+        `This PDF is ${(file.size / (1024 * 1024)).toFixed(1)} MB and needs direct Blob ingest, but the token request failed (${tokenRes.status}).`
+      )
+    );
+  }
+  const tokenBody = await tokenRes.json();
+  const clientToken = tokenBody.clientToken;
+  const pathname = tokenBody.pathname;
+  if (!clientToken || !pathname) {
+    throw new Error("Blob upload token response was incomplete.");
+  }
+
+  const putRes = await fetch(`https://blob.vercel-storage.com/${pathname}`, {
+    method: "PUT",
+    headers: {
+      authorization: `Bearer ${clientToken}`,
+      "x-api-version": "7",
+      "x-content-type": file.type || "application/pdf",
+      "x-content-length": String(file.size),
+      "x-add-random-suffix": "0",
+    },
+    body: file,
+  });
+  if (!putRes.ok) {
+    const detail = await putRes.text();
+    throw new Error(detail || `Blob PUT failed: ${putRes.status}`);
+  }
+  let stored = {};
+  try {
+    stored = await putRes.json();
+  } catch {
+    stored = {};
+  }
+  const blobUrl = stored.url || stored.downloadUrl || "";
+  if (!blobUrl) {
+    throw new Error("Blob accepted the upload but returned no URL.");
+  }
+
+  const completeRes = await fetch(`${BASE}/ingest/from-blob`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      filename: name,
+      blob_url: blobUrl,
+      blob_pathname: pathname,
+      size_bytes: file.size,
+    }),
+  });
+  if (!completeRes.ok) {
+    throw new Error(await errorDetail(completeRes, `ingest from Blob failed: ${completeRes.status}`));
+  }
+  return completeRes.json();
 }
 
 export async function listIngestSources() {
