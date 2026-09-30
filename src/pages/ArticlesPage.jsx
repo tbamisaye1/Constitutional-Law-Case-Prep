@@ -1,12 +1,34 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { CaseFilesPanel } from '../components/library/CaseFilesPanel'
+import {
+  FileText,
+  FileUp,
+  Filter,
+  Highlighter,
+  Search,
+  StickyNote,
+  Trash2,
+} from 'lucide-react'
 import { PdfViewer } from '../components/library/PdfViewer'
 import { AnnotationPanel } from '../components/library/AnnotationPanel'
 import { SyncBanner } from '../components/SyncBanner'
 import { useCaseLibrary } from '../hooks/useCaseLibrary'
 import { downloadIngestFile, listIngestSources } from '../api/client'
 import { CORPUS_ARTICLES_ID, CORPUS_ARTICLES_LABEL } from '../data/corpusArticles'
+import { articleDisplayName, articleSearchHaystack } from '../lib/articleLabels'
+
+const FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'opened', label: 'Opened here' },
+  { id: 'ready', label: 'Ready to open' },
+  { id: 'notes', label: 'With notes' },
+]
+
+const SORTS = [
+  { id: 'name', label: 'Name' },
+  { id: 'recent', label: 'Recent' },
+  { id: 'notes', label: 'Most notes' },
+]
 
 /**
  * Corpus PDF room: read Ask AI / Upload articles the same way Instant Case
@@ -19,6 +41,12 @@ export function ArticlesPage() {
   const [ingestSources, setIngestSources] = useState([])
   const [pullError, setPullError] = useState('')
   const [pulling, setPulling] = useState('')
+  const [focusAnnotationId, setFocusAnnotationId] = useState(null)
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState('all')
+  const [sort, setSort] = useState('name')
+  const [indexingId, setIndexingId] = useState('')
+  const attachInput = useRef(null)
 
   const missing = params.get('missing') || ''
   const focusQuote = params.get('q') || ''
@@ -29,6 +57,19 @@ export function ArticlesPage() {
     () => lib.filesMeta.filter((f) => f.caseId === CORPUS_ARTICLES_ID),
     [lib.filesMeta]
   )
+
+  const noteStats = useMemo(() => {
+    const byFile = new Map()
+    for (const a of lib.annotations) {
+      if (a.caseId !== CORPUS_ARTICLES_ID) continue
+      const key = a.fileId || '__case__'
+      const row = byFile.get(key) || { notes: 0, highlights: 0 }
+      if (a.kind === 'highlight') row.highlights += 1
+      else row.notes += 1
+      byFile.set(key, row)
+    }
+    return byFile
+  }, [lib.annotations])
 
   const activeId =
     (paramFile && caseFiles.some((f) => f.id === paramFile) && paramFile) ||
@@ -98,12 +139,76 @@ export function ArticlesPage() {
     }
   }, [missing]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const attachedNames = new Set(caseFiles.map((f) => f.name))
-  const orphanSources = ingestSources
-    .map((row) => (typeof row === 'string' ? row : row?.source))
-    .filter(
-      (s) => typeof s === 'string' && s.toLowerCase().endsWith('.pdf') && !attachedNames.has(s)
-    )
+  const attachedNames = useMemo(
+    () => new Set(caseFiles.map((f) => f.name)),
+    [caseFiles]
+  )
+
+  const catalog = useMemo(() => {
+    const rows = []
+
+    for (const f of caseFiles) {
+      const stats = noteStats.get(f.id) || { notes: 0, highlights: 0 }
+      rows.push({
+        key: `local-${f.id}`,
+        kind: 'opened',
+        id: f.id,
+        name: f.name,
+        label: articleDisplayName(f.name),
+        available: Boolean(lib.blobs[f.id]),
+        askAiIndexed: Boolean(f.askAiIndexed),
+        askAiIndexError: f.askAiIndexError || '',
+        notes: stats.notes,
+        highlights: stats.highlights,
+        savedAt: f.savedAt || 0,
+        size: f.size || 0,
+      })
+    }
+
+    for (const row of ingestSources) {
+      const source = typeof row === 'string' ? row : row?.source
+      if (typeof source !== 'string' || !source.toLowerCase().endsWith('.pdf')) continue
+      if (attachedNames.has(source)) continue
+      rows.push({
+        key: `ingest-${source}`,
+        kind: 'ready',
+        id: null,
+        name: source,
+        label: articleDisplayName(source),
+        available: true,
+        askAiIndexed: true,
+        askAiIndexError: '',
+        notes: 0,
+        highlights: 0,
+        savedAt: 0,
+        size: 0,
+        chunks: typeof row === 'object' ? row.chunks : null,
+      })
+    }
+
+    return rows
+  }, [caseFiles, ingestSources, attachedNames, noteStats, lib.blobs])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    let rows = catalog.filter((row) => {
+      if (filter === 'opened' && row.kind !== 'opened') return false
+      if (filter === 'ready' && row.kind !== 'ready') return false
+      if (filter === 'notes' && row.notes + row.highlights === 0) return false
+      if (q && !articleSearchHaystack(row.name).includes(q)) return false
+      return true
+    })
+
+    rows = [...rows].sort((a, b) => {
+      if (sort === 'recent') return (b.savedAt || 0) - (a.savedAt || 0) || a.label.localeCompare(b.label)
+      if (sort === 'notes') {
+        const n = b.notes + b.highlights - (a.notes + a.highlights)
+        return n || a.label.localeCompare(b.label)
+      }
+      return a.label.localeCompare(b.label)
+    })
+    return rows
+  }, [catalog, filter, query, sort])
 
   async function pullSource(name) {
     setPulling(name)
@@ -119,6 +224,26 @@ export function ArticlesPage() {
       setPullError(error?.message || `Could not open ${name}`)
     } finally {
       setPulling('')
+    }
+  }
+
+  function openOpened(id) {
+    lib.setActiveFileId(id)
+    navigate(`/articles?file=${encodeURIComponent(id)}&page=1`, { replace: true })
+  }
+
+  async function onRetryIndex(fileId) {
+    setIndexingId(fileId)
+    try {
+      await lib.retryAskAiIndex(fileId)
+    } finally {
+      setIndexingId('')
+      try {
+        const data = await listIngestSources()
+        setIngestSources(data.sources || [])
+      } catch {
+        /* keep prior list */
+      }
     }
   }
 
@@ -141,14 +266,16 @@ export function ArticlesPage() {
       )
     : undefined
 
+  const indexFailMeta = caseFiles.find((f) => f.askAiIndexError && !f.askAiIndexed)
+
   return (
     <section className="workspace articles-room">
       <header className="workspace-head">
         <div>
           <h1>Articles</h1>
           <p className="lede">
-            Read PDFs Ask AI retrieved, the same way Instant Case works on Case facts. Jump here from
-            an Ask AI cite to land on the page and quote.
+            Search and open PDFs Ask AI indexed, then read them the same way Instant Case works on
+            Case facts. Jump here from an Ask AI cite to land on the page and quote.
           </p>
         </div>
       </header>
@@ -158,42 +285,181 @@ export function ArticlesPage() {
         saveError={lib.saveError}
         lastSavedAt={lib.lastSavedAt}
         onSyncNow={lib.syncNow}
+        onRetrySaveError={
+          indexFailMeta
+            ? () => onRetryIndex(indexFailMeta.id)
+            : undefined
+        }
+        retrySaveLabel={
+          indexingId === indexFailMeta?.id ? 'Indexing…' : 'Retry Ask AI index'
+        }
       />
 
-      {orphanSources.length ? (
-        <div className="articles-ingest-rail">
-          <div className="mono articles-ingest-label">Indexed for Ask AI, not opened here yet</div>
-          <div className="articles-ingest-chips">
-            {orphanSources.slice(0, 12).map((name) => (
+      <div className="articles-shelf">
+        <div className="articles-shelf-toolbar">
+          <label className="articles-search">
+            <Search size={14} aria-hidden />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search articles…"
+              aria-label="Search articles"
+            />
+          </label>
+
+          <div className="articles-filter-group" role="group" aria-label="Filter articles">
+            <Filter size={13} aria-hidden />
+            {FILTERS.map((f) => (
               <button
-                key={name}
+                key={f.id}
                 type="button"
-                className="btn-soft"
-                disabled={Boolean(pulling)}
-                onClick={() => pullSource(name)}
+                className={filter === f.id ? 'articles-chip on' : 'articles-chip'}
+                onClick={() => setFilter(f.id)}
               >
-                {pulling === name ? 'Opening…' : name}
+                {f.label}
               </button>
             ))}
           </div>
+
+          <label className="articles-sort">
+            <span className="mono">Sort</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort articles">
+              {SORTS.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            type="button"
+            className="btn-ink articles-add"
+            onClick={() => attachInput.current?.click()}
+          >
+            <FileUp size={14} /> Add PDF
+          </button>
+          <input
+            ref={attachInput}
+            type="file"
+            accept="application/pdf,.pdf"
+            multiple
+            hidden
+            onChange={(e) => {
+              lib.attachFiles(CORPUS_ARTICLES_ID, e.target.files)
+              e.target.value = ''
+            }}
+          />
         </div>
-      ) : null}
+
+        <div className="articles-shelf-meta mono">
+          {filtered.length} shown
+          {catalog.length !== filtered.length ? ` of ${catalog.length}` : ''}
+          {' · '}
+          {caseFiles.length} opened here
+          {' · '}
+          {catalog.filter((r) => r.kind === 'ready').length} ready to open
+        </div>
+
+        <ul className="articles-shelf-list">
+          {filtered.length === 0 ? (
+            <li className="articles-shelf-empty">
+              {catalog.length === 0
+                ? `No PDFs on ${CORPUS_ARTICLES_LABEL} yet. Add one above, or pull from Upload / Ask AI.`
+                : 'Nothing matches that search or filter.'}
+            </li>
+          ) : (
+            filtered.map((row) => {
+              const selected = row.kind === 'opened' && row.id === activeId
+              const busy = pulling === row.name || indexingId === row.id
+              const markCount = row.notes + row.highlights
+              return (
+                <li
+                  key={row.key}
+                  className={
+                    selected
+                      ? 'articles-row on'
+                      : row.kind === 'ready'
+                        ? 'articles-row ready'
+                        : 'articles-row'
+                  }
+                >
+                  <button
+                    type="button"
+                    className="articles-row-main"
+                    disabled={busy || (row.kind === 'opened' && !row.available)}
+                    title={row.name}
+                    onClick={() => {
+                      if (row.kind === 'ready') pullSource(row.name)
+                      else if (row.id) openOpened(row.id)
+                    }}
+                  >
+                    <FileText size={15} aria-hidden />
+                    <span className="articles-row-copy">
+                      <span className="articles-row-title">{row.label}</span>
+                      {row.label !== row.name ? (
+                        <span className="articles-row-file mono">{row.name}</span>
+                      ) : null}
+                    </span>
+                    <span className="articles-row-badges">
+                      {row.kind === 'ready' ? (
+                        <span className="articles-badge ready">Ready to open</span>
+                      ) : row.askAiIndexed ? (
+                        <span className="articles-badge ok">In Ask AI</span>
+                      ) : row.askAiIndexError ? (
+                        <span className="articles-badge warn">Index failed</span>
+                      ) : (
+                        <span className="articles-badge">Local</span>
+                      )}
+                      {markCount > 0 ? (
+                        <span className="articles-badge marks" title={`${row.notes} notes, ${row.highlights} highlights`}>
+                          {row.highlights > 0 ? (
+                            <>
+                              <Highlighter size={11} aria-hidden /> {row.highlights}
+                            </>
+                          ) : null}
+                          {row.notes > 0 ? (
+                            <>
+                              {row.highlights > 0 ? ' · ' : null}
+                              <StickyNote size={11} aria-hidden /> {row.notes}
+                            </>
+                          ) : null}
+                        </span>
+                      ) : null}
+                      {busy ? <span className="mono articles-row-busy">{pulling === row.name ? 'Opening…' : 'Indexing…'}</span> : null}
+                    </span>
+                  </button>
+                  <div className="articles-row-actions">
+                    {row.kind === 'opened' && row.askAiIndexError && !row.askAiIndexed ? (
+                      <button
+                        type="button"
+                        className="btn-soft"
+                        disabled={Boolean(indexingId)}
+                        onClick={() => onRetryIndex(row.id)}
+                      >
+                        Retry index
+                      </button>
+                    ) : null}
+                    {row.kind === 'opened' ? (
+                      <button
+                        type="button"
+                        className="icon-btn soft"
+                        aria-label={`Remove ${row.name}`}
+                        onClick={() => lib.removeFile(row.id)}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    ) : null}
+                  </div>
+                </li>
+              )
+            })
+          )}
+        </ul>
+      </div>
 
       <div className="library-read-stack case-at-bar-read">
-        <CaseFilesPanel
-          caseId={CORPUS_ARTICLES_ID}
-          caseName={CORPUS_ARTICLES_LABEL}
-          filesMeta={lib.filesMeta}
-          blobs={lib.blobs}
-          activeFileId={activeId}
-          suggestedFile={missing || 'Upload or pull an Ask AI article'}
-          onSelect={(id) => {
-            lib.setActiveFileId(id)
-            navigate(`/articles?file=${encodeURIComponent(id)}&page=1`, { replace: true })
-          }}
-          onAttach={lib.attachFiles}
-          onRemove={lib.removeFile}
-        />
         <div className="library-read">
           <PdfViewer
             file={fileBlob}
@@ -209,7 +475,7 @@ export function ArticlesPage() {
               next.set('page', String(p))
               setParams(next, { replace: true })
             }}
-            suggestedFile={missing || 'Attach a PDF above'}
+            suggestedFile={missing || 'Select an article above'}
             emptyHint={emptyHint}
             highlights={lib.annotations.filter(
               (a) =>
@@ -217,7 +483,7 @@ export function ArticlesPage() {
                 (!a.fileId || a.fileId === activeId) &&
                 a.kind === 'highlight'
             )}
-            onHighlight={({ page: p, quote, rects, text }) =>
+            onHighlight={({ page: p, quote, rects, text, color }) =>
               lib.upsertAnnotation({
                 caseId: CORPUS_ARTICLES_ID,
                 fileId: activeId,
@@ -225,9 +491,11 @@ export function ArticlesPage() {
                 quote,
                 rects,
                 text,
+                color,
                 kind: 'highlight',
               })
             }
+            onSelectHighlight={(id) => setFocusAnnotationId(id)}
           />
           <AnnotationPanel
             caseId={CORPUS_ARTICLES_ID}
@@ -247,6 +515,8 @@ export function ArticlesPage() {
             onUpdate={(id, patch) => lib.updateAnnotation(id, patch)}
             onRemove={lib.removeAnnotation}
             onJump={(p) => activeId && lib.setPage(activeId, p)}
+            onFlush={lib.syncNow}
+            focusAnnotationId={focusAnnotationId}
           />
         </div>
       </div>
