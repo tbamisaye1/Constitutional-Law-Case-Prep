@@ -2,11 +2,45 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { guideSections } from '../data/guideCopy'
 import { onPageHide, readJson, writeJson } from '../lib/persist'
 
-const KEY = 'case-prep-guide-edits-v1'
+/** Bumped after TipTap stripped tables/callouts into merged text. */
+const KEY = 'case-prep-guide-edits-v2'
+const LEGACY_KEY = 'case-prep-guide-edits-v1'
+
+/**
+ * TipTap's default schema used to flatten guide tables into run-on words
+ * like "CourtFourthAmendment…". Drop those overrides so seed HTML returns.
+ */
+function looksMangled(html) {
+  if (!html || typeof html !== 'string') return false
+  if (/CourtFourth|Article IIResult|CourtFourth Amendment/i.test(html)) return true
+  if (/Posture/i.test(html) && !/<table[\s>]/i.test(html) && !/guide-table-wrap/i.test(html)) {
+    return true
+  }
+  // TipTap often left bare cell text mashed together without separators.
+  if (/District Court[\s\S]{0,40}Bronner wins[\s\S]{0,80}Fourteenth Circuit/i.test(html)) {
+    if (!/<table[\s>]/i.test(html)) return true
+  }
+  return false
+}
+
+function scrubEdits(raw) {
+  if (!raw || typeof raw !== 'object') return {}
+  const next = {}
+  for (const [id, html] of Object.entries(raw)) {
+    if (typeof html !== 'string') continue
+    if (looksMangled(html)) continue
+    next[id] = html
+  }
+  return next
+}
 
 function loadEdits() {
-  const saved = readJson(KEY, null)
-  if (saved && typeof saved === 'object') return saved
+  const current = readJson(KEY, null)
+  if (current && typeof current === 'object') return scrubEdits(current)
+
+  const legacy = readJson(LEGACY_KEY, null)
+  if (legacy && typeof legacy === 'object') return scrubEdits(legacy)
+
   return {}
 }
 

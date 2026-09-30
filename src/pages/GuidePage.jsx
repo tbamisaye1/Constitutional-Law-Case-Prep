@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Search, Pencil, BookOpen } from 'lucide-react'
-import { NoteEditor } from '../components/NoteEditor'
+import { GuideHtmlEditor } from '../components/guide/GuideHtmlEditor'
 import { useGuide } from '../hooks/useGuide'
 import { useTextSelectionAi } from '../hooks/useTextSelectionAi'
 import { GUIDE_PAGE_LEDE } from '../data/guideCopy'
@@ -132,7 +132,7 @@ export function GuidePage() {
 
           {editing ? (
             <div className="guide-editor">
-              <NoteEditor
+              <GuideHtmlEditor
                 key={active.id}
                 html={html}
                 onChange={(next) => setHtml(active.id, next)}

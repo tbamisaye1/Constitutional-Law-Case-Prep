@@ -8,6 +8,8 @@ const SECTION_IDS = [
   'rmap',
   'statutes',
   'below',
+  'issue1',
+  'issue2',
   'q1doc',
   'q1story',
   'q1cases',

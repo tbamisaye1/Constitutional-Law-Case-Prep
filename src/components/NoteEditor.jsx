@@ -1,6 +1,3 @@
-import { useEditor, EditorContent } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import Placeholder from '@tiptap/extension-placeholder'
 import { useEffect, useRef } from 'react'
 import {
   Bold,
@@ -14,6 +11,9 @@ import {
   IndentIncrease,
   IndentDecrease,
 } from 'lucide-react'
+import { useEditor, EditorContent } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import Placeholder from '@tiptap/extension-placeholder'
 
 /**
  * TipTap note surface (https://github.com/ueberdosis/tiptap).
@@ -21,6 +21,9 @@ import {
  *
  * immediatelyRender: false is required for React 19 Strict Mode so the editor
  * does not mount twice and write an empty doc over saved notes.
+ *
+ * Do not write getHTML() on unmount. That used to re-serialize through the
+ * schema and wipe custom guide markup when the user only opened Edit / Done.
  */
 export function NoteEditor({ html, onChange, editable = true }) {
   const onChangeRef = useRef(onChange)
@@ -53,9 +56,6 @@ export function NoteEditor({ html, onChange, editable = true }) {
     skipping.current = false
     return () => {
       skipping.current = true
-      if (!editor.isDestroyed) {
-        onChangeRef.current?.(editor.getHTML())
-      }
     }
   }, [editor])
 

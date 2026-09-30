@@ -819,14 +819,15 @@
 }
 
 .case-row {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  align-items: start;
   width: 100%;
   text-align: left;
   border: none;
   border-bottom: 1px solid var(--rule-soft);
   background: var(--paper);
-  padding: 14px 14px;
-  cursor: pointer;
+  padding: 10px 8px 10px 14px;
   color: inherit;
 }
 
@@ -837,6 +838,27 @@
 .case-row.on {
   background: var(--paper-2);
   box-shadow: inset 3px 0 0 var(--ink);
+}
+
+.case-row-main {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 4px 6px 4px 0;
+  cursor: pointer;
+  color: inherit;
+}
+
+.case-row-delete {
+  margin-top: 4px;
+  opacity: 0.55;
+}
+
+.case-row:hover .case-row-delete,
+.case-row.on .case-row-delete {
+  opacity: 1;
 }
 
 .case-row-top {
