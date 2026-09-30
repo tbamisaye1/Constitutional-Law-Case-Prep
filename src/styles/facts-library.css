@@ -991,6 +991,16 @@
   color: var(--ink);
 }
 
+.anno-quote-jump {
+  cursor: pointer;
+}
+
+.anno-quote-jump:hover,
+.anno-quote-jump:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 1px;
+}
+
 .anno-item.pinned .anno-quote {
   background: var(--paper);
 }
@@ -2401,6 +2411,24 @@
   filter: brightness(0.92);
 }
 
+.pdf-hl-pulse {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+  animation: pdf-hl-pulse 1.6s ease-out 1;
+  z-index: 2;
+}
+
+@keyframes pdf-hl-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(156, 122, 34, 0.55);
+    filter: brightness(1.15);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(156, 122, 34, 0);
+    filter: brightness(1);
+  }
+}
+
 .hl-color-row {
   display: flex;
   align-items: center;
@@ -3678,6 +3706,27 @@ button.ai-ev-card:disabled {
   align-items: center;
   gap: 4px;
   padding-right: 6px;
+}
+
+.articles-rename {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  min-width: 0;
+  grid-column: 1 / -1;
+  color: var(--ink-3);
+}
+
+.articles-rename input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 8px;
 }
 
 @media (max-width: 720px) {

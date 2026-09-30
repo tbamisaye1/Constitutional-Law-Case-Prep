@@ -5,6 +5,7 @@ import {
   FileUp,
   Filter,
   Highlighter,
+  Pencil,
   Search,
   StickyNote,
   Trash2,
@@ -42,11 +43,23 @@ export function ArticlesPage() {
   const [pullError, setPullError] = useState('')
   const [pulling, setPulling] = useState('')
   const [focusAnnotationId, setFocusAnnotationId] = useState(null)
+  const [focusHighlightId, setFocusHighlightId] = useState(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState('name')
   const [indexingId, setIndexingId] = useState('')
+  const [renamingName, setRenamingName] = useState('')
+  const [renameDraft, setRenameDraft] = useState('')
   const attachInput = useRef(null)
+  const renameInput = useRef(null)
+
+  const titleByName = useMemo(() => {
+    const map = new Map()
+    for (const row of lib.articleTitles || []) {
+      if (row?.id && row.title) map.set(row.id, row.title)
+    }
+    return map
+  }, [lib.articleTitles])
 
   const missing = params.get('missing') || ''
   const focusQuote = params.get('q') || ''
@@ -149,12 +162,14 @@ export function ArticlesPage() {
 
     for (const f of caseFiles) {
       const stats = noteStats.get(f.id) || { notes: 0, highlights: 0 }
+      const customTitle = titleByName.get(f.name) || ''
       rows.push({
         key: `local-${f.id}`,
         kind: 'opened',
         id: f.id,
         name: f.name,
-        label: articleDisplayName(f.name),
+        customTitle,
+        label: articleDisplayName(f.name, customTitle),
         available: Boolean(lib.blobs[f.id]),
         askAiIndexed: Boolean(f.askAiIndexed),
         askAiIndexError: f.askAiIndexError || '',
@@ -169,12 +184,14 @@ export function ArticlesPage() {
       const source = typeof row === 'string' ? row : row?.source
       if (typeof source !== 'string' || !source.toLowerCase().endsWith('.pdf')) continue
       if (attachedNames.has(source)) continue
+      const customTitle = titleByName.get(source) || ''
       rows.push({
         key: `ingest-${source}`,
         kind: 'ready',
         id: null,
         name: source,
-        label: articleDisplayName(source),
+        customTitle,
+        label: articleDisplayName(source, customTitle),
         available: true,
         askAiIndexed: true,
         askAiIndexError: '',
@@ -187,7 +204,7 @@ export function ArticlesPage() {
     }
 
     return rows
-  }, [caseFiles, ingestSources, attachedNames, noteStats, lib.blobs])
+  }, [caseFiles, ingestSources, attachedNames, noteStats, lib.blobs, titleByName])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -195,7 +212,7 @@ export function ArticlesPage() {
       if (filter === 'opened' && row.kind !== 'opened') return false
       if (filter === 'ready' && row.kind !== 'ready') return false
       if (filter === 'notes' && row.notes + row.highlights === 0) return false
-      if (q && !articleSearchHaystack(row.name).includes(q)) return false
+      if (q && !articleSearchHaystack(row.name, row.customTitle).includes(q)) return false
       return true
     })
 
@@ -209,6 +226,12 @@ export function ArticlesPage() {
     })
     return rows
   }, [catalog, filter, query, sort])
+
+  useEffect(() => {
+    if (!renamingName) return
+    renameInput.current?.focus()
+    renameInput.current?.select()
+  }, [renamingName])
 
   async function pullSource(name) {
     setPulling(name)
@@ -230,6 +253,25 @@ export function ArticlesPage() {
   function openOpened(id) {
     lib.setActiveFileId(id)
     navigate(`/articles?file=${encodeURIComponent(id)}&page=1`, { replace: true })
+  }
+
+  function startRename(row) {
+    setRenamingName(row.name)
+    setRenameDraft(row.customTitle || row.label)
+  }
+
+  function commitRename() {
+    if (!renamingName) return
+    const name = renamingName
+    const draft = renameDraft
+    setRenamingName('')
+    setRenameDraft('')
+    lib.setArticleTitle(name, draft)
+  }
+
+  function cancelRename() {
+    setRenamingName('')
+    setRenameDraft('')
   }
 
   async function onRetryIndex(fileId) {
@@ -374,6 +416,7 @@ export function ArticlesPage() {
               const selected = row.kind === 'opened' && row.id === activeId
               const busy = pulling === row.name || indexingId === row.id
               const markCount = row.notes + row.highlights
+              const isRenaming = renamingName === row.name
               return (
                 <li
                   key={row.key}
@@ -385,73 +428,114 @@ export function ArticlesPage() {
                         : 'articles-row'
                   }
                 >
-                  <button
-                    type="button"
-                    className="articles-row-main"
-                    disabled={busy || (row.kind === 'opened' && !row.available)}
-                    title={row.name}
-                    onClick={() => {
-                      if (row.kind === 'ready') pullSource(row.name)
-                      else if (row.id) openOpened(row.id)
-                    }}
-                  >
-                    <FileText size={15} aria-hidden />
-                    <span className="articles-row-copy">
-                      <span className="articles-row-title">{row.label}</span>
-                      {row.label !== row.name ? (
-                        <span className="articles-row-file mono">{row.name}</span>
-                      ) : null}
-                    </span>
-                    <span className="articles-row-badges">
-                      {row.kind === 'ready' ? (
-                        <span className="articles-badge ready">Ready to open</span>
-                      ) : row.askAiIndexed ? (
-                        <span className="articles-badge ok">In Ask AI</span>
-                      ) : row.askAiIndexError ? (
-                        <span className="articles-badge warn">Index failed</span>
-                      ) : (
-                        <span className="articles-badge">Local</span>
-                      )}
-                      {markCount > 0 ? (
-                        <span className="articles-badge marks" title={`${row.notes} notes, ${row.highlights} highlights`}>
-                          {row.highlights > 0 ? (
-                            <>
-                              <Highlighter size={11} aria-hidden /> {row.highlights}
-                            </>
-                          ) : null}
-                          {row.notes > 0 ? (
-                            <>
-                              {row.highlights > 0 ? ' · ' : null}
-                              <StickyNote size={11} aria-hidden /> {row.notes}
-                            </>
-                          ) : null}
+                  {isRenaming ? (
+                    <form
+                      className="articles-rename"
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        commitRename()
+                      }}
+                    >
+                      <Pencil size={14} aria-hidden />
+                      <input
+                        ref={renameInput}
+                        value={renameDraft}
+                        onChange={(e) => setRenameDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') {
+                            e.preventDefault()
+                            cancelRename()
+                          }
+                        }}
+                        onBlur={commitRename}
+                        placeholder="Display name"
+                        aria-label={`Rename ${row.name}`}
+                      />
+                      <button type="submit" className="btn-soft">
+                        Save
+                      </button>
+                      <button type="button" className="btn-soft" onMouseDown={(e) => e.preventDefault()} onClick={cancelRename}>
+                        Cancel
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="articles-row-main"
+                        disabled={busy || (row.kind === 'opened' && !row.available)}
+                        title={row.name}
+                        onClick={() => {
+                          if (row.kind === 'ready') pullSource(row.name)
+                          else if (row.id) openOpened(row.id)
+                        }}
+                      >
+                        <FileText size={15} aria-hidden />
+                        <span className="articles-row-copy">
+                          <span className="articles-row-title">{row.label}</span>
+                          <span className="articles-row-file mono">{row.name}</span>
                         </span>
-                      ) : null}
-                      {busy ? <span className="mono articles-row-busy">{pulling === row.name ? 'Opening…' : 'Indexing…'}</span> : null}
-                    </span>
-                  </button>
-                  <div className="articles-row-actions">
-                    {row.kind === 'opened' && row.askAiIndexError && !row.askAiIndexed ? (
-                      <button
-                        type="button"
-                        className="btn-soft"
-                        disabled={Boolean(indexingId)}
-                        onClick={() => onRetryIndex(row.id)}
-                      >
-                        Retry index
+                        <span className="articles-row-badges">
+                          {row.kind === 'ready' ? (
+                            <span className="articles-badge ready">Ready to open</span>
+                          ) : row.askAiIndexed ? (
+                            <span className="articles-badge ok">In Ask AI</span>
+                          ) : row.askAiIndexError ? (
+                            <span className="articles-badge warn">Index failed</span>
+                          ) : (
+                            <span className="articles-badge">Local</span>
+                          )}
+                          {markCount > 0 ? (
+                            <span className="articles-badge marks" title={`${row.notes} notes, ${row.highlights} highlights`}>
+                              {row.highlights > 0 ? (
+                                <>
+                                  <Highlighter size={11} aria-hidden /> {row.highlights}
+                                </>
+                              ) : null}
+                              {row.notes > 0 ? (
+                                <>
+                                  {row.highlights > 0 ? ' · ' : null}
+                                  <StickyNote size={11} aria-hidden /> {row.notes}
+                                </>
+                              ) : null}
+                            </span>
+                          ) : null}
+                          {busy ? <span className="mono articles-row-busy">{pulling === row.name ? 'Opening…' : 'Indexing…'}</span> : null}
+                        </span>
                       </button>
-                    ) : null}
-                    {row.kind === 'opened' ? (
-                      <button
-                        type="button"
-                        className="icon-btn soft"
-                        aria-label={`Remove ${row.name}`}
-                        onClick={() => lib.removeFile(row.id)}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    ) : null}
-                  </div>
+                      <div className="articles-row-actions">
+                        <button
+                          type="button"
+                          className="icon-btn soft"
+                          aria-label={`Rename ${row.label}`}
+                          title="Rename how this article is shown"
+                          onClick={() => startRename(row)}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        {row.kind === 'opened' && row.askAiIndexError && !row.askAiIndexed ? (
+                          <button
+                            type="button"
+                            className="btn-soft"
+                            disabled={Boolean(indexingId)}
+                            onClick={() => onRetryIndex(row.id)}
+                          >
+                            Retry index
+                          </button>
+                        ) : null}
+                        {row.kind === 'opened' ? (
+                          <button
+                            type="button"
+                            className="icon-btn soft"
+                            aria-label={`Remove ${row.name}`}
+                            onClick={() => lib.removeFile(row.id)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        ) : null}
+                      </div>
+                    </>
+                  )}
                 </li>
               )
             })
@@ -496,6 +580,7 @@ export function ArticlesPage() {
               })
             }
             onSelectHighlight={(id) => setFocusAnnotationId(id)}
+            focusHighlightId={focusHighlightId}
           />
           <AnnotationPanel
             caseId={CORPUS_ARTICLES_ID}
@@ -514,7 +599,13 @@ export function ArticlesPage() {
             }
             onUpdate={(id, patch) => lib.updateAnnotation(id, patch)}
             onRemove={lib.removeAnnotation}
-            onJump={(p) => activeId && lib.setPage(activeId, p)}
+            onJump={(anno) => {
+              if (!activeId || !anno?.page) return
+              lib.setPage(activeId, anno.page)
+              setFocusHighlightId(null)
+              setFocusAnnotationId(anno.id || null)
+              window.setTimeout(() => setFocusHighlightId(anno.id || null), 0)
+            }}
             onFlush={lib.syncNow}
             focusAnnotationId={focusAnnotationId}
           />

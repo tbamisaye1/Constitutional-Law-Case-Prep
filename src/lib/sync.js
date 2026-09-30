@@ -33,6 +33,7 @@ const LIBRARY_KINDS = {
   cites: 'cites',
   timeline: 'timeline',
   noteTabs: 'note_tabs',
+  articleTitles: 'article_titles',
 }
 
 export function metaKey(entity, ...parts) {

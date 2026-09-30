@@ -16,6 +16,7 @@ export function CaseAtBarPanel({ lib }) {
   const [params] = useSearchParams()
   const [mode, setMode] = useState('read') // read | notes
   const [focusAnnotationId, setFocusAnnotationId] = useState(null)
+  const [focusHighlightId, setFocusHighlightId] = useState(null)
   const paramFile = params.get('file')
   const paramPage = Number(params.get('page') || 0)
   const focusQuote = params.get('q') || ''
@@ -126,6 +127,7 @@ export function CaseAtBarPanel({ lib }) {
                 })
               }
               onSelectHighlight={(id) => setFocusAnnotationId(id)}
+              focusHighlightId={focusHighlightId}
             />
             <AnnotationPanel
               caseId={CASE_AT_BAR_ID}
@@ -144,7 +146,13 @@ export function CaseAtBarPanel({ lib }) {
               }
               onUpdate={(id, patch) => lib.updateAnnotation(id, patch)}
               onRemove={lib.removeAnnotation}
-              onJump={(p) => activeId && lib.setPage(activeId, p)}
+              onJump={(anno) => {
+                if (!activeId || !anno?.page) return
+                lib.setPage(activeId, anno.page)
+                setFocusHighlightId(null)
+                setFocusAnnotationId(anno.id || null)
+                window.setTimeout(() => setFocusHighlightId(anno.id || null), 0)
+              }}
               onFlush={lib.syncNow}
               focusAnnotationId={focusAnnotationId}
             />

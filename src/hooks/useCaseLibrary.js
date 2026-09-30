@@ -74,6 +74,8 @@ function emptyStore() {
     cites: SEED_CITES,
     timeline: [...SEED_DOCTRINE_TIMELINE, ...SEED_PROCEDURAL_TIMELINE, ...SEED_RECORD_TIMELINE],
     noteTabs: [],
+    // Custom shelf labels keyed by PDF filename (id === name).
+    articleTitles: [],
     activeFileId: null,
     pageByFile: {},
     // Which rows have changed since the backend last accepted them, and how
@@ -97,6 +99,7 @@ function load() {
     cites: parsed.cites?.length ? parsed.cites : base.cites,
     timeline: parsed.timeline?.length ? parsed.timeline : base.timeline,
     noteTabs: parsed.noteTabs || [],
+    articleTitles: Array.isArray(parsed.articleTitles) ? parsed.articleTitles : [],
     activeFileId: parsed.activeFileId || null,
     pageByFile: parsed.pageByFile || {},
     // Absent for anyone who used the app before sync existed. Starting from a
@@ -1003,6 +1006,37 @@ export function useCaseLibrary() {
     )
   }, [])
 
+  /**
+   * Set or clear the Articles-shelf display title for a PDF filename.
+   * Empty title removes the override so the auto label returns.
+   */
+  const setArticleTitle = useCallback((filename, title) => {
+    const name = String(filename || '').trim()
+    if (!name) return
+    const nextTitle = String(title || '').trim()
+    updateStore(
+      (prev) => {
+        const list = prev.articleTitles || []
+        if (!nextTitle) {
+          return {
+            ...prev,
+            articleTitles: list.filter((row) => row.id !== name),
+          }
+        }
+        const row = { id: name, name, title: nextTitle }
+        const exists = list.some((r) => r.id === name)
+        return {
+          ...prev,
+          articleTitles: exists
+            ? list.map((r) => (r.id === name ? row : r))
+            : [row, ...list],
+        }
+      },
+      [metaKey('library_records', 'article_titles', name)],
+      !nextTitle
+    )
+  }, [])
+
   return {
     cases: snap.store.cases,
     annotations: snap.store.annotations,
@@ -1012,6 +1046,7 @@ export function useCaseLibrary() {
     cites: snap.store.cites,
     timeline: snap.store.timeline,
     noteTabs: snap.store.noteTabs,
+    articleTitles: snap.store.articleTitles || [],
     blobs: snap.blobs,
     activeFileId: snap.store.activeFileId,
     setActiveFileId,
@@ -1036,6 +1071,7 @@ export function useCaseLibrary() {
     attachBlob,
     removeFile,
     retryAskAiIndex,
+    setArticleTitle,
     setPage,
     upsertAnnotation,
     updateAnnotation,

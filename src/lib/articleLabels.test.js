@@ -8,9 +8,19 @@ describe('articleDisplayName', () => {
     )
   })
 
-  it('keeps readable case titles', () => {
-    expect(articleDisplayName('Ex parte Milligan, 71 U.S. (4 Wall.) 2 (1866).pdf')).toContain(
-      'Milligan'
+  it('keeps readable case titles without doubling v.', () => {
+    expect(articleDisplayName('Katz v. United States, 389 U.S. 347 (1967) (1).pdf')).toBe(
+      'Katz v. United States, 389 U.S. 347 (1967) (1)'
+    )
+  })
+
+  it('labels CRS-style report ids', () => {
+    expect(articleDisplayName('R42337.17.pdf')).toBe('CRS report R42337.17')
+  })
+
+  it('prefers a custom title', () => {
+    expect(articleDisplayName('R42337.17.pdf', 'Fourth Amendment CRS memo')).toBe(
+      'Fourth Amendment CRS memo'
     )
   })
 
@@ -21,8 +31,8 @@ describe('articleDisplayName', () => {
   })
 
   it('indexes both display and raw names for search', () => {
-    const hay = articleSearchHaystack('07_United_States_v_Jones.pdf')
-    expect(hay).toContain('jones')
+    const hay = articleSearchHaystack('07_United_States_v_Jones.pdf', 'Jones GPS tracking')
+    expect(hay).toContain('jones gps')
     expect(hay).toContain('07_united_states')
   })
 })

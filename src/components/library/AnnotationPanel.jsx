@@ -6,6 +6,7 @@ import {
   ChevronUp,
   ChevronsDownUp,
   ChevronsUpDown,
+  LocateFixed,
   Pin,
   PinOff,
   Plus,
@@ -116,8 +117,22 @@ function AnnotationItem({
       style={isHighlight ? { borderLeftColor: color.solid, borderLeftWidth: 3 } : undefined}
     >
       <div className="anno-side">
-        <button type="button" className="anno-jump" onClick={() => onJump(a.page)}>
+        <button
+          type="button"
+          className="anno-jump"
+          title="Go to this place in the PDF"
+          onClick={() => onJump?.(a)}
+        >
           <span className="mono">p. {a.page}</span>
+        </button>
+        <button
+          type="button"
+          className="icon-btn soft"
+          aria-label="Go to this highlight in the PDF"
+          title="Go to highlight"
+          onClick={() => onJump?.(a)}
+        >
+          <LocateFixed size={14} />
         </button>
         <button
           type="button"
@@ -141,8 +156,18 @@ function AnnotationItem({
       <div className="anno-body">
         {a.quote ? (
           <blockquote
-            className="anno-quote"
+            className="anno-quote anno-quote-jump"
             style={{ borderLeftColor: color.solid, background: color.fill }}
+            role="button"
+            tabIndex={0}
+            title="Go to this highlight in the PDF"
+            onClick={() => onJump?.(a)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onJump?.(a)
+              }
+            }}
           >
             “{expanded || a.quote.length <= 160 ? a.quote : `${a.quote.slice(0, 160)}…`}”
           </blockquote>
@@ -348,8 +373,8 @@ export function AnnotationPanel({
       </div>
 
       <p className="anno-hint mono">
-        Click a highlight on the PDF to jump here. Notes are ordered by where the highlight sits on
-        the page. Pin keeps a note at the top.
+        Click a note or the locate button to jump to that place in the PDF. Click a highlight on the
+        PDF to jump here. Pin keeps a note at the top.
       </p>
 
       <ul className="anno-list" ref={listRef}>

@@ -30,6 +30,7 @@ function store(overrides = {}) {
     cites: [],
     timeline: [],
     noteTabs: [],
+    articleTitles: [],
     syncMeta: emptySyncMeta(),
     ...overrides,
   }

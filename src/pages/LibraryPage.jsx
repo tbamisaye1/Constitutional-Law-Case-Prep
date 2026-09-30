@@ -38,6 +38,7 @@ export function LibraryPage() {
   const [pullError, setPullError] = useState('')
   const [pulling, setPulling] = useState(false)
   const [focusAnnotationId, setFocusAnnotationId] = useState(null)
+  const [focusHighlightId, setFocusHighlightId] = useState(null)
 
   const paramFile = params.get('file')
   const paramPage = Number(params.get('page') || 0)
@@ -458,6 +459,7 @@ export function LibraryPage() {
                     })
                   }
                   onSelectHighlight={(id) => setFocusAnnotationId(id)}
+                  focusHighlightId={focusHighlightId}
                 />
                 <AnnotationPanel
                   caseId={selected.id}
@@ -476,7 +478,13 @@ export function LibraryPage() {
                   }
                   onUpdate={(id, patch) => lib.updateAnnotation(id, patch)}
                   onRemove={lib.removeAnnotation}
-                  onJump={(p) => activeId && lib.setPage(activeId, p)}
+                  onJump={(anno) => {
+                    if (!activeId || !anno?.page) return
+                    lib.setPage(activeId, anno.page)
+                    setFocusHighlightId(null)
+                    setFocusAnnotationId(anno.id || null)
+                    window.setTimeout(() => setFocusHighlightId(anno.id || null), 0)
+                  }}
                   onFlush={lib.syncNow}
                   focusAnnotationId={focusAnnotationId}
                 />

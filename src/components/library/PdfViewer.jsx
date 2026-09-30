@@ -34,6 +34,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.vers
  *
  * Optional `focusQuote`: after the text layer renders, find that snippet, paint a
  * temporary highlight, and scroll it into view (Ask AI cite → jump).
+ *
+ * Optional `focusHighlightId`: when a notes-panel card asks to locate its
+ * highlight, jump the page (caller sets `page`) and pulse/scroll that overlay.
  */
 export function PdfViewer({
   file,
@@ -46,6 +49,7 @@ export function PdfViewer({
   onSelectHighlight,
   caseId = null,
   focusQuote = '',
+  focusHighlightId = null,
   emptyHint = '',
 }) {
   const [numPages, setNumPages] = useState(null)
@@ -63,10 +67,12 @@ export function PdfViewer({
   const [searchHits, setSearchHits] = useState([])
   const [searchBusy, setSearchBusy] = useState(false)
   const [searchError, setSearchError] = useState('')
+  const [pulseHighlightId, setPulseHighlightId] = useState(null)
   const stageRef = useRef(null)
   const pdfDocRef = useRef(null)
   const searchInputRef = useRef(null)
   const focusKeyRef = useRef('')
+  const lastFocusHighlightRef = useRef('')
   const { openBubble } = useAiUi()
 
   useEffect(() => {
@@ -138,6 +144,46 @@ export function PdfViewer({
     () => highlights.filter((h) => h.page === page && Array.isArray(h.rects) && h.rects.length),
     [highlights, page]
   )
+
+  useEffect(() => {
+    if (!focusHighlightId) {
+      lastFocusHighlightRef.current = ''
+      return
+    }
+    const token = `${focusHighlightId}@${page}`
+    if (lastFocusHighlightRef.current === token) return
+
+    const target = highlights.find((h) => h.id === focusHighlightId)
+    if (!target) return
+    // Wait until the parent has switched to the highlight's page.
+    if (target.page !== page) return
+
+    lastFocusHighlightRef.current = token
+    setPulseHighlightId(focusHighlightId)
+
+    const tryScroll = () => {
+      const root = stageRef.current
+      if (!root) return false
+      const el =
+        root.querySelector(`[data-hl-id="${CSS.escape(focusHighlightId)}"]`) ||
+        root.querySelector(`[data-hl-id="${focusHighlightId}"]`)
+      if (!el) return false
+      el.scrollIntoView({ block: 'center', behavior: 'smooth', inline: 'nearest' })
+      return true
+    }
+
+    // Overlay may paint a frame after page change.
+    if (!tryScroll()) {
+      requestAnimationFrame(() => {
+        if (!tryScroll()) window.setTimeout(tryScroll, 80)
+      })
+    }
+
+    const clearPulse = window.setTimeout(() => {
+      setPulseHighlightId((current) => (current === focusHighlightId ? null : current))
+    }, 1800)
+    return () => window.clearTimeout(clearPulse)
+  }, [focusHighlightId, page, highlights])
 
   function applyFocusQuote() {
     const needle = String(focusQuote || '').trim()
@@ -519,11 +565,13 @@ export function PdfViewer({
           <div className="pdf-highlight-layer">
             {pageHighlights.map((h) => {
               const color = highlightColorMeta(h.color)
+              const pulsing = pulseHighlightId === h.id
               return (h.rects || []).map((r, i) => (
                 <button
                   key={`${h.id}-${i}`}
                   type="button"
-                  className="pdf-hl pdf-hl-hit"
+                  data-hl-id={i === 0 ? h.id : undefined}
+                  className={pulsing ? 'pdf-hl pdf-hl-hit pdf-hl-pulse' : 'pdf-hl pdf-hl-hit'}
                   aria-label={`Open note for highlight: ${(h.quote || '').slice(0, 80)}`}
                   style={{
                     top: `${r.top * 100}%`,
