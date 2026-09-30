@@ -57,15 +57,24 @@ export async function listMatters() {
   return res.json();
 }
 
-export async function chatPrep(message, matterId = "bronner-2026", groundingSource = "documents") {
+export async function chatPrep(
+  message,
+  matterId = "bronner-2026",
+  groundingSource = "documents",
+  selection = ""
+) {
+  const body = {
+    message,
+    matter_id: matterId,
+    grounding_source: groundingSource === "web_plus" ? "web_plus" : "documents",
+  };
+  const sel = typeof selection === "string" ? selection.trim() : "";
+  if (sel) body.selection = sel;
+
   const res = await fetch(`${BASE}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message,
-      matter_id: matterId,
-      grounding_source: groundingSource === "web_plus" ? "web_plus" : "documents",
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const detail = await res.text();
@@ -77,8 +86,19 @@ export async function chatPrep(message, matterId = "bronner-2026", groundingSour
 /**
  * Vercel rejects API bodies over 4.5 MB. Stay under that for the proxied path;
  * larger PDFs go browser → Blob → /ingest/from-blob.
+ *
+ * Stay well under the hard cap: multipart framing plus a ~3 MB opinion often
+ * trips a connection reset ("Failed to fetch") instead of a clean 413.
  */
-const INGEST_PROXY_LIMIT_BYTES = 3.5 * 1024 * 1024;
+const INGEST_PROXY_LIMIT_BYTES = 2.5 * 1024 * 1024;
+
+function isProxyIngestNetworkFailure(error) {
+  const message = error?.message || String(error || "");
+  return (
+    error?.name === "TypeError" ||
+    /failed to fetch|networkerror|network request failed|load failed/i.test(message)
+  );
+}
 
 /** Upload a PDF; backend chunks it and merges into the FAISS index for Ask AI. */
 export async function ingestPdf(file) {
@@ -86,18 +106,28 @@ export async function ingestPdf(file) {
     return ingestPdfDirect(file);
   }
 
-  const form = new FormData();
-  form.append("file", file);
-  const res = await fetch(`${BASE}/ingest/pdf`, {
-    method: "POST",
-    body: form,
-  });
-  if (res.status === 413) {
-    // Older deploys or multipart overhead can still 413 near the cap.
-    return ingestPdfDirect(file);
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${BASE}/ingest/pdf`, {
+      method: "POST",
+      body: form,
+    });
+    if (res.status === 413) {
+      // Older deploys or multipart overhead can still 413 near the cap.
+      return ingestPdfDirect(file);
+    }
+    if (!res.ok) throw new Error(await errorDetail(res, `ingest failed: ${res.status}`));
+    return res.json();
+  } catch (error) {
+    // Vercel often resets oversized multipart uploads before returning 413.
+    // Retry via Blob so Instant Case opinions (Milligan, Youngstown, etc.)
+    // still reach FAISS instead of stranding as "readable but not indexed".
+    if (isProxyIngestNetworkFailure(error)) {
+      return ingestPdfDirect(file);
+    }
+    throw error;
   }
-  if (!res.ok) throw new Error(await errorDetail(res, `ingest failed: ${res.status}`));
-  return res.json();
 }
 
 /**

@@ -73,6 +73,7 @@ function emptyStore() {
     caseFacts: flattenFacts(SEED_CASE_FACTS),
     cites: SEED_CITES,
     timeline: [...SEED_DOCTRINE_TIMELINE, ...SEED_PROCEDURAL_TIMELINE, ...SEED_RECORD_TIMELINE],
+    noteTabs: [],
     activeFileId: null,
     pageByFile: {},
     // Which rows have changed since the backend last accepted them, and how
@@ -95,6 +96,7 @@ function load() {
     caseFacts: parsed.caseFacts?.length ? parsed.caseFacts : base.caseFacts,
     cites: parsed.cites?.length ? parsed.cites : base.cites,
     timeline: parsed.timeline?.length ? parsed.timeline : base.timeline,
+    noteTabs: parsed.noteTabs || [],
     activeFileId: parsed.activeFileId || null,
     pageByFile: parsed.pageByFile || {},
     // Absent for anyone who used the app before sync existed. Starting from a
@@ -401,6 +403,10 @@ async function uploadFileBytes(meta, blob) {
   }
 }
 
+/** Skip auto-retry for a minute after a failed Ask AI index so hydrate does not spam. */
+const askAiIndexCooldownUntil = new Map()
+const askAiIndexingIds = new Set()
+
 /**
  * Chunk a library / Case-at-bar PDF into the FAISS index Ask AI searches.
  *
@@ -409,31 +415,56 @@ async function uploadFileBytes(meta, blob) {
  *
  * @param {object} meta The filesMeta row.
  * @param {Blob} blob PDF bytes.
+ * @param {{ force?: boolean }} [options] Pass force to ignore the cooldown (Retry).
  */
-async function indexFileForAskAi(meta, blob) {
+async function indexFileForAskAi(meta, blob, options = {}) {
   if (!blob || meta.askAiIndexed) return
+  if (askAiIndexingIds.has(meta.id)) return
+  const cooldownUntil = askAiIndexCooldownUntil.get(meta.id) || 0
+  if (!options.force && Date.now() < cooldownUntil) return
 
+  askAiIndexingIds.add(meta.id)
   try {
     const file = new File([blob], meta.name, {
       type: blob.type || 'application/pdf',
     })
     await ingestPdf(file)
+    askAiIndexCooldownUntil.delete(meta.id)
     memory = {
       ...memory,
       store: {
         ...memory.store,
-        filesMeta: memory.store.filesMeta.map((file) =>
-          file.id === meta.id ? { ...file, askAiIndexed: true } : file
+        filesMeta: memory.store.filesMeta.map((row) =>
+          row.id === meta.id
+            ? { ...row, askAiIndexed: true, askAiIndexError: '' }
+            : row
         ),
       },
+      saveError: memory.saveError?.includes(meta.name) ? '' : memory.saveError,
     }
     emit()
     persistSoon()
   } catch (error) {
     console.warn(`Could not index ${meta.name} for Ask AI`, error)
-    setMemory({
-      saveError: `${meta.name} is readable, but Ask AI could not index it yet. ${error?.message || ''}`.trim(),
-    })
+    askAiIndexCooldownUntil.set(meta.id, Date.now() + 60_000)
+    const detail = (error?.message || '').trim()
+    const nextStore = {
+      ...memory.store,
+      filesMeta: memory.store.filesMeta.map((row) =>
+        row.id === meta.id ? { ...row, askAiIndexError: detail || 'index failed' } : row
+      ),
+    }
+    // Write the error flag directly. persistSoon → persistNow clears saveError
+    // on a successful localStorage write, which would hide the banner.
+    memory = {
+      ...memory,
+      store: nextStore,
+      saveError: `${meta.name} is readable, but Ask AI could not index it yet. ${detail}`.trim(),
+    }
+    emit()
+    writeJson(KEY, nextStore)
+  } finally {
+    askAiIndexingIds.delete(meta.id)
   }
 }
 
@@ -507,6 +538,7 @@ export function useCaseLibrary() {
       issue: 1,
       tag: null,
       usefulness: 'background',
+      headlineNote: '',
       holding: '',
       rule: '',
       usePetitioner: '',
@@ -678,6 +710,76 @@ export function useCaseLibrary() {
     }
   }, [])
 
+  /**
+   * Re-try FAISS indexing for a PDF that is readable locally but failed earlier
+   * (common for large Instant Case opinions when the proxy path dies mid-upload).
+   */
+  const retryAskAiIndex = useCallback(async (fileId) => {
+    const meta = memory.store.filesMeta.find((f) => f.id === fileId)
+    const blob = memory.blobs[fileId]
+    if (!meta || !blob || meta.askAiIndexed) return false
+    askAiIndexCooldownUntil.delete(fileId)
+    setMemory({ saveError: '' })
+    await indexFileForAskAi(meta, blob, { force: true })
+    const next = memory.store.filesMeta.find((f) => f.id === fileId)
+    return Boolean(next?.askAiIndexed)
+  }, [])
+
+  /**
+   * Remove a library case and its local notes / annotations / PDFs.
+   * Sync tombstones the case (and related rows) so other devices drop it too.
+   */
+  const removeCase = useCallback(
+    async (caseId) => {
+      if (!caseId) return
+
+      const fileIds = memory.store.filesMeta
+        .filter((f) => f.caseId === caseId)
+        .map((f) => f.id)
+      for (const fileId of fileIds) {
+        await removeFile(fileId)
+      }
+
+      const annotationIds = memory.store.annotations
+        .filter((a) => a.caseId === caseId)
+        .map((a) => a.id)
+      const noteLayers = Object.keys(memory.store.notesByCase[caseId] || {})
+      const citeIds = (memory.store.cites || [])
+        .filter((c) => c.fromCaseId === caseId || c.toCaseId === caseId)
+        .map((c) => c.id)
+      const noteTabIds = (memory.store.noteTabs || [])
+        .filter((t) => t.caseId === caseId)
+        .map((t) => t.id)
+      const dirtyKeys = [
+        metaKey('cases', caseId),
+        ...annotationIds.map((id) => metaKey('annotations', id)),
+        ...noteLayers.map((layerId) => metaKey('notes', caseId, layerId)),
+        ...citeIds.map((id) => metaKey('library_records', 'cites', id)),
+        ...noteTabIds.map((id) => metaKey('library_records', 'note_tabs', id)),
+      ]
+
+      updateStore(
+        (prev) => {
+          const notesByCase = { ...prev.notesByCase }
+          delete notesByCase[caseId]
+          return {
+            ...prev,
+            cases: prev.cases.filter((c) => c.id !== caseId),
+            annotations: prev.annotations.filter((a) => a.caseId !== caseId),
+            notesByCase,
+            noteTabs: (prev.noteTabs || []).filter((t) => t.caseId !== caseId),
+            cites: (prev.cites || []).filter(
+              (c) => c.fromCaseId !== caseId && c.toCaseId !== caseId
+            ),
+          }
+        },
+        dirtyKeys,
+        true
+      )
+    },
+    [removeFile]
+  )
+
   // Active file and current page are this browser's view state, not shared
   // data, so they are deliberately left out of sync. Syncing them would make
   // two open devices fight over each other's scroll position.
@@ -716,6 +818,8 @@ export function useCaseLibrary() {
           quote: payload.quote || '',
           rects: payload.rects || null,
           kind: payload.kind || (payload.quote ? 'highlight' : 'page'),
+          pinned: Boolean(payload.pinned),
+          color: payload.color || 'gold',
           savedAt: Date.now(),
         }
         return { ...prev, annotations: [next, ...prev.annotations] }
@@ -728,7 +832,9 @@ export function useCaseLibrary() {
     updateStore(
       (prev) => ({
         ...prev,
-        annotations: prev.annotations.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+        annotations: prev.annotations.map((a) =>
+          a.id === id ? { ...a, ...patch, savedAt: Date.now() } : a
+        ),
       }),
       [metaKey('annotations', id)]
     )
@@ -853,6 +959,50 @@ export function useCaseLibrary() {
     )
   }, [])
 
+  const addNoteTab = useCallback(({ caseId, label, kind }) => {
+    const id = `tab-${Date.now()}`
+    const next = {
+      id,
+      caseId,
+      label: (label || 'Tab').trim() || 'Tab',
+      kind: kind || 'text',
+    }
+    updateStore(
+      (prev) => ({
+        ...prev,
+        noteTabs: [...(prev.noteTabs || []), next],
+      }),
+      [metaKey('library_records', 'note_tabs', id)]
+    )
+    return next
+  }, [])
+
+  const removeNoteTab = useCallback((id) => {
+    const existing = memory.store.noteTabs?.find((t) => t.id === id)
+    const dirtyKeys = [metaKey('library_records', 'note_tabs', id)]
+    if (existing?.kind === 'text' && existing.caseId) {
+      dirtyKeys.push(metaKey('notes', existing.caseId, id))
+    }
+    updateStore(
+      (prev) => {
+        const tab = (prev.noteTabs || []).find((t) => t.id === id)
+        let notesByCase = prev.notesByCase
+        if (tab?.kind === 'text' && tab.caseId) {
+          const layers = { ...(notesByCase[tab.caseId] || {}) }
+          delete layers[tab.id]
+          notesByCase = { ...notesByCase, [tab.caseId]: layers }
+        }
+        return {
+          ...prev,
+          noteTabs: (prev.noteTabs || []).filter((t) => t.id !== id),
+          notesByCase,
+        }
+      },
+      dirtyKeys,
+      true
+    )
+  }, [])
+
   return {
     cases: snap.store.cases,
     annotations: snap.store.annotations,
@@ -861,6 +1011,7 @@ export function useCaseLibrary() {
     caseFacts: snap.store.caseFacts,
     cites: snap.store.cites,
     timeline: snap.store.timeline,
+    noteTabs: snap.store.noteTabs,
     blobs: snap.blobs,
     activeFileId: snap.store.activeFileId,
     setActiveFileId,
@@ -878,11 +1029,13 @@ export function useCaseLibrary() {
     syncNow: () => scheduleSync(0),
     updateCase,
     addCase,
+    removeCase,
     setLayerNote,
     getLayerNotes,
     attachFiles,
     attachBlob,
     removeFile,
+    retryAskAiIndex,
     setPage,
     upsertAnnotation,
     updateAnnotation,
@@ -895,5 +1048,7 @@ export function useCaseLibrary() {
     removeCite,
     upsertTimeline,
     removeTimeline,
+    addNoteTab,
+    removeNoteTab,
   }
 }

@@ -47,7 +47,14 @@ function describe(sync) {
   return { tone: 'ok', text: `Saved in this browser and on the backend.${when}` }
 }
 
-export function SyncBanner({ sync, saveError, lastSavedAt, onSyncNow }) {
+export function SyncBanner({
+  sync,
+  saveError,
+  lastSavedAt,
+  onSyncNow,
+  onRetrySaveError,
+  retrySaveLabel = 'Retry',
+}) {
   const { tone, text } = describe(sync)
   const pinned = isWorkspacePinned()
   const [open, setOpen] = useState(false)
@@ -75,7 +82,16 @@ export function SyncBanner({ sync, saveError, lastSavedAt, onSyncNow }) {
 
   return (
     <>
-      {saveError ? <p className="save-banner error">{saveError}</p> : null}
+      {saveError ? (
+        <p className="save-banner error">
+          {saveError}
+          {onRetrySaveError ? (
+            <button type="button" className="anno-jump" onClick={onRetrySaveError}>
+              {retrySaveLabel}
+            </button>
+          ) : null}
+        </p>
+      ) : null}
       <p className={`save-banner mono sync-${tone}`}>
         {text}
         {lastSavedAt ? ` Local write ${clock(lastSavedAt)}.` : ''}
