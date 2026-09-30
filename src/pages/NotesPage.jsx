@@ -24,9 +24,9 @@ export function NotesPage() {
         <div>
           <h1>Notes</h1>
           <p className="lede">
-            {NOTEBOOK_META.title}: section groups → sections → pages (drag to reorder or nest as
-            subpages). Nested bullets use Tab / Shift+Tab. Saves in this browser until the API
-            exists.
+            {NOTEBOOK_META.title}: section groups → sections → pages. Use Add subpage (or the
+            corner icon on a page) to nest under the current page; drag to reorder. Nested bullets
+            use Tab / Shift+Tab. Saves in this browser until the API exists.
           </p>
         </div>
       </header>
@@ -48,6 +48,7 @@ export function NotesPage() {
           activePageId={nb.pageId}
           onSelectPage={nb.selectPage}
           onAddPage={nb.addPage}
+          onAddSubpage={nb.addSubpage}
           onDeletePage={nb.deletePage}
           onMovePages={nb.reorderPages}
           sectionName={sectionName}
@@ -56,12 +57,22 @@ export function NotesPage() {
         <div className="onenote-canvas">
           {nb.activePage ? (
             <>
-              <input
-                className="notes-title-input"
-                value={nb.activePage.title}
-                onChange={(e) => nb.renamePage(e.target.value)}
-                aria-label="Page title"
-              />
+              <div className="notes-canvas-head">
+                <input
+                  className="notes-title-input"
+                  value={nb.activePage.title}
+                  onChange={(e) => nb.renamePage(e.target.value)}
+                  aria-label="Page title"
+                />
+                <button
+                  type="button"
+                  className="btn-soft notes-add-subpage"
+                  onClick={() => nb.addSubpage(nb.pageId)}
+                  title="Add a subpage under this page"
+                >
+                  <span aria-hidden>↳</span> Add subpage
+                </button>
+              </div>
               <NoteEditor
                 key={nb.activePage.id}
                 html={nb.activePage.html}

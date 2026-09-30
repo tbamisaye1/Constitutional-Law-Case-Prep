@@ -5,6 +5,7 @@ import {
   findPage,
   firstPageId,
   insertAfter,
+  insertAsChild,
   mapPages,
   movePages,
   pickPageAfterDelete,
@@ -117,6 +118,29 @@ export function useNotebook() {
     setPageId(id)
   }, [sectionId, activePage])
 
+  /**
+   * Add a subpage under parentId (or under the active page when omitted).
+   * Used for OneNote-style nesting without requiring a drag.
+   */
+  const addSubpage = useCallback(
+    (parentId) => {
+      if (!sectionId) return
+      const parent = parentId || activePage?.id
+      if (!parent) {
+        addPage()
+        return
+      }
+      const id = `pg-${Date.now()}`
+      const page = { id, title: 'Untitled subpage', html: '<p></p>' }
+      setPagesBySection((prev) => ({
+        ...prev,
+        [sectionId]: insertAsChild(prev[sectionId] || [], parent, page),
+      }))
+      setPageId(id)
+    },
+    [sectionId, activePage, addPage]
+  )
+
   const deletePage = useCallback(
     (id) => {
       if (!sectionId || !id) return
@@ -220,6 +244,7 @@ export function useNotebook() {
     updatePageHtml,
     renamePage,
     addPage,
+    addSubpage,
     deletePage,
     reorderPages,
     addSection,

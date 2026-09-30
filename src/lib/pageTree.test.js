@@ -3,6 +3,7 @@ import {
   findPage,
   firstPageId,
   insertAfter,
+  insertAsChild,
   movePages,
   pickPageAfterDelete,
   removePage,
@@ -36,6 +37,17 @@ describe('pageTree', () => {
   it('prepends when nothing is selected', () => {
     const next = insertAfter(sample, null, { id: 'x', title: 'X', html: '<p></p>' })
     expect(next[0].id).toBe('x')
+  })
+
+  it('inserts a subpage under a parent', () => {
+    const next = insertAsChild(sample, 'a', { id: 'x', title: 'X', html: '<p></p>' })
+    expect(findPage(next, 'a').children.map((p) => p.id)).toEqual(['x'])
+    expect(next.map((p) => p.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('inserts a subpage under a page that already has children', () => {
+    const next = insertAsChild(sample, 'b', { id: 'x', title: 'X', html: '<p></p>' })
+    expect(findPage(next, 'b').children.map((p) => p.id)).toEqual(['x', 'b1', 'b2'])
   })
 
   it('nests a page under another via move', () => {

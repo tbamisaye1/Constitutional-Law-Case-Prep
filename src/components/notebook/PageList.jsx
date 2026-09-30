@@ -1,22 +1,25 @@
 import { useMemo, useRef } from 'react'
 import { Tree } from 'react-arborist'
-import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, CornerDownRight, Plus, Trash2 } from 'lucide-react'
 
 /**
  * Middle OneNote pane: nestable pages with drag reorder / subpages (react-arborist).
- * Drop a page onto another to nest; drag between siblings to reorder.
+ * Drop a page onto another to nest; use Add subpage for a one-click child under
+ * the selected page (or under a specific row).
  */
 export function PageList({
   pages,
   activePageId,
   onSelectPage,
   onAddPage,
+  onAddSubpage,
   onDeletePage,
   onMovePages,
   sectionName,
 }) {
   const wrapRef = useRef(null)
   const data = useMemo(() => pages || [], [pages])
+  const canSubpage = Boolean(activePageId)
 
   return (
     <div className="onenote-pages">
@@ -76,6 +79,18 @@ export function PageList({
                 </button>
                 <button
                   type="button"
+                  className="page-subpage"
+                  aria-label={`Add subpage under ${node.data.title}`}
+                  title="Add subpage"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onAddSubpage?.(node.id)
+                  }}
+                >
+                  <CornerDownRight size={14} strokeWidth={1.75} />
+                </button>
+                <button
+                  type="button"
                   className="page-delete"
                   aria-label={`Delete ${node.data.title}`}
                   title="Delete page"
@@ -91,9 +106,24 @@ export function PageList({
           </Tree>
         )}
       </div>
-      <button type="button" className="onenote-add page-add" onClick={onAddPage}>
-        <Plus size={14} /> Add page
-      </button>
+      <div className="page-add-row">
+        <button type="button" className="onenote-add page-add" onClick={onAddPage}>
+          <Plus size={14} /> Add page
+        </button>
+        <button
+          type="button"
+          className="onenote-add page-add page-add-sub"
+          onClick={() => onAddSubpage?.(activePageId)}
+          disabled={!canSubpage}
+          title={
+            canSubpage
+              ? 'Add a subpage under the selected page'
+              : 'Select a page first, then add a subpage under it'
+          }
+        >
+          <CornerDownRight size={14} /> Add subpage
+        </button>
+      </div>
     </div>
   )
 }

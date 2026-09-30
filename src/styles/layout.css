@@ -698,25 +698,32 @@
   box-shadow: none;
 }
 
-.page-delete {
+.page-delete,
+.page-subpage {
   flex-shrink: 0;
   opacity: 0;
   border: none;
   background: transparent;
   color: var(--ink-3);
-  padding: 0 12px;
+  padding: 0 10px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
 }
 
 .page-row:hover .page-delete,
-.page-row.on .page-delete {
+.page-row.on .page-delete,
+.page-row:hover .page-subpage,
+.page-row.on .page-subpage {
   opacity: 1;
 }
 
 .page-delete:hover {
   color: var(--two, #a33);
+}
+
+.page-subpage:hover {
+  color: var(--ink);
 }
 
 .page-card strong {
@@ -735,8 +742,38 @@
   overflow: hidden;
 }
 
-.page-add {
+.page-add-row {
+  display: flex;
+  flex-direction: column;
   border-top: 1px solid var(--rule-soft);
+}
+
+.page-add {
+  border-top: none;
+}
+
+.page-add-sub:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.notes-canvas-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.notes-canvas-head .notes-title-input {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.notes-add-subpage {
+  flex-shrink: 0;
+  margin-top: 4px;
+  white-space: nowrap;
 }
 
 .onenote-canvas {

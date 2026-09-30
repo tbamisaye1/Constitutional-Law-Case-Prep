@@ -81,6 +81,30 @@ export function insertAfter(nodes, afterId, newPage) {
 }
 
 /**
+ * Insert newPage as the first child of parentId.
+ * If parentId is missing, prepend at the root (same as a top-level page).
+ */
+export function insertAsChild(nodes, parentId, newPage) {
+  const list = nodes || []
+  if (!parentId) return [newPage, ...list]
+
+  let inserted = false
+  function walk(siblings) {
+    return siblings.map((n) => {
+      if (n.id === parentId) {
+        inserted = true
+        return { ...n, children: [newPage, ...(n.children || [])] }
+      }
+      if (n.children?.length) return { ...n, children: walk(n.children) }
+      return n
+    })
+  }
+
+  const result = walk(list)
+  return inserted ? result : [newPage, ...list]
+}
+
+/**
  * Next page to select after deleting `removedId` from the pre-delete tree.
  * Prefer next sibling, then previous sibling, then parent, then first remaining.
  */
