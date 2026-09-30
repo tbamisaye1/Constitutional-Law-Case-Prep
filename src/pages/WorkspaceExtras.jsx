@@ -1,22 +1,112 @@
 import { Callout } from '../components/CaseCard'
 import { NoteEditor } from '../components/NoteEditor'
 import { ingestPdf, listIngestSources, removeIngestSource } from '../api/client'
-import { Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { Columns2, Maximize2, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { onPageHide, readJson, writeJson } from '../lib/persist'
+
+const OPENINGS_KEY = 'case-prep-openings-v1'
+
+const SIDE_SEED = {
+  petitioner: `<h2>Petitioner opening</h2><p>May it please the Court. Counsel for Bobby Bronner…</p><h2>OA notes</h2><ul><li>Cold facts</li><li>Hardest question from the government</li><li>One-sentence hinge on Q1 / Q2</li></ul>`,
+  respondent: `<h2>Respondent opening</h2><p>May it please the Court. Counsel for the United States…</p><h2>OA notes</h2><ul><li>Cold facts</li><li>Hardest question from Bronner</li><li>One-sentence hinge on Q1 / Q2</li></ul>`,
+}
+
+const SIDES = [
+  {
+    id: 'petitioner',
+    label: 'Petitioner opening',
+    hint: 'Bronner / defense script and OA notes for this side.',
+  },
+  {
+    id: 'respondent',
+    label: 'Respondent opening',
+    hint: 'United States script and OA notes for this side.',
+  },
+]
+
+function loadOpenings() {
+  const saved = readJson(OPENINGS_KEY, null)
+  if (saved && typeof saved === 'object') {
+    return {
+      petitioner: typeof saved.petitioner === 'string' ? saved.petitioner : SIDE_SEED.petitioner,
+      respondent: typeof saved.respondent === 'string' ? saved.respondent : SIDE_SEED.respondent,
+    }
+  }
+  return { ...SIDE_SEED }
+}
 
 export function OpeningsPage() {
-  const [html, setHtml] = useState(
-    `<h2>Opening</h2><p>May it please the Court…</p><h2>OA notes</h2><ul><li>Cold facts</li><li>Hardest question from the other side</li><li>One-sentence hinge</li></ul>`
-  )
+  const [drafts, setDrafts] = useState(loadOpenings)
+  const [focus, setFocus] = useState(null)
+  const skipFirstWrite = useRef(true)
+
+  useEffect(() => {
+    if (skipFirstWrite.current) {
+      skipFirstWrite.current = false
+      return
+    }
+    writeJson(OPENINGS_KEY, drafts)
+  }, [drafts])
+
+  useEffect(() => onPageHide(() => writeJson(OPENINGS_KEY, drafts)), [drafts])
+
+  function setSide(side, html) {
+    setDrafts((prev) => ({ ...prev, [side]: html }))
+  }
+
+  const visible = focus ? SIDES.filter((s) => s.id === focus) : SIDES
+
   return (
     <section className="workspace">
       <header className="workspace-head">
         <div>
           <h1>Openings &amp; OA</h1>
-          <p className="lede">Scripts and oral-argument packs. Edit here the way you do in OneNote.</p>
+          <p className="lede">
+            Separate scripts for each side. Focus one when you want full width; Both brings the
+            split back.
+          </p>
         </div>
       </header>
-      <NoteEditor html={html} onChange={setHtml} />
+
+      <div className={focus ? 'use-split dive-use use-split-focus' : 'use-split dive-use'}>
+        {visible.map((side) => {
+          const focused = focus === side.id
+          return (
+            <div key={side.id} className="use-pane dive-pane">
+              <div className="use-pane-head">
+                <div>
+                  <h3 className="use-pane-title">{side.label}</h3>
+                  <p className="notes-hub-hint">{side.hint}</p>
+                </div>
+                <button
+                  type="button"
+                  className="btn-soft use-focus-btn"
+                  onClick={() => setFocus(focused ? null : side.id)}
+                  title={focused ? 'Show both sides' : `Focus ${side.label}`}
+                >
+                  {focused ? (
+                    <>
+                      <Columns2 size={14} /> Both
+                    </>
+                  ) : (
+                    <>
+                      <Maximize2 size={14} /> Focus
+                    </>
+                  )}
+                </button>
+              </div>
+              <div className="dive-editor">
+                <NoteEditor
+                  key={side.id}
+                  html={drafts[side.id]}
+                  onChange={(html) => setSide(side.id, html)}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </section>
   )
 }
