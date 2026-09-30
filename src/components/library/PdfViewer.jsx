@@ -1,15 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
-import { ChevronLeft, ChevronRight, FileUp, Highlighter, Sparkles, ZoomIn, ZoomOut } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  FileUp,
+  Highlighter,
+  Search,
+  Sparkles,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 import { useAiUi } from '../../ai/AiUiContext'
 import { findQuoteOnPage } from '../../lib/pdfQuoteFocus'
+import { findAllOnPage, searchPdfDocument } from '../../lib/pdfTextSearch'
+import {
+  DEFAULT_HIGHLIGHT_COLOR,
+  HIGHLIGHT_COLORS,
+  highlightColorMeta,
+  normalizeHighlightColor,
+} from '../../lib/highlightColors'
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
 
 /**
- * PDF reader with text-select → highlight note.
+ * PDF reader with text-select → highlight note, page jump, and in-document search.
  * Selection is captured relative to the page box so overlays survive zoom changes
  * (rects are stored as fractions of page width/height).
  *
@@ -24,6 +43,7 @@ export function PdfViewer({
   suggestedFile,
   highlights = [],
   onHighlight,
+  onSelectHighlight,
   caseId = null,
   focusQuote = '',
   emptyHint = '',
@@ -32,8 +52,20 @@ export function PdfViewer({
   const [scale, setScale] = useState(1.05)
   const [error, setError] = useState('')
   const [pending, setPending] = useState(null)
+  const [pendingColor, setPendingColor] = useState(DEFAULT_HIGHLIGHT_COLOR)
   const [focusRects, setFocusRects] = useState([])
+  const [pageDraft, setPageDraft] = useState(String(page || 1))
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchDraft, setSearchDraft] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchMatches, setSearchMatches] = useState([])
+  const [activeMatch, setActiveMatch] = useState(0)
+  const [searchHits, setSearchHits] = useState([])
+  const [searchBusy, setSearchBusy] = useState(false)
+  const [searchError, setSearchError] = useState('')
   const stageRef = useRef(null)
+  const pdfDocRef = useRef(null)
+  const searchInputRef = useRef(null)
   const focusKeyRef = useRef('')
   const { openBubble } = useAiUi()
 
@@ -43,13 +75,64 @@ export function PdfViewer({
     setPending(null)
     setFocusRects([])
     focusKeyRef.current = ''
-  }, [file])
+    pdfDocRef.current = null
+    clearSearch(true)
+  }, [file]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setPending(null)
     setFocusRects([])
     focusKeyRef.current = ''
   }, [page, focusQuote])
+
+  useEffect(() => {
+    setPageDraft(String(page || 1))
+  }, [page])
+
+  useEffect(() => {
+    if (searchOpen) {
+      requestAnimationFrame(() => searchInputRef.current?.focus())
+    }
+  }, [searchOpen])
+
+  useEffect(() => {
+    function onKey(event) {
+      const isFind = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f'
+      if (!isFind) return
+      const root = stageRef.current?.closest('.pdf-viewer')
+      if (!root) return
+      // Only steal Cmd/Ctrl+F when focus is inside this viewer.
+      if (!root.contains(document.activeElement) && document.activeElement !== document.body) {
+        return
+      }
+      event.preventDefault()
+      setSearchOpen(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  function clearSearch(resetDraft = false) {
+    setSearchQuery('')
+    setSearchMatches([])
+    setActiveMatch(0)
+    setSearchHits([])
+    setSearchError('')
+    setSearchBusy(false)
+    if (resetDraft) setSearchDraft('')
+  }
+
+  function jumpToPage(raw) {
+    const parsed = Number.parseInt(String(raw).trim(), 10)
+    if (!Number.isFinite(parsed)) {
+      setPageDraft(String(page || 1))
+      return
+    }
+    const max = numPages || parsed
+    const next = Math.min(Math.max(1, parsed), max)
+    setPageDraft(String(next))
+    if (next !== page) onPageChange(next)
+  }
 
   const pageHighlights = useMemo(
     () => highlights.filter((h) => h.page === page && Array.isArray(h.rects) && h.rects.length),
@@ -91,6 +174,88 @@ export function PdfViewer({
     }
   }
 
+  function applySearchHighlights() {
+    if (!searchQuery.trim() || !searchMatches.length) {
+      setSearchHits([])
+      return
+    }
+    const pageEl = stageRef.current?.querySelector('.react-pdf__Page')
+    if (!pageEl) return
+
+    const hits = findAllOnPage(pageEl, searchQuery)
+    setSearchHits(hits)
+
+    const active = searchMatches[activeMatch]
+    if (!active || active.page !== page) return
+    const hit = hits[active.occurrence]
+    if (!hit?.range) return
+    try {
+      const box = hit.range.getBoundingClientRect()
+      const scroller = stageRef.current
+      if (scroller && box.height > 0) {
+        const stageBox = scroller.getBoundingClientRect()
+        const delta = box.top - stageBox.top - scroller.clientHeight * 0.3
+        scroller.scrollTop += delta
+      }
+    } catch {
+      // Still show the painted rects.
+    }
+  }
+
+  async function runSearch(rawQuery) {
+    const query = String(rawQuery || '').trim()
+    setSearchDraft(query)
+    if (query.length < 2) {
+      clearSearch()
+      setSearchError(query ? 'Type at least 2 characters.' : '')
+      return
+    }
+    const pdf = pdfDocRef.current
+    if (!pdf) {
+      setSearchError('PDF is still loading.')
+      return
+    }
+
+    setSearchBusy(true)
+    setSearchError('')
+    try {
+      const matches = await searchPdfDocument(pdf, query)
+      setSearchQuery(query)
+      setSearchMatches(matches)
+      if (!matches.length) {
+        setActiveMatch(0)
+        setSearchHits([])
+        setSearchError('No matches in this PDF.')
+        return
+      }
+      setActiveMatch(0)
+      const first = matches[0]
+      if (first.page !== page) onPageChange(first.page)
+      else requestAnimationFrame(() => applySearchHighlights())
+    } catch (err) {
+      console.error('PDF search failed', err)
+      setSearchError('Could not search this PDF.')
+      setSearchMatches([])
+      setSearchHits([])
+    } finally {
+      setSearchBusy(false)
+    }
+  }
+
+  function goToMatch(nextIndex) {
+    if (!searchMatches.length) return
+    const wrapped = ((nextIndex % searchMatches.length) + searchMatches.length) % searchMatches.length
+    setActiveMatch(wrapped)
+    const target = searchMatches[wrapped]
+    if (target.page !== page) onPageChange(target.page)
+    else requestAnimationFrame(() => applySearchHighlights())
+  }
+
+  useEffect(() => {
+    if (!searchQuery || !searchMatches.length) return
+    requestAnimationFrame(() => applySearchHighlights())
+  }, [page, searchQuery, activeMatch, searchMatches.length, scale]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function onMouseUp() {
     if (!onHighlight) return
     const sel = window.getSelection()
@@ -122,6 +287,7 @@ export function PdfViewer({
     if (!rects.length) return
 
     const first = range.getBoundingClientRect()
+    setPendingColor(DEFAULT_HIGHLIGHT_COLOR)
     setPending({
       quote,
       rects,
@@ -140,10 +306,16 @@ export function PdfViewer({
       quote: pending.quote,
       rects: pending.rects,
       text: '',
+      color: normalizeHighlightColor(pendingColor),
     })
     setPending(null)
     window.getSelection()?.removeAllRanges()
   }
+
+  const activeOnPage =
+    searchMatches[activeMatch] && searchMatches[activeMatch].page === page
+      ? searchMatches[activeMatch].occurrence
+      : -1
 
   if (!file) {
     return (
@@ -167,13 +339,25 @@ export function PdfViewer({
   }
 
   return (
-    <div className="pdf-viewer">
+    <div className="pdf-viewer" tabIndex={-1}>
       <div className="pdf-toolbar">
         <span className="pdf-filename mono" title={fileName}>
           {fileName || 'PDF'}
         </span>
         <span className="pdf-hint mono">Select text → highlight or Ask AI</span>
         <div className="pdf-toolbar-right">
+          <button
+            type="button"
+            className={searchOpen ? 'btn-soft on' : 'btn-soft'}
+            onClick={() => {
+              setSearchOpen((v) => !v)
+              if (searchOpen) clearSearch(true)
+            }}
+            aria-label="Search in PDF"
+            title="Search in PDF (⌘F / Ctrl+F)"
+          >
+            <Search size={15} />
+          </button>
           <button type="button" className="btn-soft" onClick={() => setScale((s) => Math.max(0.7, s - 0.1))}>
             <ZoomOut size={15} />
           </button>
@@ -186,23 +370,119 @@ export function PdfViewer({
             className="btn-soft"
             disabled={page <= 1}
             onClick={() => onPageChange(Math.max(1, page - 1))}
+            aria-label="Previous page"
           >
             <ChevronLeft size={15} />
           </button>
-          <span className="mono pdf-page">
-            {page}
-            {numPages ? ` / ${numPages}` : ''}
-          </span>
+          <label className="pdf-page-jump">
+            <span className="visually-hidden">Go to page</span>
+            <input
+              className="mono pdf-page-input"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={numPages || undefined}
+              value={pageDraft}
+              onChange={(e) => setPageDraft(e.target.value)}
+              onBlur={() => jumpToPage(pageDraft)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  jumpToPage(pageDraft)
+                  e.currentTarget.blur()
+                }
+              }}
+              aria-label={numPages ? `Page number, of ${numPages}` : 'Page number'}
+            />
+            <span className="mono pdf-page-total">{numPages ? `/ ${numPages}` : ''}</span>
+          </label>
           <button
             type="button"
             className="btn-soft"
             disabled={numPages != null && page >= numPages}
             onClick={() => onPageChange(page + 1)}
+            aria-label="Next page"
           >
             <ChevronRight size={15} />
           </button>
         </div>
       </div>
+
+      {searchOpen ? (
+        <div className="pdf-search-bar">
+          <Search size={14} className="pdf-search-icon" aria-hidden />
+          <input
+            ref={searchInputRef}
+            className="pdf-search-input"
+            type="search"
+            value={searchDraft}
+            placeholder="Find words or phrases in this PDF…"
+            aria-label="Search PDF"
+            onChange={(e) => setSearchDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                if (e.shiftKey && searchMatches.length) goToMatch(activeMatch - 1)
+                else if (searchQuery === searchDraft.trim() && searchMatches.length) {
+                  goToMatch(activeMatch + 1)
+                } else {
+                  runSearch(searchDraft)
+                }
+              } else if (e.key === 'Escape') {
+                setSearchOpen(false)
+                clearSearch(true)
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="btn-soft"
+            disabled={searchBusy || searchDraft.trim().length < 2}
+            onClick={() => runSearch(searchDraft)}
+          >
+            {searchBusy ? 'Searching…' : 'Find'}
+          </button>
+          <button
+            type="button"
+            className="btn-soft"
+            disabled={!searchMatches.length}
+            onClick={() => goToMatch(activeMatch - 1)}
+            aria-label="Previous match"
+          >
+            <ChevronUp size={14} />
+          </button>
+          <button
+            type="button"
+            className="btn-soft"
+            disabled={!searchMatches.length}
+            onClick={() => goToMatch(activeMatch + 1)}
+            aria-label="Next match"
+          >
+            <ChevronDown size={14} />
+          </button>
+          <span className="mono pdf-search-count">
+            {searchBusy
+              ? '…'
+              : searchMatches.length
+                ? `${activeMatch + 1} / ${searchMatches.length}`
+                : searchQuery
+                  ? '0'
+                  : ''}
+          </span>
+          <button
+            type="button"
+            className="icon-btn soft"
+            aria-label="Close search"
+            onClick={() => {
+              setSearchOpen(false)
+              clearSearch(true)
+            }}
+          >
+            <X size={14} />
+          </button>
+          {searchError ? <span className="pdf-search-error">{searchError}</span> : null}
+        </div>
+      ) : null}
 
       <div className="pdf-stage" ref={stageRef} onMouseUp={onMouseUp}>
         {error ? <p className="pdf-error">{error}</p> : null}
@@ -210,13 +490,14 @@ export function PdfViewer({
           <Document
             file={file}
             loading={<p className="pdf-loading mono">Loading PDF…</p>}
-            onLoadSuccess={({ numPages: n }) => {
-              setNumPages(n)
+            onLoadSuccess={(pdf) => {
+              pdfDocRef.current = pdf
+              setNumPages(pdf.numPages)
               setError('')
             }}
             onLoadError={(err) => {
               console.error('PDF load error', err)
-              setError('Could not open this PDF. Remove it and add it again.')
+              setError('Could not open that PDF. Try another file.')
             }}
           >
             <Page
@@ -227,17 +508,45 @@ export function PdfViewer({
               loading={<p className="pdf-loading mono">Rendering page…</p>}
               onRenderTextLayerSuccess={() => {
                 // Text layer paints after this callback; wait one frame so spans exist.
-                requestAnimationFrame(() => applyFocusQuote())
+                requestAnimationFrame(() => {
+                  applyFocusQuote()
+                  applySearchHighlights()
+                })
               }}
             />
           </Document>
 
-          <div className="pdf-highlight-layer" aria-hidden>
-            {pageHighlights.map((h) =>
-              (h.rects || []).map((r, i) => (
-                <span
+          <div className="pdf-highlight-layer">
+            {pageHighlights.map((h) => {
+              const color = highlightColorMeta(h.color)
+              return (h.rects || []).map((r, i) => (
+                <button
                   key={`${h.id}-${i}`}
-                  className="pdf-hl"
+                  type="button"
+                  className="pdf-hl pdf-hl-hit"
+                  aria-label={`Open note for highlight: ${(h.quote || '').slice(0, 80)}`}
+                  style={{
+                    top: `${r.top * 100}%`,
+                    left: `${r.left * 100}%`,
+                    width: `${r.width * 100}%`,
+                    height: `${r.height * 100}%`,
+                    background: color.fill,
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onSelectHighlight?.(h.id)
+                  }}
+                />
+              ))
+            })}
+            {searchHits.map((hit, hitIndex) =>
+              (hit.rects || []).map((r, i) => (
+                <span
+                  key={`search-${hitIndex}-${i}`}
+                  className={
+                    hitIndex === activeOnPage ? 'pdf-hl pdf-hl-search pdf-hl-search-active' : 'pdf-hl pdf-hl-search'
+                  }
                   style={{
                     top: `${r.top * 100}%`,
                     left: `${r.left * 100}%`,
@@ -270,6 +579,19 @@ export function PdfViewer({
                 “{pending.quote.slice(0, 120)}
                 {pending.quote.length > 120 ? '…' : ''}”
               </p>
+              <div className="hl-color-row" role="group" aria-label="Highlight color">
+                {HIGHLIGHT_COLORS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={pendingColor === c.id ? 'hl-swatch on' : 'hl-swatch'}
+                    style={{ background: c.solid }}
+                    aria-label={c.label}
+                    aria-pressed={pendingColor === c.id}
+                    onClick={() => setPendingColor(c.id)}
+                  />
+                ))}
+              </div>
               <button type="button" className="btn-ink" onClick={confirmHighlight}>
                 <Highlighter size={14} /> Save highlight
               </button>

@@ -15,6 +15,7 @@ import { CASE_AT_BAR_ID, CASE_AT_BAR_LABEL } from '../../data/caseAtBar'
 export function CaseAtBarPanel({ lib }) {
   const [params] = useSearchParams()
   const [mode, setMode] = useState('read') // read | notes
+  const [focusAnnotationId, setFocusAnnotationId] = useState(null)
   const paramFile = params.get('file')
   const paramPage = Number(params.get('page') || 0)
   const focusQuote = params.get('q') || ''
@@ -112,7 +113,7 @@ export function CaseAtBarPanel({ lib }) {
                   (!a.fileId || a.fileId === activeId) &&
                   a.kind === 'highlight'
               )}
-              onHighlight={({ page: p, quote, rects, text }) =>
+              onHighlight={({ page: p, quote, rects, text, color }) =>
                 lib.upsertAnnotation({
                   caseId: CASE_AT_BAR_ID,
                   fileId: activeId,
@@ -120,9 +121,11 @@ export function CaseAtBarPanel({ lib }) {
                   quote,
                   rects,
                   text,
+                  color,
                   kind: 'highlight',
                 })
               }
+              onSelectHighlight={(id) => setFocusAnnotationId(id)}
             />
             <AnnotationPanel
               caseId={CASE_AT_BAR_ID}
@@ -142,6 +145,8 @@ export function CaseAtBarPanel({ lib }) {
               onUpdate={(id, patch) => lib.updateAnnotation(id, patch)}
               onRemove={lib.removeAnnotation}
               onJump={(p) => activeId && lib.setPage(activeId, p)}
+              onFlush={lib.syncNow}
+              focusAnnotationId={focusAnnotationId}
             />
           </div>
         </div>

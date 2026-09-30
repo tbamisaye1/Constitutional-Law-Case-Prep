@@ -29,6 +29,7 @@ function store(overrides = {}) {
     caseFacts: [],
     cites: [],
     timeline: [],
+    noteTabs: [],
     syncMeta: emptySyncMeta(),
     ...overrides,
   }
@@ -74,7 +75,22 @@ describe('collectChanges', () => {
 
     const { changes } = collectChanges(store(), meta)
 
-    expect(changes.annotations).toEqual([{ id: 'a-1', updatedAt: 2_000, deleted: true }])
+    expect(changes.annotations).toEqual([
+      {
+        id: 'a-1',
+        caseId: '',
+        fileId: null,
+        page: 1,
+        kind: 'page',
+        quote: '',
+        text: '',
+        rects: null,
+        pinned: false,
+        color: 'gold',
+        updatedAt: 2_000,
+        deleted: true,
+      },
+    ])
   })
 
   it('keys notes by case and layer', () => {
@@ -92,16 +108,25 @@ describe('collectChanges', () => {
     const base = store({
       cites: [{ id: 'cite-1', label: 'Katz' }],
       timeline: [{ id: 'event-1', label: 'Argued' }],
+      noteTabs: [{ id: 'tab-1', caseId: 'katz', label: 'Hypo', kind: 'text' }],
     })
     const meta = markDirty(
       base.syncMeta,
-      [metaKey('library_records', 'cites', 'cite-1'), metaKey('library_records', 'timeline', 'event-1')],
+      [
+        metaKey('library_records', 'cites', 'cite-1'),
+        metaKey('library_records', 'timeline', 'event-1'),
+        metaKey('library_records', 'note_tabs', 'tab-1'),
+      ],
       1_000
     )
 
     const { changes } = collectChanges(base, meta)
 
-    expect(changes.library_records.map((row) => row.kind).sort()).toEqual(['cites', 'timeline'])
+    expect(changes.library_records.map((row) => row.kind).sort()).toEqual([
+      'cites',
+      'note_tabs',
+      'timeline',
+    ])
   })
 })
 
@@ -163,6 +188,36 @@ describe('applyChanges', () => {
           contentType: 'application/pdf',
           stored: true,
           updatedAt: 3_000,
+        },
+      ],
+    })
+
+    expect(result.store.filesMeta[0].stored).toBe(true)
+  })
+
+  it('keeps a local stored flag when a pull omits it', () => {
+    const base = store({
+      filesMeta: [
+        {
+          id: 'pdf-1',
+          caseId: 'corpus-articles',
+          name: 'summary.pdf',
+          size: 900,
+          stored: true,
+        },
+      ],
+    })
+    const meta = markDirty(emptySyncMeta(), [metaKey('documents', 'pdf-1')], 1_000)
+
+    const result = applyChanges(base, meta, {
+      documents: [
+        {
+          id: 'pdf-1',
+          caseId: 'corpus-articles',
+          name: 'summary.pdf',
+          size: 900,
+          contentType: 'application/pdf',
+          updatedAt: 5_000,
         },
       ],
     })

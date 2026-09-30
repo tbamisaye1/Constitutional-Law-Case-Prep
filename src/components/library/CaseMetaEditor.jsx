@@ -1,5 +1,5 @@
 /**
- * Editable case header: name, cite, holding, rule, dual-side use.
+ * Editable case header: headline note, holding, rule, dual-side use.
  * You argue both sides; both use fields stay visible.
  */
 export function CaseMetaEditor({ caseItem, onChange, editing, onToggleEdit }) {
@@ -16,6 +16,10 @@ export function CaseMetaEditor({ caseItem, onChange, editing, onToggleEdit }) {
         </div>
         <h2 className="case-detail-title">{caseItem.name}</h2>
         <dl className="case-meta-grid">
+          <div>
+            <dt className="mono">Headline note</dt>
+            <dd>{caseItem.headlineNote || '—'}</dd>
+          </div>
           <div>
             <dt className="mono">Holding</dt>
             <dd>{caseItem.holding || '—'}</dd>
@@ -111,6 +115,7 @@ export function CaseMetaEditor({ caseItem, onChange, editing, onToggleEdit }) {
           <option value="overview">overview</option>
         </select>
       </div>
+      {field('headlineNote', 'Headline note', true)}
       {field('holding', 'Holding', true)}
       {field('rule', 'Rule left behind', true)}
       <div className="fact-grid-2">

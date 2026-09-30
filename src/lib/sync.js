@@ -32,6 +32,7 @@ const LIBRARY_KINDS = {
   caseFacts: 'case_facts',
   cites: 'cites',
   timeline: 'timeline',
+  noteTabs: 'note_tabs',
 }
 
 export function metaKey(entity, ...parts) {
@@ -101,6 +102,7 @@ export function collectChanges(store, syncMeta) {
         issue: row.issue ?? null,
         tag: row.tag ?? null,
         usefulness: row.usefulness || 'background',
+        headlineNote: row.headlineNote || '',
         holding: row.holding || '',
         rule: row.rule || '',
         usePetitioner: row.usePetitioner || '',
@@ -137,6 +139,8 @@ export function collectChanges(store, syncMeta) {
         quote: row.quote || '',
         text: row.text || '',
         rects: row.rects || null,
+        pinned: Boolean(row.pinned),
+        color: row.color || 'gold',
       },
       metaKey('annotations', row.id)
     )
@@ -166,9 +170,32 @@ export function collectChanges(store, syncMeta) {
     const tombstone = { updatedAt: meta.updatedAt, deleted: true }
 
     if (entity === 'notes') {
-      Object.assign(tombstone, { caseId: rest[0], layerId: rest[1] })
+      Object.assign(tombstone, { caseId: rest[0], layerId: rest[1], html: '' })
     } else if (entity === 'library_records') {
       Object.assign(tombstone, { kind: rest[0], id: rest[1], data: {} })
+    } else if (entity === 'annotations') {
+      // Postgres annotations.case_id (and page/kind) are NOT NULL. An id-only
+      // tombstone used to 500 the whole sync; placeholders keep the delete.
+      Object.assign(tombstone, {
+        id: rest[0],
+        caseId: '',
+        fileId: null,
+        page: 1,
+        kind: 'page',
+        quote: '',
+        text: '',
+        rects: null,
+        pinned: false,
+        color: 'gold',
+      })
+    } else if (entity === 'documents') {
+      Object.assign(tombstone, {
+        id: rest[0],
+        caseId: '',
+        name: '',
+        size: 0,
+        contentType: 'application/pdf',
+      })
     } else {
       Object.assign(tombstone, { id: rest[0] })
     }
@@ -233,6 +260,7 @@ export function applyChanges(store, syncMeta, changes) {
             issue: row.issue,
             tag: row.tag,
             usefulness: row.usefulness,
+            headlineNote: row.headlineNote || '',
             holding: row.holding,
             rule: row.rule,
             usePetitioner: row.usePetitioner,
@@ -246,6 +274,7 @@ export function applyChanges(store, syncMeta, changes) {
   for (const row of changes.documents || []) {
     const key = metaKey('documents', row.id)
     if (!isNewer(key, row)) continue
+    const previous = nextStore.filesMeta.find((file) => file.id === row.id)
     nextStore = {
       ...nextStore,
       filesMeta: row.deleted
@@ -257,8 +286,10 @@ export function applyChanges(store, syncMeta, changes) {
             size: row.size,
             contentType: row.contentType,
             // Tells the reader it can fetch bytes from the backend when this
-            // browser has no IndexedDB copy of the PDF.
-            stored: Boolean(row.stored),
+            // browser has no IndexedDB copy of the PDF. Prefer the pull value;
+            // keep a local true if an older server echo omitted `stored`.
+            stored:
+              row.stored != null ? Boolean(row.stored) : Boolean(previous?.stored),
           }),
     }
     note(key, row)
@@ -280,6 +311,8 @@ export function applyChanges(store, syncMeta, changes) {
             quote: row.quote,
             text: row.text,
             rects: row.rects,
+            pinned: Boolean(row.pinned),
+            color: row.color || 'gold',
             savedAt: row.updatedAt,
           }),
     }

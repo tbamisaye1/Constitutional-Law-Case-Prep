@@ -63,7 +63,12 @@ export function AiUiProvider({ children }) {
       setReply(null)
 
       try {
-        const data = await chatPrep(user_prompt, ctx.matter_id || MATTER.id, groundingSource)
+        const data = await chatPrep(
+          user_prompt,
+          ctx.matter_id || MATTER.id,
+          groundingSource,
+          ctx.selection || ''
+        )
         const status = groundingStatusFromReply(data.grounding_status, data.reply)
         setReply({
           grounding_status: status,
@@ -87,7 +92,7 @@ export function AiUiProvider({ children }) {
         setLoading(false)
       }
     },
-    [ctx.matter_id, prompt, groundingSource]
+    [ctx.matter_id, ctx.selection, prompt, groundingSource]
   )
 
   const askAi = useCallback(() => runPrompt(prompt), [prompt, runPrompt])

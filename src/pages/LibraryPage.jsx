@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Maximize2, Plus, Search } from 'lucide-react'
+import { ArrowLeft, Maximize2, Plus, Search, Trash2 } from 'lucide-react'
 import { Tag } from '../components/CaseCard'
 import { CaseMetaEditor } from '../components/library/CaseMetaEditor'
 import { CaseFilesPanel } from '../components/library/CaseFilesPanel'
@@ -37,6 +37,7 @@ export function LibraryPage() {
   const [deepDive, setDeepDive] = useState(true)
   const [pullError, setPullError] = useState('')
   const [pulling, setPulling] = useState(false)
+  const [focusAnnotationId, setFocusAnnotationId] = useState(null)
 
   const paramFile = params.get('file')
   const paramPage = Number(params.get('page') || 0)
@@ -49,7 +50,15 @@ export function LibraryPage() {
       if (filter !== 'all' && String(c.issue) !== filter) return false
       if (usefulFilter !== 'all' && (c.usefulness || 'background') !== usefulFilter) return false
       if (!q) return true
-      return [c.name, c.cite, c.holding, c.rule, c.usePetitioner, c.useRespondent]
+      return [
+        c.name,
+        c.cite,
+        c.headlineNote,
+        c.holding,
+        c.rule,
+        c.usePetitioner,
+        c.useRespondent,
+      ]
         .join(' ')
         .toLowerCase()
         .includes(q)
@@ -130,6 +139,31 @@ export function LibraryPage() {
     if (first) lib.setActiveFileId(first.id)
   }
 
+  function createCase() {
+    const id = lib.addCase()
+    setParams({ case: id })
+    setEditing(true)
+    setDeepDive(true)
+    setPane('card')
+  }
+
+  async function deleteCase(caseId, caseName) {
+    const label = caseName || 'this case'
+    const ok = window.confirm(
+      `Delete “${label}” from the case library?\n\nIts notes, highlights, and attached PDFs will be removed too.`
+    )
+    if (!ok) return
+    await lib.removeCase(caseId)
+    const remaining = lib.cases.filter((c) => c.id !== caseId)
+    if (remaining[0]) {
+      setParams({ case: remaining[0].id })
+      setEditing(false)
+    } else {
+      setParams({})
+      setEditing(false)
+    }
+  }
+
   function jumpToAnnotation(a) {
     if (a.fileId) lib.setActiveFileId(a.fileId)
     lib.setPage(a.fileId || activeId, a.page)
@@ -138,8 +172,18 @@ export function LibraryPage() {
 
   if (!selected) {
     return (
-      <section className="workspace">
-        <p>No cases yet.</p>
+      <section className="workspace library-room">
+        <header className="workspace-head">
+          <div>
+            <h1>Case library</h1>
+            <p className="lede">No cases yet. Add one to start a card, attach PDFs, and take notes.</p>
+          </div>
+          <div className="head-actions">
+            <button type="button" className="btn-ink" onClick={createCase}>
+              <Plus size={16} /> Add case
+            </button>
+          </div>
+        </header>
       </section>
     )
   }
@@ -178,17 +222,7 @@ export function LibraryPage() {
             </p>
           </div>
           <div className="head-actions">
-            <button
-              type="button"
-              className="btn-soft"
-              onClick={() => {
-                const id = lib.addCase()
-                setParams({ case: id })
-                setEditing(true)
-                setDeepDive(true)
-                setPane('card')
-              }}
-            >
+            <button type="button" className="btn-soft" onClick={createCase}>
               <Plus size={16} /> Add case
             </button>
           </div>
@@ -241,6 +275,9 @@ export function LibraryPage() {
               </button>
             ))}
           </div>
+          <button type="button" className="btn-ink library-add-case" onClick={createCase}>
+            <Plus size={15} /> Add case
+          </button>
         </div>
       ) : null}
 
@@ -248,32 +285,51 @@ export function LibraryPage() {
         {!deepDive ? (
           <ScrollArea.Root className="library-list quiet-list">
             <ScrollArea.Viewport className="library-list-viewport">
+              {list.length === 0 ? (
+                <p className="library-empty mono">No cases match these filters.</p>
+              ) : null}
               {list.map((c) => {
                 const nFiles = lib.filesMeta.filter((f) => f.caseId === c.id).length
                 return (
-                  <button
+                  <div
                     key={c.id}
-                    type="button"
                     className={c.id === selected.id ? 'case-row soft-row on' : 'case-row soft-row'}
-                    onClick={() => selectCase(c.id)}
                   >
-                    <div className="case-row-top">
-                      <strong>{c.name}</strong>
-                      {c.tag ? <Tag tone={c.issue === 2 ? 'q2' : 'q1'}>{c.tag}</Tag> : null}
-                    </div>
-                    <span className="mono cite">{c.cite}</span>
-                    <p className="case-row-blurb">{c.holding}</p>
-                    <div className="case-row-flags">
-                      <span className={`useful-pill useful-${c.usefulness || 'background'}`}>
-                        {c.usefulness || 'background'}
-                      </span>
-                      {nFiles > 0 ? (
-                        <span className="mono case-file-count">
-                          {nFiles} PDF{nFiles === 1 ? '' : 's'}
+                    <button
+                      type="button"
+                      className="case-row-main"
+                      onClick={() => selectCase(c.id)}
+                    >
+                      <div className="case-row-top">
+                        <strong>{c.name}</strong>
+                        {c.tag ? <Tag tone={c.issue === 2 ? 'q2' : 'q1'}>{c.tag}</Tag> : null}
+                      </div>
+                      <span className="mono cite">{c.cite}</span>
+                      <p className="case-row-blurb">{c.holding}</p>
+                      <div className="case-row-flags">
+                        <span className={`useful-pill useful-${c.usefulness || 'background'}`}>
+                          {c.usefulness || 'background'}
                         </span>
-                      ) : null}
-                    </div>
-                  </button>
+                        {nFiles > 0 ? (
+                          <span className="mono case-file-count">
+                            {nFiles} PDF{nFiles === 1 ? '' : 's'}
+                          </span>
+                        ) : null}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn soft case-row-delete"
+                      aria-label={`Delete ${c.name}`}
+                      title="Delete case"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteCase(c.id, c.name)
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 )
               })}
             </ScrollArea.Viewport>
@@ -300,10 +356,19 @@ export function LibraryPage() {
                 <p className="mono sticky-case-cite">{selected.cite}</p>
               </div>
             </div>
-            <MatterTagBar
-              value={selected.usefulness || 'background'}
-              onChange={(usefulness) => lib.updateCase(selected.id, { usefulness })}
-            />
+            <div className="dive-bar-right">
+              <MatterTagBar
+                value={selected.usefulness || 'background'}
+                onChange={(usefulness) => lib.updateCase(selected.id, { usefulness })}
+              />
+              <button
+                type="button"
+                className="btn-soft"
+                onClick={() => deleteCase(selected.id, selected.name)}
+              >
+                <Trash2 size={14} /> Delete
+              </button>
+            </div>
           </div>
 
           <div className="view-toggle editorial-toggle" role="tablist">
@@ -380,7 +445,7 @@ export function LibraryPage() {
                       (!a.fileId || a.fileId === activeId) &&
                       a.kind === 'highlight'
                   )}
-                  onHighlight={({ page: p, quote, rects, text }) =>
+                  onHighlight={({ page: p, quote, rects, text, color }) =>
                     lib.upsertAnnotation({
                       caseId: selected.id,
                       fileId: activeId,
@@ -388,9 +453,11 @@ export function LibraryPage() {
                       quote,
                       rects,
                       text,
+                      color,
                       kind: 'highlight',
                     })
                   }
+                  onSelectHighlight={(id) => setFocusAnnotationId(id)}
                 />
                 <AnnotationPanel
                   caseId={selected.id}
@@ -410,6 +477,8 @@ export function LibraryPage() {
                   onUpdate={(id, patch) => lib.updateAnnotation(id, patch)}
                   onRemove={lib.removeAnnotation}
                   onJump={(p) => activeId && lib.setPage(activeId, p)}
+                  onFlush={lib.syncNow}
+                  focusAnnotationId={focusAnnotationId}
                 />
               </div>
             </div>
