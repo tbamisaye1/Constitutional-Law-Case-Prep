@@ -1,14 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import {
+  Bookmark,
+  BookmarkCheck,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Download,
+  ExternalLink,
   FileUp,
   Highlighter,
+  Maximize2,
+  Minimize2,
   Search,
   Sparkles,
+  Trash2,
   X,
   ZoomIn,
   ZoomOut,
@@ -37,6 +44,10 @@ pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.vers
  *
  * Optional `focusHighlightId`: when a notes-panel card asks to locate its
  * highlight, jump the page (caller sets `page`) and pulse/scroll that overlay.
+ *
+ * Optional reading bookmarks (`bookmarks` + `onAddBookmark` / `onRemoveBookmark`)
+ * save a page so you can step away and jump back. Expand fills the viewport;
+ * Download / Open in browser use the loaded PDF blob.
  */
 export function PdfViewer({
   file,
@@ -51,6 +62,9 @@ export function PdfViewer({
   focusQuote = '',
   focusHighlightId = null,
   emptyHint = '',
+  bookmarks = [],
+  onAddBookmark = null,
+  onRemoveBookmark = null,
 }) {
   const [numPages, setNumPages] = useState(null)
   const [scale, setScale] = useState(1.05)
@@ -68,12 +82,26 @@ export function PdfViewer({
   const [searchBusy, setSearchBusy] = useState(false)
   const [searchError, setSearchError] = useState('')
   const [pulseHighlightId, setPulseHighlightId] = useState(null)
+  const [expanded, setExpanded] = useState(false)
+  const [bookmarksOpen, setBookmarksOpen] = useState(false)
+  const [bookmarkFlash, setBookmarkFlash] = useState(false)
   const stageRef = useRef(null)
   const pdfDocRef = useRef(null)
   const searchInputRef = useRef(null)
   const focusKeyRef = useRef('')
   const lastFocusHighlightRef = useRef('')
+  const objectUrlRef = useRef('')
   const { openBubble } = useAiUi()
+
+  const pageBookmarked = useMemo(
+    () => bookmarks.some((b) => Number(b.page) === Number(page)),
+    [bookmarks, page]
+  )
+
+  const sortedBookmarks = useMemo(
+    () => [...bookmarks].sort((a, b) => (a.page || 0) - (b.page || 0) || (b.savedAt || 0) - (a.savedAt || 0)),
+    [bookmarks]
+  )
 
   useEffect(() => {
     setNumPages(null)
@@ -104,18 +132,42 @@ export function PdfViewer({
   useEffect(() => {
     function onKey(event) {
       const isFind = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f'
-      if (!isFind) return
-      const root = stageRef.current?.closest('.pdf-viewer')
-      if (!root) return
-      // Only steal Cmd/Ctrl+F when focus is inside this viewer.
-      if (!root.contains(document.activeElement) && document.activeElement !== document.body) {
+      if (isFind) {
+        const root = stageRef.current?.closest('.pdf-viewer')
+        if (!root) return
+        // Only steal Cmd/Ctrl+F when focus is inside this viewer.
+        if (!root.contains(document.activeElement) && document.activeElement !== document.body) {
+          return
+        }
+        event.preventDefault()
+        setSearchOpen(true)
         return
       }
-      event.preventDefault()
-      setSearchOpen(true)
+      if (event.key === 'Escape' && expanded) {
+        event.preventDefault()
+        setExpanded(false)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+  }, [expanded])
+
+  useEffect(() => {
+    if (!expanded) return undefined
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [expanded])
+
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current)
+        objectUrlRef.current = ''
+      }
+    }
   }, [])
 
   function clearSearch(resetDraft = false) {
@@ -126,6 +178,44 @@ export function PdfViewer({
     setSearchError('')
     setSearchBusy(false)
     if (resetDraft) setSearchDraft('')
+  }
+
+  function resolvePdfUrl() {
+    if (!file) return ''
+    if (typeof file === 'string') return file
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current)
+      objectUrlRef.current = ''
+    }
+    const url = URL.createObjectURL(file)
+    objectUrlRef.current = url
+    return url
+  }
+
+  function downloadPdf() {
+    if (!file) return
+    const url = resolvePdfUrl()
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName || 'article.pdf'
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+
+  function openInBrowser() {
+    if (!file) return
+    const url = resolvePdfUrl()
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  function saveBookmark() {
+    if (!onAddBookmark || !page) return
+    onAddBookmark(page)
+    setBookmarksOpen(true)
+    setBookmarkFlash(true)
+    window.setTimeout(() => setBookmarkFlash(false), 900)
   }
 
   function jumpToPage(raw) {
@@ -385,13 +475,75 @@ export function PdfViewer({
   }
 
   return (
-    <div className="pdf-viewer" tabIndex={-1}>
+    <div className={expanded ? 'pdf-viewer is-expanded' : 'pdf-viewer'} tabIndex={-1}>
       <div className="pdf-toolbar">
         <span className="pdf-filename mono" title={fileName}>
           {fileName || 'PDF'}
         </span>
         <span className="pdf-hint mono">Select text → highlight or Ask AI</span>
         <div className="pdf-toolbar-right">
+          {onAddBookmark ? (
+            <>
+              <button
+                type="button"
+                className={
+                  bookmarkFlash || pageBookmarked ? 'btn-soft on' : 'btn-soft'
+                }
+                onClick={saveBookmark}
+                aria-label="Bookmark this page"
+                title="Bookmark this page (come back later)"
+              >
+                {pageBookmarked ? <BookmarkCheck size={15} /> : <Bookmark size={15} />}
+              </button>
+              <button
+                type="button"
+                className={bookmarksOpen ? 'btn-soft on' : 'btn-soft'}
+                disabled={!sortedBookmarks.length}
+                onClick={() => setBookmarksOpen((v) => !v)}
+                aria-label="Show bookmarks"
+                title={
+                  sortedBookmarks.length
+                    ? `${sortedBookmarks.length} bookmark${sortedBookmarks.length === 1 ? '' : 's'}`
+                    : 'No bookmarks yet'
+                }
+              >
+                <span className="mono pdf-bm-count">{sortedBookmarks.length || 0}</span>
+              </button>
+            </>
+          ) : null}
+          <button
+            type="button"
+            className="btn-soft"
+            onClick={downloadPdf}
+            aria-label="Download PDF"
+            title="Download PDF"
+          >
+            <Download size={15} />
+          </button>
+          <button
+            type="button"
+            className="btn-soft"
+            onClick={openInBrowser}
+            aria-label="Open PDF in browser"
+            title="Open in browser tab"
+          >
+            <ExternalLink size={15} />
+          </button>
+          <button
+            type="button"
+            className={expanded ? 'btn-soft on' : 'btn-soft'}
+            onClick={() => {
+              setExpanded((v) => {
+                const next = !v
+                if (next) setScale((s) => Math.max(s, 1.25))
+                return next
+              })
+            }}
+            aria-label={expanded ? 'Exit expanded view' : 'Expand PDF'}
+            title={expanded ? 'Exit expanded view (Esc)' : 'Expand to full screen'}
+          >
+            {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          </button>
           <button
             type="button"
             className={searchOpen ? 'btn-soft on' : 'btn-soft'}
@@ -408,7 +560,7 @@ export function PdfViewer({
             <ZoomOut size={15} />
           </button>
           <span className="mono pdf-scale">{Math.round(scale * 100)}%</span>
-          <button type="button" className="btn-soft" onClick={() => setScale((s) => Math.min(1.8, s + 0.1))}>
+          <button type="button" className="btn-soft" onClick={() => setScale((s) => Math.min(2.4, s + 0.1))}>
             <ZoomIn size={15} />
           </button>
           <button
@@ -453,6 +605,37 @@ export function PdfViewer({
           </button>
         </div>
       </div>
+
+      {onAddBookmark && bookmarksOpen && sortedBookmarks.length ? (
+        <div className="pdf-bookmarks-bar" role="list" aria-label="Reading bookmarks">
+          <span className="mono pdf-bookmarks-label">Bookmarks</span>
+          {sortedBookmarks.map((bm) => (
+            <div key={bm.id} className="pdf-bookmark-chip" role="listitem">
+              <button
+                type="button"
+                className={Number(bm.page) === Number(page) ? 'pdf-bm-jump on' : 'pdf-bm-jump'}
+                onClick={() => {
+                  const target = Number(bm.page) || 1
+                  if (target !== page) onPageChange(target)
+                }}
+                title={bm.label || `Page ${bm.page}`}
+              >
+                p. {bm.page}
+              </button>
+              {onRemoveBookmark ? (
+                <button
+                  type="button"
+                  className="icon-btn soft"
+                  aria-label={`Remove bookmark on page ${bm.page}`}
+                  onClick={() => onRemoveBookmark(bm.id)}
+                >
+                  <Trash2 size={12} />
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {searchOpen ? (
         <div className="pdf-search-bar">

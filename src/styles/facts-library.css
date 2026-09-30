@@ -717,6 +717,16 @@
   flex-direction: column;
 }
 
+.pdf-viewer.is-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  min-height: 100vh;
+  border: none;
+  background: #cfd1ca;
+  box-shadow: none;
+}
+
 .pdf-toolbar {
   display: flex;
   align-items: center;
@@ -725,17 +735,80 @@
   padding: 8px 10px;
   background: var(--paper);
   border-bottom: 1px solid var(--rule-soft);
+  flex-wrap: wrap;
 }
 
 .pdf-toolbar-right {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .pdf-toolbar-right .btn-soft.on {
   background: var(--ink);
   color: var(--paper);
+}
+
+.pdf-bm-count {
+  font-size: 11px;
+  min-width: 1.4ch;
+  display: inline-block;
+  text-align: center;
+}
+
+.pdf-bookmarks-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.pdf-bookmarks-label {
+  font-size: 10px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 4px;
+}
+
+.pdf-bookmark-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--rule-soft);
+  background: var(--paper);
+  padding: 1px 2px 1px 6px;
+}
+
+.pdf-bm-jump {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  padding: 3px 4px;
+  cursor: pointer;
+}
+
+.pdf-bm-jump.on {
+  color: var(--gold, #b8860b);
+  font-weight: 600;
+}
+
+.pdf-bm-jump:hover {
+  text-decoration: underline;
+}
+
+.pdf-viewer.is-expanded .pdf-stage {
+  padding: 20px 24px 32px;
+}
+
+.pdf-viewer.is-expanded .pdf-page-wrap {
+  max-width: min(1100px, 96vw);
 }
 
 .pdf-search-bar {

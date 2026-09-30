@@ -34,6 +34,7 @@ const LIBRARY_KINDS = {
   timeline: 'timeline',
   noteTabs: 'note_tabs',
   articleTitles: 'article_titles',
+  pdfBookmarks: 'pdf_bookmarks',
 }
 
 export function metaKey(entity, ...parts) {

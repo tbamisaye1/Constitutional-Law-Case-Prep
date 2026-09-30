@@ -76,6 +76,8 @@ function emptyStore() {
     noteTabs: [],
     // Custom shelf labels keyed by PDF filename (id === name).
     articleTitles: [],
+    // Reading bookmarks: { id, fileId, page, label, savedAt }
+    pdfBookmarks: [],
     activeFileId: null,
     pageByFile: {},
     // Which rows have changed since the backend last accepted them, and how
@@ -100,6 +102,7 @@ function load() {
     timeline: parsed.timeline?.length ? parsed.timeline : base.timeline,
     noteTabs: parsed.noteTabs || [],
     articleTitles: Array.isArray(parsed.articleTitles) ? parsed.articleTitles : [],
+    pdfBookmarks: Array.isArray(parsed.pdfBookmarks) ? parsed.pdfBookmarks : [],
     activeFileId: parsed.activeFileId || null,
     pageByFile: parsed.pageByFile || {},
     // Absent for anyone who used the app before sync existed. Starting from a
@@ -1037,6 +1040,61 @@ export function useCaseLibrary() {
     )
   }, [])
 
+  /**
+   * Drop a reading bookmark on the current PDF page so you can step away and
+   * jump straight back. One bookmark per file+page; re-saving refreshes the label.
+   */
+  const addPdfBookmark = useCallback((fileId, page, label = '') => {
+    if (!fileId || !page) return null
+    const pageNum = Number(page) || 1
+    const existing = (memory.store.pdfBookmarks || []).find(
+      (row) => row.fileId === fileId && Number(row.page) === pageNum
+    )
+    if (existing) {
+      const row = {
+        ...existing,
+        label: String(label || '').trim() || existing.label || `Page ${pageNum}`,
+        savedAt: Date.now(),
+      }
+      updateStore(
+        (prev) => ({
+          ...prev,
+          pdfBookmarks: (prev.pdfBookmarks || []).map((b) => (b.id === existing.id ? row : b)),
+        }),
+        [metaKey('library_records', 'pdf_bookmarks', existing.id)]
+      )
+      return row
+    }
+    const id = `bm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    const row = {
+      id,
+      fileId,
+      page: pageNum,
+      label: String(label || '').trim() || `Page ${pageNum}`,
+      savedAt: Date.now(),
+    }
+    updateStore(
+      (prev) => ({
+        ...prev,
+        pdfBookmarks: [row, ...(prev.pdfBookmarks || [])],
+      }),
+      [metaKey('library_records', 'pdf_bookmarks', id)]
+    )
+    return row
+  }, [])
+
+  const removePdfBookmark = useCallback((id) => {
+    if (!id) return
+    updateStore(
+      (prev) => ({
+        ...prev,
+        pdfBookmarks: (prev.pdfBookmarks || []).filter((row) => row.id !== id),
+      }),
+      [metaKey('library_records', 'pdf_bookmarks', id)],
+      true
+    )
+  }, [])
+
   return {
     cases: snap.store.cases,
     annotations: snap.store.annotations,
@@ -1047,6 +1105,7 @@ export function useCaseLibrary() {
     timeline: snap.store.timeline,
     noteTabs: snap.store.noteTabs,
     articleTitles: snap.store.articleTitles || [],
+    pdfBookmarks: snap.store.pdfBookmarks || [],
     blobs: snap.blobs,
     activeFileId: snap.store.activeFileId,
     setActiveFileId,
@@ -1072,6 +1131,8 @@ export function useCaseLibrary() {
     removeFile,
     retryAskAiIndex,
     setArticleTitle,
+    addPdfBookmark,
+    removePdfBookmark,
     setPage,
     upsertAnnotation,
     updateAnnotation,

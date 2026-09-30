@@ -581,6 +581,12 @@ export function ArticlesPage() {
             }
             onSelectHighlight={(id) => setFocusAnnotationId(id)}
             focusHighlightId={focusHighlightId}
+            bookmarks={(lib.pdfBookmarks || []).filter((b) => b.fileId === activeId)}
+            onAddBookmark={(p) => {
+              if (!activeId) return
+              lib.addPdfBookmark(activeId, p)
+            }}
+            onRemoveBookmark={(id) => lib.removePdfBookmark(id)}
           />
           <AnnotationPanel
             caseId={CORPUS_ARTICLES_ID}
