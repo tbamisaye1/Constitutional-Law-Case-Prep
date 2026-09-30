@@ -480,7 +480,16 @@ export function LibraryPage() {
                   onRemove={lib.removeAnnotation}
                   onJump={(anno) => {
                     if (!activeId || !anno?.page) return
-                    lib.setPage(activeId, anno.page)
+                    const targetPage = Number(anno.page) || 1
+                    const fileId = anno.fileId || activeId
+                    if (anno.fileId) lib.setActiveFileId(anno.fileId)
+                    lib.setPage(fileId, targetPage)
+                    const next = new URLSearchParams(params)
+                    next.set('file', fileId)
+                    next.set('page', String(targetPage))
+                    setParams(next, { replace: true })
+                    setPane('read')
+                    setDeepDive(true)
                     setFocusHighlightId(null)
                     setFocusAnnotationId(anno.id || null)
                     window.setTimeout(() => setFocusHighlightId(anno.id || null), 0)

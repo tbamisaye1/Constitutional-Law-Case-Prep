@@ -601,7 +601,12 @@ export function ArticlesPage() {
             onRemove={lib.removeAnnotation}
             onJump={(anno) => {
               if (!activeId || !anno?.page) return
-              lib.setPage(activeId, anno.page)
+              const targetPage = Number(anno.page) || 1
+              lib.setPage(activeId, targetPage)
+              const next = new URLSearchParams(params)
+              next.set('file', activeId)
+              next.set('page', String(targetPage))
+              setParams(next, { replace: true })
               setFocusHighlightId(null)
               setFocusAnnotationId(anno.id || null)
               window.setTimeout(() => setFocusHighlightId(anno.id || null), 0)
