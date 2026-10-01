@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Document, Page, pdfjs } from 'react-pdf'
 import {
   Bookmark,
@@ -146,11 +147,22 @@ export function PdfViewer({
       if (event.key === 'Escape' && expanded) {
         event.preventDefault()
         setExpanded(false)
+        return
+      }
+      if (!expanded) return
+      if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+        if (page <= 1) return
+        event.preventDefault()
+        onPageChange(Math.max(1, page - 1))
+      } else if (event.key === 'ArrowRight' || event.key === 'PageDown') {
+        if (numPages != null && page >= numPages) return
+        event.preventDefault()
+        onPageChange(page + 1)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [expanded])
+  }, [expanded, page, numPages, onPageChange])
 
   useEffect(() => {
     if (!expanded) return undefined
@@ -474,13 +486,15 @@ export function PdfViewer({
     )
   }
 
-  return (
+  const viewer = (
     <div className={expanded ? 'pdf-viewer is-expanded' : 'pdf-viewer'} tabIndex={-1}>
       <div className="pdf-toolbar">
         <span className="pdf-filename mono" title={fileName}>
           {fileName || 'PDF'}
         </span>
-        <span className="pdf-hint mono">Select text → highlight or Ask AI</span>
+        <span className="pdf-hint mono">
+          {expanded ? 'Esc exits · ← → change page' : 'Select text → highlight or Ask AI'}
+        </span>
         <div className="pdf-toolbar-right">
           {onAddBookmark ? (
             <>
@@ -531,7 +545,7 @@ export function PdfViewer({
           </button>
           <button
             type="button"
-            className={expanded ? 'btn-soft on' : 'btn-soft'}
+            className={expanded ? 'btn-ink pdf-expand-exit' : 'btn-soft'}
             onClick={() => {
               setExpanded((v) => {
                 const next = !v
@@ -542,7 +556,13 @@ export function PdfViewer({
             aria-label={expanded ? 'Exit expanded view' : 'Expand PDF'}
             title={expanded ? 'Exit expanded view (Esc)' : 'Expand to full screen'}
           >
-            {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+            {expanded ? (
+              <>
+                <Minimize2 size={15} /> Exit
+              </>
+            ) : (
+              <Maximize2 size={15} />
+            )}
           </button>
           <button
             type="button"
@@ -858,4 +878,17 @@ export function PdfViewer({
       </div>
     </div>
   )
+
+  // Portal so sticky topbar / rail cannot sit above the toolbar and eat clicks
+  // (that was why Exit and page arrows felt dead after expand).
+  if (expanded && typeof document !== 'undefined') {
+    return (
+      <>
+        <div className="pdf-viewer pdf-viewer-placeholder" aria-hidden="true" />
+        {createPortal(viewer, document.body)}
+      </>
+    )
+  }
+
+  return viewer
 }

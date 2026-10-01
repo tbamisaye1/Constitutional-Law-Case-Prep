@@ -720,11 +720,33 @@
 .pdf-viewer.is-expanded {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  /* Above sticky topbar (100), AI fab (150), and cmdk (200). */
+  z-index: 500;
   min-height: 100vh;
+  height: 100vh;
+  width: 100vw;
   border: none;
   background: #cfd1ca;
   box-shadow: none;
+}
+
+.pdf-viewer.is-expanded .pdf-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.pdf-expand-exit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+body:has(.pdf-viewer.is-expanded) .ai-fab {
+  display: none;
 }
 
 .pdf-toolbar {
@@ -809,6 +831,13 @@
 
 .pdf-viewer.is-expanded .pdf-page-wrap {
   max-width: min(1100px, 96vw);
+}
+
+.pdf-viewer-placeholder {
+  min-height: 520px;
+  border: 1px dashed var(--rule-soft);
+  background: var(--paper-2);
+  pointer-events: none;
 }
 
 .pdf-search-bar {
