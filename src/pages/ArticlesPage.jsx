@@ -101,7 +101,10 @@ export function ArticlesPage() {
     let cancelled = false
     listIngestSources()
       .then((data) => {
-        if (!cancelled) setIngestSources(data.sources || [])
+        if (cancelled) return
+        const sources = data.sources || []
+        setIngestSources(sources)
+        lib.reconcileAskAiIndexed(sources)
       })
       .catch(() => {
         if (!cancelled) setIngestSources([])
@@ -109,7 +112,7 @@ export function ArticlesPage() {
     return () => {
       cancelled = true
     }
-  }, [lib.filesMeta.length])
+  }, [lib.filesMeta.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (paramFile && caseFiles.some((f) => f.id === paramFile)) {

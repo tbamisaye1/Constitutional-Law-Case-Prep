@@ -12,6 +12,7 @@ import {
   deleteDocument,
   downloadDocument,
   ingestPdf,
+  listIngestSources,
   removeIngestSource,
   syncChanges,
   uploadDocument,
@@ -431,27 +432,29 @@ async function indexFileForAskAi(meta, blob, options = {}) {
 
   askAiIndexingIds.add(meta.id)
   try {
+    // Stale local failures are common after a proxy "Failed to fetch" even when
+    // the PDF already landed in FAISS (or was indexed on another path).
+    if (!options.force) {
+      const already = await sourceNameIsIndexed(meta.name)
+      if (already) {
+        markFileAskAiIndexed(meta.id, meta.name)
+        return
+      }
+    }
+
     const file = new File([blob], meta.name, {
       type: blob.type || 'application/pdf',
     })
     await ingestPdf(file)
-    askAiIndexCooldownUntil.delete(meta.id)
-    memory = {
-      ...memory,
-      store: {
-        ...memory.store,
-        filesMeta: memory.store.filesMeta.map((row) =>
-          row.id === meta.id
-            ? { ...row, askAiIndexed: true, askAiIndexError: '' }
-            : row
-        ),
-      },
-      saveError: memory.saveError?.includes(meta.name) ? '' : memory.saveError,
-    }
-    emit()
-    persistSoon()
+    markFileAskAiIndexed(meta.id, meta.name)
   } catch (error) {
     console.warn(`Could not index ${meta.name} for Ask AI`, error)
+    // Upload may have succeeded server-side while the browser lost the response.
+    const already = await sourceNameIsIndexed(meta.name)
+    if (already) {
+      markFileAskAiIndexed(meta.id, meta.name)
+      return
+    }
     askAiIndexCooldownUntil.set(meta.id, Date.now() + 60_000)
     const detail = (error?.message || '').trim()
     const nextStore = {
@@ -472,6 +475,36 @@ async function indexFileForAskAi(meta, blob, options = {}) {
   } finally {
     askAiIndexingIds.delete(meta.id)
   }
+}
+
+async function sourceNameIsIndexed(name) {
+  if (!name) return false
+  try {
+    const data = await listIngestSources()
+    return (data.sources || []).some((row) => {
+      const source = typeof row === 'string' ? row : row?.source
+      return source === name
+    })
+  } catch {
+    return false
+  }
+}
+
+function markFileAskAiIndexed(fileId, fileName = '') {
+  askAiIndexCooldownUntil.delete(fileId)
+  memory = {
+    ...memory,
+    store: {
+      ...memory.store,
+      filesMeta: memory.store.filesMeta.map((row) =>
+        row.id === fileId ? { ...row, askAiIndexed: true, askAiIndexError: '' } : row
+      ),
+    },
+    saveError:
+      fileName && memory.saveError?.includes(fileName) ? '' : memory.saveError,
+  }
+  emit()
+  persistSoon()
 }
 
 /**
@@ -729,6 +762,44 @@ export function useCaseLibrary() {
     await indexFileForAskAi(meta, blob, { force: true })
     const next = memory.store.filesMeta.find((f) => f.id === fileId)
     return Boolean(next?.askAiIndexed)
+  }, [])
+
+  /**
+   * When /ingest/sources already lists a local PDF by filename, clear the stale
+   * "Failed to fetch" banner and mark it indexed without re-uploading.
+   */
+  const reconcileAskAiIndexed = useCallback((sourceNames) => {
+    const names = new Set(
+      (sourceNames || [])
+        .map((row) => (typeof row === 'string' ? row : row?.source))
+        .filter(Boolean)
+    )
+    if (!names.size) return
+
+    const pending = memory.store.filesMeta.filter(
+      (row) => !row.askAiIndexed && names.has(row.name)
+    )
+    if (!pending.length) return
+
+    const ids = new Set(pending.map((row) => row.id))
+    const clearedNames = pending.map((row) => row.name)
+    for (const id of ids) askAiIndexCooldownUntil.delete(id)
+
+    memory = {
+      ...memory,
+      store: {
+        ...memory.store,
+        filesMeta: memory.store.filesMeta.map((row) =>
+          ids.has(row.id) ? { ...row, askAiIndexed: true, askAiIndexError: '' } : row
+        ),
+      },
+      saveError:
+        memory.saveError && clearedNames.some((name) => memory.saveError.includes(name))
+          ? ''
+          : memory.saveError,
+    }
+    emit()
+    persistSoon()
   }, [])
 
   /**
@@ -1130,6 +1201,7 @@ export function useCaseLibrary() {
     attachBlob,
     removeFile,
     retryAskAiIndex,
+    reconcileAskAiIndexed,
     setArticleTitle,
     addPdfBookmark,
     removePdfBookmark,
