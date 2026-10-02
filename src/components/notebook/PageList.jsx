@@ -8,11 +8,11 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
+import { useElementSize } from '../../hooks/useElementSize'
 
 /**
- * Middle OneNote pane: nestable pages with drag reorder / subpages (react-arborist).
- * Drop a page onto another to nest; Add subpage for a one-click child; Promote
- * lifts a nested page to the section root.
+ * Middle OneNote pane: nestable pages with drag reorder / subpages.
+ * Add page / Add subpage stay pinned under the list; only the list scrolls.
  */
 export function PageList({
   pages,
@@ -25,26 +25,28 @@ export function PageList({
   onMovePages,
   sectionName,
 }) {
-  const wrapRef = useRef(null)
+  const bodyRef = useRef(null)
+  const { width, height } = useElementSize(bodyRef)
   const data = useMemo(() => pages || [], [pages])
   const canSubpage = Boolean(activePageId)
+  const treeHeight = Math.max(height, 80)
+  const treeWidth = Math.max(width, 120)
 
   return (
     <div className="onenote-pages">
       <div className="onenote-pane-label mono">{sectionName || 'Pages'}</div>
-      <div className="onenote-pages-body" ref={wrapRef}>
+      <div className="onenote-pages-body" ref={bodyRef}>
         {data.length === 0 ? (
           <p className="onenote-empty">No pages yet. Add one below.</p>
-        ) : (
+        ) : height > 0 ? (
           <Tree
             data={data}
-            width="100%"
-            height={480}
+            width={treeWidth}
+            height={treeHeight}
             indent={12}
             rowHeight={64}
             openByDefault
             selection={activePageId || undefined}
-            rowClassName="page-tree-row"
             className="page-tree-list"
             onMove={({ dragIds, parentId, index }) => {
               onMovePages?.(dragIds, parentId, index)
@@ -54,8 +56,6 @@ export function PageList({
           >
             {({ node, style, dragHandle }) => {
               const nested = node.level > 0
-              // Keep arborist's vertical placement; drop its indent padding and
-              // handle nesting ourselves so root pages sit flush left.
               const { paddingLeft: _ignored, ...rowPlace } = style || {}
               return (
                 <div
@@ -151,7 +151,7 @@ export function PageList({
               )
             }}
           </Tree>
-        )}
+        ) : null}
       </div>
       <div className="page-add-row">
         <button type="button" className="onenote-add page-add" onClick={onAddPage}>

@@ -9,11 +9,12 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
+import { useElementSize } from '../../hooks/useElementSize'
 
 /**
  * Left OneNote pane: section groups + sections.
  * Tree behavior from react-arborist (drag, open/close, keyboard).
- * Rename: double-click, F2, or pencil. Delete: trash or Backspace.
+ * Add section controls stay pinned under the list.
  * https://github.com/brimdata/react-arborist
  */
 export function SectionTree({
@@ -26,8 +27,11 @@ export function SectionTree({
   onRenameNode,
   onDeleteNodes,
 }) {
-  const wrapRef = useRef(null)
+  const bodyRef = useRef(null)
+  const { width, height } = useElementSize(bodyRef)
   const data = useMemo(() => tree, [tree])
+  const treeHeight = Math.max(height, 80)
+  const treeWidth = Math.max(width, 120)
 
   function confirmAndDelete(ids, label) {
     if (!ids?.length || !onDeleteNodes) return
@@ -39,112 +43,114 @@ export function SectionTree({
   }
 
   return (
-    <div className="onenote-tree" ref={wrapRef}>
+    <div className="onenote-tree">
       <div className="onenote-pane-label mono">Sections</div>
-      <div className="onenote-tree-body">
-        <Tree
-          data={data}
-          width="100%"
-          height={480}
-          indent={18}
-          rowHeight={32}
-          openByDefault
-          selection={selectedSectionId || undefined}
-          onRename={({ id, name }) => onRenameNode(id, name)}
-          onDelete={({ ids }) => {
-            const label =
-              ids.length === 1 ? findNodeName(tree, ids[0]) || 'this item' : `${ids.length} items`
-            confirmAndDelete(ids, label)
-          }}
-          onMove={({ dragIds, parentId, index }) => {
-            setTree((prev) => moveNodes(prev, dragIds, parentId, index))
-          }}
-          disableDrop={({ parentNode }) => parentNode?.data?.kind === 'section'}
-          onActivate={(node) => {
-            if (node.data.kind === 'section') onSelectSection(node.id)
-          }}
-        >
-          {({ node, style, dragHandle }) => (
-            <div
-              ref={dragHandle}
-              style={style}
-              className={
-                node.isSelected && node.data.kind === 'section'
-                  ? 'tree-row on'
-                  : 'tree-row'
-              }
-              onClick={() => {
-                if (node.isEditing) return
-                if (node.data.kind === 'group') node.toggle()
-                else onSelectSection(node.id)
-              }}
-              onDoubleClick={(e) => {
-                e.stopPropagation()
-                if (!node.isEditing) node.edit()
-              }}
-            >
-              {node.data.kind === 'group' ? (
-                <button
-                  type="button"
-                  className="tree-chevron"
-                  aria-label={node.isOpen ? 'Collapse' : 'Expand'}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    node.toggle()
-                  }}
-                >
-                  {node.isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
-              ) : (
-                <span
-                  className="section-tab"
-                  style={{ background: node.data.color || '#4C5158' }}
-                  aria-hidden
-                />
-              )}
-              {node.data.kind === 'group' ? (
-                node.isOpen ? (
-                  <FolderOpen size={15} strokeWidth={1.75} />
+      <div className="onenote-tree-body" ref={bodyRef}>
+        {height > 0 ? (
+          <Tree
+            data={data}
+            width={treeWidth}
+            height={treeHeight}
+            indent={18}
+            rowHeight={32}
+            openByDefault
+            selection={selectedSectionId || undefined}
+            onRename={({ id, name }) => onRenameNode(id, name)}
+            onDelete={({ ids }) => {
+              const label =
+                ids.length === 1 ? findNodeName(tree, ids[0]) || 'this item' : `${ids.length} items`
+              confirmAndDelete(ids, label)
+            }}
+            onMove={({ dragIds, parentId, index }) => {
+              setTree((prev) => moveNodes(prev, dragIds, parentId, index))
+            }}
+            disableDrop={({ parentNode }) => parentNode?.data?.kind === 'section'}
+            onActivate={(node) => {
+              if (node.data.kind === 'section') onSelectSection(node.id)
+            }}
+          >
+            {({ node, style, dragHandle }) => (
+              <div
+                ref={dragHandle}
+                style={style}
+                className={
+                  node.isSelected && node.data.kind === 'section'
+                    ? 'tree-row on'
+                    : 'tree-row'
+                }
+                onClick={() => {
+                  if (node.isEditing) return
+                  if (node.data.kind === 'group') node.toggle()
+                  else onSelectSection(node.id)
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation()
+                  if (!node.isEditing) node.edit()
+                }}
+              >
+                {node.data.kind === 'group' ? (
+                  <button
+                    type="button"
+                    className="tree-chevron"
+                    aria-label={node.isOpen ? 'Collapse' : 'Expand'}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      node.toggle()
+                    }}
+                  >
+                    {node.isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </button>
                 ) : (
-                  <Folder size={15} strokeWidth={1.75} />
-                )
-              ) : null}
-              {node.isEditing ? (
-                <RenameInput node={node} />
-              ) : (
-                <>
-                  <span className="tree-name">{node.data.name}</span>
-                  <span className="tree-row-actions">
-                    <button
-                      type="button"
-                      className="tree-action"
-                      aria-label={`Rename ${node.data.name}`}
-                      title="Rename"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        node.edit()
-                      }}
-                    >
-                      <Pencil size={13} strokeWidth={1.75} />
-                    </button>
-                    <button
-                      type="button"
-                      className="tree-action danger"
-                      aria-label={`Delete ${node.data.name}`}
-                      title="Delete"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        confirmAndDelete([node.id], node.data.name)
-                      }}
-                    >
-                      <Trash2 size={13} strokeWidth={1.75} />
-                    </button>
-                  </span>
-                </>
-              )}
-            </div>
-          )}
-        </Tree>
+                  <span
+                    className="section-tab"
+                    style={{ background: node.data.color || '#4C5158' }}
+                    aria-hidden
+                  />
+                )}
+                {node.data.kind === 'group' ? (
+                  node.isOpen ? (
+                    <FolderOpen size={15} strokeWidth={1.75} />
+                  ) : (
+                    <Folder size={15} strokeWidth={1.75} />
+                  )
+                ) : null}
+                {node.isEditing ? (
+                  <RenameInput node={node} />
+                ) : (
+                  <>
+                    <span className="tree-name">{node.data.name}</span>
+                    <span className="tree-row-actions">
+                      <button
+                        type="button"
+                        className="tree-action"
+                        aria-label={`Rename ${node.data.name}`}
+                        title="Rename"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          node.edit()
+                        }}
+                      >
+                        <Pencil size={13} strokeWidth={1.75} />
+                      </button>
+                      <button
+                        type="button"
+                        className="tree-action danger"
+                        aria-label={`Delete ${node.data.name}`}
+                        title="Delete"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          confirmAndDelete([node.id], node.data.name)
+                        }}
+                      >
+                        <Trash2 size={13} strokeWidth={1.75} />
+                      </button>
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+          </Tree>
+        ) : null}
       </div>
       <div className="onenote-tree-actions">
         <button type="button" className="onenote-add" onClick={onAddGroup}>
