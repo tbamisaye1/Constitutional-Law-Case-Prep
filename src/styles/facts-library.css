@@ -3372,6 +3372,62 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   font-weight: 600;
 }
 
+.ai-memory-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--rule-soft);
+  background: var(--paper);
+}
+
+.ai-memory-bar.warn {
+  border-color: color-mix(in srgb, var(--gold) 55%, var(--rule));
+  background: color-mix(in srgb, var(--gold) 12%, var(--paper));
+}
+
+.ai-memory-bar .mono {
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.ai-memory-bar .btn-soft {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.ai-memory-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+
+.ai-memory-transcript {
+  margin: 0 0 10px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.ai-memory-turn {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+
+.ai-memory-turn .mono {
+  display: inline-block;
+  min-width: 4.5ch;
+  margin-right: 6px;
+  font-size: 10px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .ai-mode-row {
   display: flex;
   border: 1px solid var(--rule);

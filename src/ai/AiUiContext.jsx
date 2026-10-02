@@ -2,6 +2,14 @@ import { createContext, useCallback, useContext, useMemo, useState } from 'react
 import { chatPrep } from '../api/client'
 import { groundingStatusFromReply } from './samplePrompts'
 import { MATTER } from '../data/seed'
+import {
+  appendAskAiTurn,
+  clearAskAiMemoryStore,
+  memoryIsFull,
+  memoryIsNearFull,
+  readAskAiMemory,
+  writeAskAiMemory,
+} from './askAiMemory'
 
 /**
  * Selection context for the Ask AI bubble.
@@ -10,6 +18,8 @@ import { MATTER } from '../data/seed'
  * grounding_source:
  *   documents — FAISS RAG only (default)
  *   web_plus  — uploaded articles + OpenRouter web search
+ *
+ * memory: prior user/assistant turns for this browser tab (sessionStorage).
  */
 
 const AiUiContext = createContext(null)
@@ -31,6 +41,12 @@ export function AiUiProvider({ children }) {
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
   const [reply, setReply] = useState(null)
+  const [memory, setMemory] = useState(() => readAskAiMemory())
+
+  const persistMemory = useCallback((next) => {
+    setMemory(next)
+    writeAskAiMemory(next)
+  }, [])
 
   const openBubble = useCallback((partial, position) => {
     setCtx((prev) => ({
@@ -58,6 +74,14 @@ export function AiUiProvider({ children }) {
     setLoading(false)
   }, [])
 
+  const clearMemory = useCallback(() => {
+    clearAskAiMemoryStore()
+    setMemory([])
+    setReply(null)
+    setLoading(false)
+    setPrompt('')
+  }, [])
+
   const runPrompt = useCallback(
     async (userPrompt) => {
       const user_prompt = (userPrompt ?? prompt).trim()
@@ -65,6 +89,11 @@ export function AiUiProvider({ children }) {
       setPrompt(user_prompt)
       setLoading(true)
       setReply(null)
+
+      const historyForApi = memory.map((t) => ({
+        role: t.role,
+        content: t.content,
+      }))
 
       try {
         const data = await chatPrep(
@@ -75,13 +104,20 @@ export function AiUiProvider({ children }) {
           {
             source_file: ctx.source_file || '',
             page: ctx.page,
+            history: historyForApi,
           }
         )
         const status = groundingStatusFromReply(data.grounding_status, data.reply)
+        const replyText = data.reply || ''
+        const nextMemory = appendAskAiTurn(
+          appendAskAiTurn(memory, { role: 'user', content: user_prompt }),
+          { role: 'assistant', content: replyText }
+        )
+        persistMemory(nextMemory)
         setReply({
           grounding_status: status,
           grounding_source: data.grounding_source || groundingSource,
-          text: data.reply,
+          text: replyText,
           grounding_notes: data.grounding_notes,
           evidence: data.evidence,
           claims_verified: data.claims_verified,
@@ -100,7 +136,16 @@ export function AiUiProvider({ children }) {
         setLoading(false)
       }
     },
-    [ctx.matter_id, ctx.selection, ctx.source_file, ctx.page, prompt, groundingSource]
+    [
+      ctx.matter_id,
+      ctx.selection,
+      ctx.source_file,
+      ctx.page,
+      prompt,
+      groundingSource,
+      memory,
+      persistMemory,
+    ]
   )
 
   const askAi = useCallback(() => runPrompt(prompt), [prompt, runPrompt])
@@ -123,11 +168,15 @@ export function AiUiProvider({ children }) {
       setPrompt,
       loading,
       reply,
+      memory,
+      memoryNearFull: memoryIsNearFull(memory),
+      memoryFull: memoryIsFull(memory),
       openBubble,
       closeBubble,
       askAi,
       runPrompt,
       clearReply,
+      clearMemory,
     }),
     [
       open,
@@ -138,11 +187,13 @@ export function AiUiProvider({ children }) {
       prompt,
       loading,
       reply,
+      memory,
       openBubble,
       closeBubble,
       askAi,
       runPrompt,
       clearReply,
+      clearMemory,
     ]
   )
 

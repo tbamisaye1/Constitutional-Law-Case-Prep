@@ -78,6 +78,17 @@ export async function chatPrep(
   if (page != null && Number.isFinite(Number(page)) && Number(page) > 0) {
     body.page = Number(page);
   }
+  if (Array.isArray(options?.history) && options.history.length) {
+    body.history = options.history
+      .filter(
+        (t) =>
+          t &&
+          (t.role === "user" || t.role === "assistant") &&
+          typeof t.content === "string" &&
+          t.content.trim()
+      )
+      .map((t) => ({ role: t.role, content: t.content.trim() }));
+  }
 
   const res = await fetch(`${BASE}/chat`, {
     method: "POST",

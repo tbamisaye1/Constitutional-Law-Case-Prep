@@ -41,10 +41,14 @@ export function AiSelectionBubble() {
     setPrompt,
     loading,
     reply,
+    memory,
+    memoryNearFull,
+    memoryFull,
     closeBubble,
     askAi,
     runPrompt,
     clearReply,
+    clearMemory,
   } = useAiUi()
   const navigate = useNavigate()
   const lib = useCaseLibrary()
@@ -192,6 +196,37 @@ export function AiSelectionBubble() {
           )}
         </p>
 
+        {memory.length ? (
+          <div className={memoryNearFull ? 'ai-memory-bar warn' : 'ai-memory-bar'}>
+            <span className="mono">
+              Memory · {memory.length} turn{memory.length === 1 ? '' : 's'}
+              {memoryFull ? ' (full · oldest will drop)' : memoryNearFull ? ' (getting full)' : ''}
+            </span>
+            <button type="button" className="btn-soft" onClick={clearMemory}>
+              Clear memory
+            </button>
+          </div>
+        ) : null}
+
+        {memoryNearFull ? (
+          <p className="ai-memory-hint">
+            Chat memory is getting full. Clear it for a fresh thread, or keep going (oldest turns
+            drop first).
+          </p>
+        ) : null}
+
+        {memory.length && !reply && !loading ? (
+          <div className="ai-memory-transcript">
+            <div className="ai-sample-label mono">Recent thread</div>
+            {memory.slice(-4).map((turn, i) => (
+              <p key={`${turn.at || i}-${turn.role}`} className="ai-memory-turn">
+                <span className="mono">{turn.role === 'user' ? 'You' : 'Ask AI'}</span>
+                {turn.content.slice(0, 140)}
+                {turn.content.length > 140 ? '…' : ''}
+              </p>
+            ))}
+          </div>
+        ) : null}
         {hasSelection ? (
           <>
             {showSideToggles ? (
@@ -367,6 +402,11 @@ export function AiSelectionBubble() {
           {reply && !loading ? (
             <button type="button" className="btn-soft" onClick={clearReply}>
               New question
+            </button>
+          ) : null}
+          {memory.length ? (
+            <button type="button" className="btn-soft" onClick={clearMemory} title="Clear chat memory">
+              Clear memory
             </button>
           ) : null}
           <span className="mono ai-kbd">⌘↵</span>
