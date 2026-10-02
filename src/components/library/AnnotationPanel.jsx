@@ -13,6 +13,7 @@ import {
   Pin,
   PinOff,
   Plus,
+  Search,
   Trash2,
   X,
 } from 'lucide-react'
@@ -253,27 +254,173 @@ function AnnotationItem({
   )
 }
 
+function TakeawaysCard({ annotation: a, onJump, onUpdate, onFlush, onTogglePin }) {
+  const textRef = useRef(null)
+  const text = a.text || ''
+  const color = highlightColorMeta(a.color)
+  const isHighlight = a.kind === 'highlight' || Boolean(a.quote)
+
+  useEffect(() => {
+    resizeTextarea(textRef.current)
+  }, [text])
+
+  return (
+    <article
+      className="takeaways-card-inner"
+      style={isHighlight ? { borderLeftColor: color.solid } : undefined}
+      data-anno-id={a.id}
+    >
+      <div className="takeaways-card-meta">
+        <span className="anno-kind mono">
+          {a.pinned ? 'pinned · ' : ''}
+          {isHighlight ? 'highlight' : 'page note'}
+          {' · '}p. {a.page}
+        </span>
+        <div className="takeaways-card-actions">
+          <button
+            type="button"
+            className={a.pinned ? 'icon-btn soft pinned-btn on' : 'icon-btn soft pinned-btn'}
+            aria-label={a.pinned ? 'Unpin note' : 'Pin note'}
+            onClick={() => onTogglePin?.(a.id, !a.pinned)}
+          >
+            {a.pinned ? <PinOff size={14} /> : <Pin size={14} />}
+          </button>
+          <button type="button" className="anno-expand-btn" onClick={() => onJump?.(a)}>
+            <LocateFixed size={14} /> Go to PDF
+          </button>
+        </div>
+      </div>
+
+      {a.quote ? (
+        <blockquote
+          className="anno-quote takeaways-quote"
+          style={{ borderLeftColor: color.solid, background: color.fill }}
+        >
+          “{a.quote}”
+        </blockquote>
+      ) : null}
+
+      <label className="takeaways-edit-label mono" htmlFor={`takeaway-text-${a.id}`}>
+        Your note
+      </label>
+      <textarea
+        id={`takeaway-text-${a.id}`}
+        ref={textRef}
+        className="takeaways-note-edit"
+        rows={Math.min(12, Math.max(3, text.split('\n').length + 1))}
+        value={text}
+        onChange={(e) => {
+          onUpdate?.(a.id, { text: e.target.value })
+          resizeTextarea(e.target)
+        }}
+        onBlur={() => onFlush?.()}
+        placeholder={
+          a.quote
+            ? 'What this highlight means / how you will use it…'
+            : 'Reading goals, rules, takeaways…'
+        }
+      />
+
+      {isHighlight ? (
+        <div className="hl-color-row takeaways-colors" role="group" aria-label="Highlight color">
+          {HIGHLIGHT_COLORS.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={normalizeHighlightColor(a.color) === c.id ? 'hl-swatch on' : 'hl-swatch'}
+              style={{ background: c.solid }}
+              aria-label={c.label}
+              aria-pressed={normalizeHighlightColor(a.color) === c.id}
+              onClick={() => {
+                onUpdate?.(a.id, { color: c.id })
+                onFlush?.()
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
+    </article>
+  )
+}
+
+/**
+ * Full-screen takeaways workspace: page index, search, and inline editing.
+ * Built for scanning many notes without squinting in the side rail.
+ */
 function TakeawaysReview({
   title,
   annotations,
   onClose,
   onJump,
+  onUpdate,
+  onFlush,
+  onTogglePin,
   onExportNotes,
   exportBusy,
   exportMessage,
 }) {
+  const [query, setQuery] = useState('')
+  const [kind, setKind] = useState('all') // all | highlight | page
+  const [activePage, setActivePage] = useState(null)
+  const bodyRef = useRef(null)
+  const searchRef = useRef(null)
+
   const sorted = useMemo(() => [...annotations].sort(compareAnnotations), [annotations])
+
+  const pageIndex = useMemo(() => {
+    const map = new Map()
+    for (const a of sorted) {
+      const p = Number(a.page) || 1
+      map.set(p, (map.get(p) || 0) + 1)
+    }
+    return [...map.entries()].sort((a, b) => a[0] - b[0])
+  }, [sorted])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return sorted.filter((a) => {
+      const isHighlight = a.kind === 'highlight' || Boolean(a.quote)
+      if (kind === 'highlight' && !isHighlight) return false
+      if (kind === 'page' && isHighlight) return false
+      if (activePage != null && Number(a.page) !== activePage) return false
+      if (!q) return true
+      const hay = `${a.quote || ''} ${a.text || ''}`.toLowerCase()
+      return hay.includes(q)
+    })
+  }, [sorted, query, kind, activePage])
 
   useEffect(() => {
     function onKey(event) {
       if (event.key === 'Escape') {
         event.preventDefault()
         onClose()
+        return
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        searchRef.current?.focus()
+        searchRef.current?.select()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
+  function jumpToPageHeader(pageNum) {
+    setActivePage(pageNum)
+    requestAnimationFrame(() => {
+      const el = bodyRef.current?.querySelector(`[data-page-header="${pageNum}"]`)
+      el?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    })
+  }
 
   let lastPage = null
 
@@ -282,11 +429,14 @@ function TakeawaysReview({
       <button type="button" className="takeaways-backdrop" aria-label="Close takeaways" onClick={onClose} />
       <div className="takeaways-sheet">
         <header className="takeaways-head">
-          <div>
+          <div className="takeaways-head-copy">
             <p className="mono takeaways-kicker">Takeaways</p>
             <h2>{title || 'This article'}</h2>
             <p className="takeaways-sub mono">
-              {sorted.length} note{sorted.length === 1 ? '' : 's'} · Esc to close
+              {filtered.length}
+              {filtered.length !== sorted.length ? ` of ${sorted.length}` : ''} note
+              {filtered.length === 1 ? '' : 's'}
+              {' · '}edit here · ⌘/Ctrl+F search · Esc close
             </p>
           </div>
           <div className="takeaways-head-actions">
@@ -309,50 +459,103 @@ function TakeawaysReview({
 
         {exportMessage ? <p className="takeaways-flash mono">{exportMessage}</p> : null}
 
-        <div className="takeaways-body">
-          {sorted.length === 0 ? (
-            <p className="takeaways-empty">No highlights or page notes yet on this article.</p>
-          ) : (
-            sorted.map((a) => {
-              const pageNum = Number(a.page) || 1
-              const showPage = pageNum !== lastPage
-              lastPage = pageNum
-              const color = highlightColorMeta(a.color)
-              const isHighlight = a.kind === 'highlight' || Boolean(a.quote)
-              return (
-                <article key={a.id} className="takeaways-card">
-                  {showPage ? <h3 className="takeaways-page mono">Page {pageNum}</h3> : null}
-                  <div
-                    className="takeaways-card-inner"
-                    style={isHighlight ? { borderLeftColor: color.solid } : undefined}
-                  >
-                    <div className="takeaways-card-meta">
-                      <span className="anno-kind mono">
-                        {a.pinned ? 'pinned · ' : ''}
-                        {isHighlight ? 'highlight' : 'page note'}
-                      </span>
-                      <button type="button" className="anno-expand-btn" onClick={() => onJump?.(a)}>
-                        <LocateFixed size={14} /> Go to PDF
-                      </button>
-                    </div>
-                    {a.quote ? (
-                      <blockquote
-                        className="anno-quote"
-                        style={{ borderLeftColor: color.solid, background: color.fill }}
+        <div className="takeaways-toolbar">
+          <label className="takeaways-search">
+            <Search size={15} aria-hidden />
+            <input
+              ref={searchRef}
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search quotes and notes…"
+              aria-label="Search takeaways"
+            />
+          </label>
+          <div className="takeaways-kind" role="group" aria-label="Filter by kind">
+            {[
+              { id: 'all', label: 'All' },
+              { id: 'highlight', label: 'Highlights' },
+              { id: 'page', label: 'Page notes' },
+            ].map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                className={kind === opt.id ? 'on' : ''}
+                onClick={() => setKind(opt.id)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {activePage != null ? (
+            <button type="button" className="btn-soft" onClick={() => setActivePage(null)}>
+              Show all pages
+            </button>
+          ) : null}
+        </div>
+
+        <div className="takeaways-layout">
+          <aside className="takeaways-nav" aria-label="Pages with notes">
+            <p className="mono takeaways-nav-label">Pages</p>
+            <button
+              type="button"
+              className={activePage == null ? 'takeaways-nav-item on' : 'takeaways-nav-item'}
+              onClick={() => {
+                setActivePage(null)
+                bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+            >
+              All <span className="mono">{sorted.length}</span>
+            </button>
+            {pageIndex.map(([pageNum, count]) => (
+              <button
+                key={pageNum}
+                type="button"
+                className={
+                  activePage === pageNum ? 'takeaways-nav-item on' : 'takeaways-nav-item'
+                }
+                onClick={() => jumpToPageHeader(pageNum)}
+              >
+                p. {pageNum} <span className="mono">{count}</span>
+              </button>
+            ))}
+          </aside>
+
+          <div className="takeaways-body" ref={bodyRef}>
+            {filtered.length === 0 ? (
+              <p className="takeaways-empty">
+                {sorted.length === 0
+                  ? 'No highlights or page notes yet on this article.'
+                  : 'Nothing matches that search or filter.'}
+              </p>
+            ) : (
+              filtered.map((a) => {
+                const pageNum = Number(a.page) || 1
+                const showPage = pageNum !== lastPage
+                lastPage = pageNum
+                return (
+                  <div key={a.id} className="takeaways-card">
+                    {showPage ? (
+                      <h3
+                        className="takeaways-page mono"
+                        data-page-header={pageNum}
+                        id={`takeaways-page-${pageNum}`}
                       >
-                        “{a.quote}”
-                      </blockquote>
+                        Page {pageNum}
+                      </h3>
                     ) : null}
-                    {a.text?.trim() ? (
-                      <p className="takeaways-note">{a.text}</p>
-                    ) : (
-                      <p className="takeaways-note empty">No note text yet.</p>
-                    )}
+                    <TakeawaysCard
+                      annotation={a}
+                      onJump={onJump}
+                      onUpdate={onUpdate}
+                      onFlush={onFlush}
+                      onTogglePin={onTogglePin}
+                    />
                   </div>
-                </article>
-              )
-            })
-          )}
+                )
+              })
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -627,6 +830,9 @@ export function AnnotationPanel({
             setReviewOpen(false)
             onJump?.(anno)
           }}
+          onUpdate={onUpdate}
+          onFlush={onFlush}
+          onTogglePin={togglePin}
           onExportNotes={onExportToNotes ? handleExport : null}
           exportBusy={exportBusy}
           exportMessage={exportMessage}
