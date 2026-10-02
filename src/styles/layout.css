@@ -938,6 +938,47 @@
   grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
 }
 
+.args-split.is-expanded {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: calc(100vh - 140px);
+}
+
+.args-notes {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 14px 20px;
+  background: var(--paper-2);
+}
+
+.args-notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.args-notes-label {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.args-workspace.is-expanded .args-notes {
+  padding: 14px clamp(16px, 6vw, 72px) 40px;
+  max-width: 920px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.args-workspace.is-expanded .note-editor {
+  min-height: calc(100vh - 200px);
+}
+
 .notes-list {
   border-right: 1px solid var(--rule);
   background: var(--paper);
