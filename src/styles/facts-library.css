@@ -3277,13 +3277,55 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   box-shadow: 0 14px 40px rgba(20, 22, 26, 0.24);
 }
 
+.ai-bubble.is-expanded {
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  left: auto;
+  width: min(720px, calc(100vw - 32px));
+  height: auto;
+  max-height: none;
+  z-index: 520;
+  box-shadow: 0 18px 48px rgba(20, 22, 26, 0.28);
+}
+
 .ai-bubble-header {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding: 12px 14px 8px;
   border-bottom: 1px solid var(--rule-soft);
+}
+
+.ai-bubble-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ai-bubble.is-expanded .ai-bubble-scroll {
+  padding: 14px 18px 8px;
+}
+
+.ai-bubble.is-expanded .ai-bubble-footer {
+  padding: 12px 18px 16px;
+}
+
+.ai-bubble.is-expanded .ai-bubble-input {
+  min-height: 96px;
+  font-size: 15px;
+}
+
+.ai-bubble.is-expanded .ai-bubble-reply-text {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.ai-bubble.is-expanded .ai-bubble-quote {
+  font-size: 14.5px;
 }
 
 .ai-bubble-policy {

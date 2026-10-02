@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, X } from 'lucide-react'
+import { Maximize2, Minimize2, Sparkles, X } from 'lucide-react'
 import { GroundingBadge } from '../GroundingBadge'
 import { useAiUi } from '../../ai/AiUiContext'
 import { useCaseLibrary } from '../../hooks/useCaseLibrary'
@@ -14,10 +14,21 @@ import {
   formatReplyForDisplay,
 } from '../../ai/samplePrompts'
 
+const EXPAND_KEY = 'case-prep-ask-ai-expanded'
+
+function readExpanded() {
+  try {
+    return localStorage.getItem(EXPAND_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 /**
  * Floating AI bubble.
  * Mode switch: Uploaded articles (RAG only) | Web (corpus + OpenRouter search).
  * Corpus evidence cards open the PDF viewer on the cited page + quote.
+ * Expand grows the panel for long answers; Esc exits expand, then closes.
  */
 export function AiSelectionBubble() {
   const {
@@ -39,6 +50,7 @@ export function AiSelectionBubble() {
   const lib = useCaseLibrary()
   const [openingId, setOpeningId] = useState('')
   const [openError, setOpenError] = useState('')
+  const [expanded, setExpanded] = useState(readExpanded)
 
   const focusRef = useRef(null)
   const webPlus = groundingSource === 'web_plus'
@@ -50,6 +62,29 @@ export function AiSelectionBubble() {
   const showSamples = !hasSelection && !loading && !reply
   const sampleGroups = webPlus ? WEB_SAMPLE_PROMPT_GROUPS : SAMPLE_PROMPT_GROUPS
   const quickActions = webPlus ? WEB_SELECTION_QUICK : SELECTION_QUICK
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(EXPAND_KEY, expanded ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+  }, [expanded])
+
+  useEffect(() => {
+    if (!open) return undefined
+    function onKey(event) {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      if (expanded) {
+        setExpanded(false)
+        return
+      }
+      closeBubble()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, expanded, closeBubble])
 
   useEffect(() => {
     if (!open || (!loading && !reply)) return
@@ -89,7 +124,7 @@ export function AiSelectionBubble() {
 
   return (
     <div
-      className="ai-bubble"
+      className={expanded ? 'ai-bubble is-expanded' : 'ai-bubble'}
       role="dialog"
       aria-label={webPlus ? 'Ask AI with uploaded articles and web search' : 'Ask AI about uploaded articles'}
     >
@@ -97,9 +132,28 @@ export function AiSelectionBubble() {
         <span className="ai-bubble-title">
           <Sparkles size={14} /> Ask AI
         </span>
-        <button type="button" className="icon-btn soft" aria-label="Close" onClick={closeBubble}>
-          <X size={14} />
-        </button>
+        <div className="ai-bubble-header-actions">
+          <button
+            type="button"
+            className={expanded ? 'btn-ink notes-expand-exit' : 'btn-soft'}
+            onClick={() => setExpanded((v) => !v)}
+            aria-label={expanded ? 'Exit expanded Ask AI' : 'Expand Ask AI'}
+            title={expanded ? 'Exit expanded view (Esc)' : 'Expand Ask AI for more room'}
+          >
+            {expanded ? (
+              <>
+                <Minimize2 size={15} /> Exit
+              </>
+            ) : (
+              <>
+                <Maximize2 size={15} /> Expand
+              </>
+            )}
+          </button>
+          <button type="button" className="icon-btn soft" aria-label="Close" onClick={closeBubble}>
+            <X size={14} />
+          </button>
+        </div>
       </div>
 
       <div className="ai-bubble-scroll">
