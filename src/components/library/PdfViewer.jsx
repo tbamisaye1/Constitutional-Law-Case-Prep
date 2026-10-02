@@ -425,8 +425,13 @@ export function PdfViewer({
     if (quote.length < 2) return
 
     const pageEl = stageRef.current?.querySelector('.react-pdf__Page')
-    if (!pageEl) return
-    const pageRect = pageEl.getBoundingClientRect()
+    // Prefer the canvas box so overlay % match the painted page, not a stretched wrap.
+    const boxEl =
+      pageEl?.querySelector('.react-pdf__Page__canvas') ||
+      pageEl?.querySelector('canvas') ||
+      pageEl
+    if (!boxEl) return
+    const pageRect = boxEl.getBoundingClientRect()
     if (pageRect.width < 1 || pageRect.height < 1) return
 
     let range
@@ -448,14 +453,16 @@ export function PdfViewer({
     if (!rects.length) return
 
     const first = range.getBoundingClientRect()
+    const wrapEl = stageRef.current?.querySelector('.pdf-page-wrap')
+    const wrapRect = wrapEl?.getBoundingClientRect() || pageRect
     setPendingColor(DEFAULT_HIGHLIGHT_COLOR)
     setPending({
       quote,
       rects,
       page,
       anchor: {
-        top: first.bottom - pageRect.top + 8,
-        left: Math.min(Math.max(first.left - pageRect.left, 8), pageRect.width - 180),
+        top: first.bottom - wrapRect.top + 8,
+        left: Math.min(Math.max(first.left - wrapRect.left, 8), wrapRect.width - 180),
       },
     })
   }
@@ -562,7 +569,14 @@ export function PdfViewer({
             onClick={() => {
               setExpanded((v) => {
                 const next = !v
-                if (next) setScale((s) => Math.max(s, 1.25))
+                if (next) {
+                  // Fit width to the expanded stage; do not CSS-shrink the page.
+                  const avail = Math.max(320, window.innerWidth - 64)
+                  const target = Math.min(1100, avail)
+                  // US Letter @ scale 1 is ~612 CSS px in pdf.js units.
+                  const fitted = Math.max(0.85, Math.min(1.85, target / 612))
+                  setScale(fitted)
+                }
                 return next
               })
             }}
@@ -763,70 +777,75 @@ export function PdfViewer({
             }}
           >
             <Page
+              key={`page-${page}-${scale}-${expanded ? 'x' : 'n'}`}
               pageNumber={page}
               scale={scale}
               renderTextLayer
               renderAnnotationLayer
               loading={<p className="pdf-loading mono">Rendering page…</p>}
               onRenderTextLayerSuccess={onTextLayerRendered}
-            />
+            >
+              <div className="pdf-highlight-layer" aria-hidden={false}>
+                {pageHighlights.map((h) => {
+                  const color = highlightColorMeta(h.color)
+                  const pulsing = pulseHighlightId === h.id
+                  return (h.rects || []).map((r, i) => (
+                    <button
+                      key={`${h.id}-${i}`}
+                      type="button"
+                      data-hl-id={i === 0 ? h.id : undefined}
+                      className={
+                        pulsing ? 'pdf-hl pdf-hl-hit pdf-hl-pulse' : 'pdf-hl pdf-hl-hit'
+                      }
+                      aria-label={`Open note for highlight: ${(h.quote || '').slice(0, 80)}`}
+                      style={{
+                        top: `${r.top * 100}%`,
+                        left: `${r.left * 100}%`,
+                        width: `${r.width * 100}%`,
+                        height: `${r.height * 100}%`,
+                        background: color.fill,
+                      }}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        onSelectHighlight?.(h.id)
+                      }}
+                    />
+                  ))
+                })}
+                {searchHits.map((hit, hitIndex) =>
+                  (hit.rects || []).map((r, i) => (
+                    <span
+                      key={`search-${hitIndex}-${i}`}
+                      className={
+                        hitIndex === activeOnPage
+                          ? 'pdf-hl pdf-hl-search pdf-hl-search-active'
+                          : 'pdf-hl pdf-hl-search'
+                      }
+                      style={{
+                        top: `${r.top * 100}%`,
+                        left: `${r.left * 100}%`,
+                        width: `${r.width * 100}%`,
+                        height: `${r.height * 100}%`,
+                      }}
+                    />
+                  ))
+                )}
+                {focusRects.map((r, i) => (
+                  <span
+                    key={`focus-${i}`}
+                    className="pdf-hl pdf-hl-focus"
+                    style={{
+                      top: `${r.top * 100}%`,
+                      left: `${r.left * 100}%`,
+                      width: `${r.width * 100}%`,
+                      height: `${r.height * 100}%`,
+                    }}
+                  />
+                ))}
+              </div>
+            </Page>
           </Document>
-
-          <div className="pdf-highlight-layer">
-            {pageHighlights.map((h) => {
-              const color = highlightColorMeta(h.color)
-              const pulsing = pulseHighlightId === h.id
-              return (h.rects || []).map((r, i) => (
-                <button
-                  key={`${h.id}-${i}`}
-                  type="button"
-                  data-hl-id={i === 0 ? h.id : undefined}
-                  className={pulsing ? 'pdf-hl pdf-hl-hit pdf-hl-pulse' : 'pdf-hl pdf-hl-hit'}
-                  aria-label={`Open note for highlight: ${(h.quote || '').slice(0, 80)}`}
-                  style={{
-                    top: `${r.top * 100}%`,
-                    left: `${r.left * 100}%`,
-                    width: `${r.width * 100}%`,
-                    height: `${r.height * 100}%`,
-                    background: color.fill,
-                  }}
-                  onClick={(event) => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    onSelectHighlight?.(h.id)
-                  }}
-                />
-              ))
-            })}
-            {searchHits.map((hit, hitIndex) =>
-              (hit.rects || []).map((r, i) => (
-                <span
-                  key={`search-${hitIndex}-${i}`}
-                  className={
-                    hitIndex === activeOnPage ? 'pdf-hl pdf-hl-search pdf-hl-search-active' : 'pdf-hl pdf-hl-search'
-                  }
-                  style={{
-                    top: `${r.top * 100}%`,
-                    left: `${r.left * 100}%`,
-                    width: `${r.width * 100}%`,
-                    height: `${r.height * 100}%`,
-                  }}
-                />
-              ))
-            )}
-            {focusRects.map((r, i) => (
-              <span
-                key={`focus-${i}`}
-                className="pdf-hl pdf-hl-focus"
-                style={{
-                  top: `${r.top * 100}%`,
-                  left: `${r.left * 100}%`,
-                  width: `${r.width * 100}%`,
-                  height: `${r.height * 100}%`,
-                }}
-              />
-            ))}
-          </div>
 
           {pending ? (
             <div

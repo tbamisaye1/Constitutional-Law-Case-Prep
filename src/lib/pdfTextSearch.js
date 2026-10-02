@@ -48,7 +48,12 @@ function buildPageIndex(pageEl) {
 }
 
 function rangeToRects(range, pageEl) {
-  const pageRect = pageEl.getBoundingClientRect()
+  const boxEl =
+    pageEl?.querySelector('.react-pdf__Page__canvas') ||
+    pageEl?.querySelector('canvas') ||
+    pageEl
+  if (!boxEl) return []
+  const pageRect = boxEl.getBoundingClientRect()
   if (pageRect.width < 1 || pageRect.height < 1) return []
   return [...range.getClientRects()]
     .filter((r) => r.width > 0 && r.height > 0)

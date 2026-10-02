@@ -827,10 +827,13 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
 
 .pdf-viewer.is-expanded .pdf-stage {
   padding: 20px 24px 32px;
+  align-items: flex-start;
 }
 
 .pdf-viewer.is-expanded .pdf-page-wrap {
-  max-width: min(1100px, 96vw);
+  /* Prefer reading width via scale, not CSS max-width (CSS sizing desyncs the
+     text layer / highlight overlay from the canvas). */
+  max-width: none;
 }
 
 .pdf-viewer-placeholder {
@@ -969,11 +972,16 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   padding: 16px;
   display: flex;
   justify-content: center;
+  /* Keep the page wrap sized to the PDF, not stretched to the stage height.
+     Stretching made highlight % coords land too high / look squashed, especially
+     in expanded view where the stage is nearly the full viewport. */
+  align-items: flex-start;
 }
 
 .pdf-stage .react-pdf__Page {
   box-shadow: 0 8px 28px rgba(20, 22, 26, 0.18);
   background: #fff;
+  position: relative;
 }
 
 .pdf-empty,
@@ -2482,13 +2490,36 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
 .pdf-page-wrap {
   position: relative;
   display: inline-block;
+  /* Never stretch with the stage; wrap must match the rendered page box. */
+  align-self: flex-start;
+  flex: 0 0 auto;
+  max-width: none;
+  line-height: 0;
+}
+
+.pdf-page-wrap .react-pdf__Document {
+  line-height: normal;
+}
+
+/* Keep pdf.js layers locked to the canvas box; never CSS-scale the canvas. */
+.pdf-page-wrap .react-pdf__Page__canvas {
+  display: block;
+  max-width: none !important;
+}
+
+.pdf-page-wrap .textLayer,
+.pdf-page-wrap .react-pdf__Page__textContent,
+.pdf-page-wrap .react-pdf__Page__annotations,
+.pdf-page-wrap .annotationLayer {
+  inset: 0 !important;
+  max-width: none !important;
 }
 
 .pdf-highlight-layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 2;
+  z-index: 3;
 }
 
 .pdf-hl {

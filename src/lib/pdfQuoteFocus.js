@@ -78,7 +78,11 @@ export function findQuoteOnPage(pageEl, quote) {
     return null
   }
 
-  const pageRect = pageEl.getBoundingClientRect()
+  const boxEl =
+    pageEl.querySelector('.react-pdf__Page__canvas') ||
+    pageEl.querySelector('canvas') ||
+    pageEl
+  const pageRect = boxEl.getBoundingClientRect()
   if (pageRect.width < 1 || pageRect.height < 1) return null
 
   const rects = [...range.getClientRects()]
