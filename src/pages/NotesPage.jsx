@@ -1,8 +1,11 @@
+import { useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { NoteEditor } from '../components/NoteEditor'
 import { SectionTree } from '../components/notebook/SectionTree'
 import { PageList } from '../components/notebook/PageList'
 import { useNotebook } from '../hooks/useNotebook'
 import { NOTEBOOK_META } from '../data/notebookSeed'
+import { findPage } from '../lib/pageTree'
 
 /**
  * Three-pane OneNote layout:
@@ -13,10 +16,26 @@ import { NOTEBOOK_META } from '../data/notebookSeed'
  * - Tree UX: https://github.com/brimdata/react-arborist
  * - Closest full-app OSS analogue for the hierarchy: Joplin notebooks
  *   https://github.com/laurent22/joplin (we embed the pattern, not the app)
+ *
+ * Deep link: /notes?section=sec-articles&page=pg-article-…
+ * (Articles → Send to Notes lands here.)
  */
 export function NotesPage() {
   const nb = useNotebook()
+  const [params] = useSearchParams()
   const sectionName = findSectionName(nb.tree, nb.sectionId)
+
+  useEffect(() => {
+    const section = params.get('section')
+    const page = params.get('page')
+    if (!section) return
+    if (!sectionExists(nb.tree, section)) return
+    if (nb.sectionId !== section) nb.selectSection(section)
+    const list = nb.pagesBySection?.[section] || []
+    if (page && findPage(list, page)) nb.selectPage(page)
+    // Only react to URL changes; notebook selection APIs are stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params])
 
   return (
     <section className="workspace notes-onenote">
@@ -100,4 +119,12 @@ function findSectionName(tree, id) {
     }
   }
   return 'Pages'
+}
+
+function sectionExists(tree, id) {
+  for (const n of tree || []) {
+    if (n.id === id) return true
+    if (n.children?.length && sectionExists(n.children, id)) return true
+  }
+  return false
 }

@@ -238,6 +238,7 @@ export function useNotebook() {
     sectionId,
     pageId: activePage?.id || null,
     pages: withPreviews(pages),
+    pagesBySection,
     activePage,
     selectSection,
     selectPage,

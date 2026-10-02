@@ -7,10 +7,14 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   LocateFixed,
+  NotebookPen,
+  PanelRightClose,
+  PanelRightOpen,
   Pin,
   PinOff,
   Plus,
   Trash2,
+  X,
 } from 'lucide-react'
 import {
   HIGHLIGHT_COLORS,
@@ -249,6 +253,112 @@ function AnnotationItem({
   )
 }
 
+function TakeawaysReview({
+  title,
+  annotations,
+  onClose,
+  onJump,
+  onExportNotes,
+  exportBusy,
+  exportMessage,
+}) {
+  const sorted = useMemo(() => [...annotations].sort(compareAnnotations), [annotations])
+
+  useEffect(() => {
+    function onKey(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  let lastPage = null
+
+  return (
+    <div className="takeaways-overlay" role="dialog" aria-modal="true" aria-label="Article takeaways">
+      <button type="button" className="takeaways-backdrop" aria-label="Close takeaways" onClick={onClose} />
+      <div className="takeaways-sheet">
+        <header className="takeaways-head">
+          <div>
+            <p className="mono takeaways-kicker">Takeaways</p>
+            <h2>{title || 'This article'}</h2>
+            <p className="takeaways-sub mono">
+              {sorted.length} note{sorted.length === 1 ? '' : 's'} · Esc to close
+            </p>
+          </div>
+          <div className="takeaways-head-actions">
+            {onExportNotes ? (
+              <button
+                type="button"
+                className="btn-ink"
+                disabled={exportBusy || !sorted.length}
+                onClick={onExportNotes}
+              >
+                <NotebookPen size={14} />
+                {exportBusy ? 'Sending…' : 'Send to Notes'}
+              </button>
+            ) : null}
+            <button type="button" className="btn-soft" onClick={onClose}>
+              <X size={14} /> Close
+            </button>
+          </div>
+        </header>
+
+        {exportMessage ? <p className="takeaways-flash mono">{exportMessage}</p> : null}
+
+        <div className="takeaways-body">
+          {sorted.length === 0 ? (
+            <p className="takeaways-empty">No highlights or page notes yet on this article.</p>
+          ) : (
+            sorted.map((a) => {
+              const pageNum = Number(a.page) || 1
+              const showPage = pageNum !== lastPage
+              lastPage = pageNum
+              const color = highlightColorMeta(a.color)
+              const isHighlight = a.kind === 'highlight' || Boolean(a.quote)
+              return (
+                <article key={a.id} className="takeaways-card">
+                  {showPage ? <h3 className="takeaways-page mono">Page {pageNum}</h3> : null}
+                  <div
+                    className="takeaways-card-inner"
+                    style={isHighlight ? { borderLeftColor: color.solid } : undefined}
+                  >
+                    <div className="takeaways-card-meta">
+                      <span className="anno-kind mono">
+                        {a.pinned ? 'pinned · ' : ''}
+                        {isHighlight ? 'highlight' : 'page note'}
+                      </span>
+                      <button type="button" className="anno-expand-btn" onClick={() => onJump?.(a)}>
+                        <LocateFixed size={14} /> Go to PDF
+                      </button>
+                    </div>
+                    {a.quote ? (
+                      <blockquote
+                        className="anno-quote"
+                        style={{ borderLeftColor: color.solid, background: color.fill }}
+                      >
+                        “{a.quote}”
+                      </blockquote>
+                    ) : null}
+                    {a.text?.trim() ? (
+                      <p className="takeaways-note">{a.text}</p>
+                    ) : (
+                      <p className="takeaways-note empty">No note text yet.</p>
+                    )}
+                  </div>
+                </article>
+              )
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /**
  * Annotations beside the PDF:
  * - default: all notes on this case/file
@@ -256,6 +366,7 @@ function AnnotationItem({
  * - compact previews so more notes fit; expand to edit
  * - reading order by highlight position; pinned stay on top
  * - focusAnnotationId scrolls the matching card into view
+ * - Review takeaways opens a roomy overlay; Send to Notes writes a notebook page
  */
 export function AnnotationPanel({
   caseId,
@@ -267,11 +378,18 @@ export function AnnotationPanel({
   onJump,
   onFlush,
   focusAnnotationId = null,
+  articleTitle = '',
+  onExportToNotes = null,
+  collapsed = false,
+  onToggleCollapsed = null,
 }) {
   const [scope, setScope] = useState('all') // all | page
   const [listPage, setListPage] = useState(1)
   const [expandedIds, setExpandedIds] = useState(() => new Set())
   const [expandAll, setExpandAll] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
+  const [exportMessage, setExportMessage] = useState('')
   const listRef = useRef(null)
 
   const forCase = useMemo(
@@ -332,14 +450,87 @@ export function AnnotationPanel({
     onFlush?.()
   }
 
+  async function handleExport() {
+    if (!onExportToNotes || exportBusy) return
+    setExportBusy(true)
+    setExportMessage('')
+    try {
+      const result = await onExportToNotes(forCase)
+      if (result?.notesPath) {
+        setExportMessage('Saved under Notes → Articles. Opening…')
+      } else {
+        setExportMessage('Saved under Notes → Articles.')
+      }
+    } catch (error) {
+      setExportMessage(error?.message || 'Could not send to Notes.')
+    } finally {
+      setExportBusy(false)
+    }
+  }
+
+  if (collapsed) {
+    return (
+      <div className="anno-panel is-collapsed">
+        <button
+          type="button"
+          className="anno-rail-toggle"
+          onClick={() => onToggleCollapsed?.(false)}
+          title="Show annotations"
+        >
+          <PanelRightOpen size={16} />
+          <span className="mono">Notes ({forCase.length})</span>
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="anno-panel">
       <div className="anno-head">
         <h3>Annotations</h3>
-        <button type="button" className="btn-ink" onClick={() => onAdd({ page, text: '' })}>
-          <Plus size={14} /> Page {page}
-        </button>
+        <div className="anno-head-actions">
+          {onToggleCollapsed ? (
+            <button
+              type="button"
+              className="icon-btn soft"
+              aria-label="Hide annotations panel"
+              title="Hide panel (more room for the PDF)"
+              onClick={() => onToggleCollapsed(true)}
+            >
+              <PanelRightClose size={15} />
+            </button>
+          ) : null}
+          <button type="button" className="btn-ink" onClick={() => onAdd({ page, text: '' })}>
+            <Plus size={14} /> Page {page}
+          </button>
+        </div>
       </div>
+
+      <div className="anno-tools">
+        <button
+          type="button"
+          className="btn-soft anno-tool-btn"
+          onClick={() => {
+            setExportMessage('')
+            setReviewOpen(true)
+          }}
+        >
+          Review takeaways ({forCase.length})
+        </button>
+        {onExportToNotes ? (
+          <button
+            type="button"
+            className="btn-soft anno-tool-btn"
+            disabled={exportBusy || !forCase.length}
+            onClick={handleExport}
+            title="Create or update a Notes page for this article"
+          >
+            <NotebookPen size={14} />
+            {exportBusy ? 'Sending…' : 'Send to Notes'}
+          </button>
+        ) : null}
+      </div>
+      {exportMessage && !reviewOpen ? <p className="anno-export-flash mono">{exportMessage}</p> : null}
 
       <div className="anno-scope" role="tablist" aria-label="Note scope">
         <button
@@ -373,8 +564,8 @@ export function AnnotationPanel({
       </div>
 
       <p className="anno-hint mono">
-        Click a note or the locate button to jump to that place in the PDF. Click a highlight on the
-        PDF to jump here. Pin keeps a note at the top.
+        Click a note or locate to jump in the PDF. Review takeaways for a wider scan. Send to Notes
+        keeps one page per article under Notes → Articles.
       </p>
 
       <ul className="anno-list" ref={listRef}>
@@ -425,6 +616,21 @@ export function AnnotationPanel({
             Next <ChevronRight size={14} />
           </button>
         </div>
+      ) : null}
+
+      {reviewOpen ? (
+        <TakeawaysReview
+          title={articleTitle}
+          annotations={forCase}
+          onClose={() => setReviewOpen(false)}
+          onJump={(anno) => {
+            setReviewOpen(false)
+            onJump?.(anno)
+          }}
+          onExportNotes={onExportToNotes ? handleExport : null}
+          exportBusy={exportBusy}
+          exportMessage={exportMessage}
+        />
       ) : null}
     </div>
   )

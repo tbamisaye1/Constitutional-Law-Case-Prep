@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
+  ChevronDown,
+  ChevronUp,
   FileText,
   FileUp,
   Filter,
@@ -17,6 +19,43 @@ import { useCaseLibrary } from '../hooks/useCaseLibrary'
 import { downloadIngestFile, listIngestSources } from '../api/client'
 import { CORPUS_ARTICLES_ID, CORPUS_ARTICLES_LABEL } from '../data/corpusArticles'
 import { articleDisplayName, articleSearchHaystack } from '../lib/articleLabels'
+import { exportArticleTakeawaysToNotes } from '../lib/articleTakeaways'
+
+const SHELF_OPEN_KEY = 'case-prep-articles-shelf-open'
+const ANNO_COLLAPSED_KEY = 'case-prep-articles-anno-collapsed'
+
+function readBool(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw === null) return fallback
+    return raw === '1' || raw === 'true'
+  } catch {
+    return fallback
+  }
+}
+
+function writeBool(key, value) {
+  try {
+    localStorage.setItem(key, value ? '1' : '0')
+  } catch {
+    /* ignore quota */
+  }
+}
+
+function initialShelfOpen() {
+  try {
+    const raw = localStorage.getItem(SHELF_OPEN_KEY)
+    if (raw !== null) return raw === '1' || raw === 'true'
+  } catch {
+    /* fall through */
+  }
+  // First visit: if a PDF is already open, start collapsed so the reader gets the screen.
+  try {
+    return !new URLSearchParams(window.location.search).get('file')
+  } catch {
+    return true
+  }
+}
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -50,6 +89,10 @@ export function ArticlesPage() {
   const [indexingId, setIndexingId] = useState('')
   const [renamingName, setRenamingName] = useState('')
   const [renameDraft, setRenameDraft] = useState('')
+  const [shelfOpen, setShelfOpen] = useState(initialShelfOpen)
+  const [annoCollapsed, setAnnoCollapsed] = useState(() =>
+    readBool(ANNO_COLLAPSED_KEY, false)
+  )
   const attachInput = useRef(null)
   const renameInput = useRef(null)
 
@@ -92,10 +135,25 @@ export function ArticlesPage() {
 
   const fileMeta = caseFiles.find((f) => f.id === activeId)
   const fileBlob = activeId ? lib.blobs[activeId] : null
+  const activeTitle = fileMeta
+    ? articleDisplayName(fileMeta.name, titleByName.get(fileMeta.name) || '')
+    : ''
+  const activeNoteCount = activeId
+    ? (noteStats.get(activeId)?.notes || 0) + (noteStats.get(activeId)?.highlights || 0)
+    : 0
   const page =
     (paramPage > 0 && activeId === paramFile ? paramPage : null) ||
     (activeId && lib.pageByFile[activeId]) ||
     1
+
+  useEffect(() => {
+    writeBool(ANNO_COLLAPSED_KEY, annoCollapsed)
+  }, [annoCollapsed])
+
+  function toggleShelf(next) {
+    setShelfOpen(next)
+    writeBool(SHELF_OPEN_KEY, next)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -340,44 +398,34 @@ export function ArticlesPage() {
         }
       />
 
-      <div className="articles-shelf">
-        <div className="articles-shelf-toolbar">
-          <label className="articles-search">
-            <Search size={14} aria-hidden />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search articles…"
-              aria-label="Search articles"
-            />
-          </label>
-
-          <div className="articles-filter-group" role="group" aria-label="Filter articles">
-            <Filter size={13} aria-hidden />
-            {FILTERS.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                className={filter === f.id ? 'articles-chip on' : 'articles-chip'}
-                onClick={() => setFilter(f.id)}
-              >
-                {f.label}
-              </button>
-            ))}
+      <div className={shelfOpen ? 'articles-shelf' : 'articles-shelf is-collapsed'}>
+        <div className="articles-shelf-bar">
+          <button
+            type="button"
+            className="articles-shelf-toggle"
+            aria-expanded={shelfOpen}
+            onClick={() => toggleShelf(!shelfOpen)}
+          >
+            {shelfOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+            <span>{shelfOpen ? 'Hide article list' : 'Browse articles'}</span>
+          </button>
+          <div className="articles-shelf-current">
+            {activeTitle ? (
+              <>
+                <FileText size={14} aria-hidden />
+                <span className="articles-shelf-current-title" title={fileMeta?.name}>
+                  {activeTitle}
+                </span>
+                {activeNoteCount > 0 ? (
+                  <span className="articles-badge marks mono">
+                    {activeNoteCount} note{activeNoteCount === 1 ? '' : 's'}
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <span className="mono articles-shelf-current-empty">No article open</span>
+            )}
           </div>
-
-          <label className="articles-sort">
-            <span className="mono">Sort</span>
-            <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort articles">
-              {SORTS.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
           <button
             type="button"
             className="btn-ink articles-add"
@@ -394,160 +442,226 @@ export function ArticlesPage() {
             onChange={(e) => {
               lib.attachFiles(CORPUS_ARTICLES_ID, e.target.files)
               e.target.value = ''
+              toggleShelf(true)
             }}
           />
         </div>
 
-        <div className="articles-shelf-meta mono">
-          {filtered.length} shown
-          {catalog.length !== filtered.length ? ` of ${catalog.length}` : ''}
-          {' · '}
-          {caseFiles.length} opened here
-          {' · '}
-          {catalog.filter((r) => r.kind === 'ready').length} ready to open
-        </div>
+        {shelfOpen ? (
+          <>
+            <div className="articles-shelf-toolbar">
+              <label className="articles-search">
+                <Search size={14} aria-hidden />
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search articles…"
+                  aria-label="Search articles"
+                />
+              </label>
 
-        <ul className="articles-shelf-list">
-          {filtered.length === 0 ? (
-            <li className="articles-shelf-empty">
-              {catalog.length === 0
-                ? `No PDFs on ${CORPUS_ARTICLES_LABEL} yet. Add one above, or pull from Upload / Ask AI.`
-                : 'Nothing matches that search or filter.'}
-            </li>
-          ) : (
-            filtered.map((row) => {
-              const selected = row.kind === 'opened' && row.id === activeId
-              const busy = pulling === row.name || indexingId === row.id
-              const markCount = row.notes + row.highlights
-              const isRenaming = renamingName === row.name
-              return (
-                <li
-                  key={row.key}
-                  className={
-                    selected
-                      ? 'articles-row on'
-                      : row.kind === 'ready'
-                        ? 'articles-row ready'
-                        : 'articles-row'
-                  }
+              <div className="articles-filter-group" role="group" aria-label="Filter articles">
+                <Filter size={13} aria-hidden />
+                {FILTERS.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    className={filter === f.id ? 'articles-chip on' : 'articles-chip'}
+                    onClick={() => setFilter(f.id)}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <label className="articles-sort">
+                <span className="mono">Sort</span>
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value)}
+                  aria-label="Sort articles"
                 >
-                  {isRenaming ? (
-                    <form
-                      className="articles-rename"
-                      onSubmit={(e) => {
-                        e.preventDefault()
-                        commitRename()
-                      }}
+                  {SORTS.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="articles-shelf-meta mono">
+              {filtered.length} shown
+              {catalog.length !== filtered.length ? ` of ${catalog.length}` : ''}
+              {' · '}
+              {caseFiles.length} opened here
+              {' · '}
+              {catalog.filter((r) => r.kind === 'ready').length} ready to open
+            </div>
+
+            <ul className="articles-shelf-list">
+              {filtered.length === 0 ? (
+                <li className="articles-shelf-empty">
+                  {catalog.length === 0
+                    ? `No PDFs on ${CORPUS_ARTICLES_LABEL} yet. Add one above, or pull from Upload / Ask AI.`
+                    : 'Nothing matches that search or filter.'}
+                </li>
+              ) : (
+                filtered.map((row) => {
+                  const selected = row.kind === 'opened' && row.id === activeId
+                  const busy = pulling === row.name || indexingId === row.id
+                  const markCount = row.notes + row.highlights
+                  const isRenaming = renamingName === row.name
+                  return (
+                    <li
+                      key={row.key}
+                      className={
+                        selected
+                          ? 'articles-row on'
+                          : row.kind === 'ready'
+                            ? 'articles-row ready'
+                            : 'articles-row'
+                      }
                     >
-                      <Pencil size={14} aria-hidden />
-                      <input
-                        ref={renameInput}
-                        value={renameDraft}
-                        onChange={(e) => setRenameDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') {
+                      {isRenaming ? (
+                        <form
+                          className="articles-rename"
+                          onSubmit={(e) => {
                             e.preventDefault()
-                            cancelRename()
-                          }
-                        }}
-                        onBlur={commitRename}
-                        placeholder="Display name"
-                        aria-label={`Rename ${row.name}`}
-                      />
-                      <button type="submit" className="btn-soft">
-                        Save
-                      </button>
-                      <button type="button" className="btn-soft" onMouseDown={(e) => e.preventDefault()} onClick={cancelRename}>
-                        Cancel
-                      </button>
-                    </form>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="articles-row-main"
-                        disabled={busy || (row.kind === 'opened' && !row.available)}
-                        title={row.name}
-                        onClick={() => {
-                          if (row.kind === 'ready') pullSource(row.name)
-                          else if (row.id) openOpened(row.id)
-                        }}
-                      >
-                        <FileText size={15} aria-hidden />
-                        <span className="articles-row-copy">
-                          <span className="articles-row-title">{row.label}</span>
-                          <span className="articles-row-file mono">{row.name}</span>
-                        </span>
-                        <span className="articles-row-badges">
-                          {row.kind === 'ready' ? (
-                            <span className="articles-badge ready">Ready to open</span>
-                          ) : row.askAiIndexed ? (
-                            <span className="articles-badge ok">In Ask AI</span>
-                          ) : row.askAiIndexError ? (
-                            <span className="articles-badge warn">Index failed</span>
-                          ) : (
-                            <span className="articles-badge">Local</span>
-                          )}
-                          {markCount > 0 ? (
-                            <span className="articles-badge marks" title={`${row.notes} notes, ${row.highlights} highlights`}>
-                              {row.highlights > 0 ? (
-                                <>
-                                  <Highlighter size={11} aria-hidden /> {row.highlights}
-                                </>
-                              ) : null}
-                              {row.notes > 0 ? (
-                                <>
-                                  {row.highlights > 0 ? ' · ' : null}
-                                  <StickyNote size={11} aria-hidden /> {row.notes}
-                                </>
-                              ) : null}
-                            </span>
-                          ) : null}
-                          {busy ? <span className="mono articles-row-busy">{pulling === row.name ? 'Opening…' : 'Indexing…'}</span> : null}
-                        </span>
-                      </button>
-                      <div className="articles-row-actions">
-                        <button
-                          type="button"
-                          className="icon-btn soft"
-                          aria-label={`Rename ${row.label}`}
-                          title="Rename how this article is shown"
-                          onClick={() => startRename(row)}
+                            commitRename()
+                          }}
                         >
-                          <Pencil size={14} />
-                        </button>
-                        {row.kind === 'opened' && row.askAiIndexError && !row.askAiIndexed ? (
+                          <Pencil size={14} aria-hidden />
+                          <input
+                            ref={renameInput}
+                            value={renameDraft}
+                            onChange={(e) => setRenameDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                e.preventDefault()
+                                cancelRename()
+                              }
+                            }}
+                            onBlur={commitRename}
+                            placeholder="Display name"
+                            aria-label={`Rename ${row.name}`}
+                          />
+                          <button type="submit" className="btn-soft">
+                            Save
+                          </button>
                           <button
                             type="button"
                             className="btn-soft"
-                            disabled={Boolean(indexingId)}
-                            onClick={() => onRetryIndex(row.id)}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={cancelRename}
                           >
-                            Retry index
+                            Cancel
                           </button>
-                        ) : null}
-                        {row.kind === 'opened' ? (
+                        </form>
+                      ) : (
+                        <>
                           <button
                             type="button"
-                            className="icon-btn soft"
-                            aria-label={`Remove ${row.name}`}
-                            onClick={() => lib.removeFile(row.id)}
+                            className="articles-row-main"
+                            disabled={busy || (row.kind === 'opened' && !row.available)}
+                            title={row.name}
+                            onClick={() => {
+                              if (row.kind === 'ready') pullSource(row.name)
+                              else if (row.id) openOpened(row.id)
+                              toggleShelf(false)
+                            }}
                           >
-                            <Trash2 size={14} />
+                            <FileText size={15} aria-hidden />
+                            <span className="articles-row-copy">
+                              <span className="articles-row-title">{row.label}</span>
+                              <span className="articles-row-file mono">{row.name}</span>
+                            </span>
+                            <span className="articles-row-badges">
+                              {row.kind === 'ready' ? (
+                                <span className="articles-badge ready">Ready to open</span>
+                              ) : row.askAiIndexed ? (
+                                <span className="articles-badge ok">In Ask AI</span>
+                              ) : row.askAiIndexError ? (
+                                <span className="articles-badge warn">Index failed</span>
+                              ) : (
+                                <span className="articles-badge">Local</span>
+                              )}
+                              {markCount > 0 ? (
+                                <span
+                                  className="articles-badge marks"
+                                  title={`${row.notes} notes, ${row.highlights} highlights`}
+                                >
+                                  {row.highlights > 0 ? (
+                                    <>
+                                      <Highlighter size={11} aria-hidden /> {row.highlights}
+                                    </>
+                                  ) : null}
+                                  {row.notes > 0 ? (
+                                    <>
+                                      {row.highlights > 0 ? ' · ' : null}
+                                      <StickyNote size={11} aria-hidden /> {row.notes}
+                                    </>
+                                  ) : null}
+                                </span>
+                              ) : null}
+                              {busy ? (
+                                <span className="mono articles-row-busy">
+                                  {pulling === row.name ? 'Opening…' : 'Indexing…'}
+                                </span>
+                              ) : null}
+                            </span>
                           </button>
-                        ) : null}
-                      </div>
-                    </>
-                  )}
-                </li>
-              )
-            })
-          )}
-        </ul>
+                          <div className="articles-row-actions">
+                            <button
+                              type="button"
+                              className="icon-btn soft"
+                              aria-label={`Rename ${row.label}`}
+                              title="Rename how this article is shown"
+                              onClick={() => startRename(row)}
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            {row.kind === 'opened' && row.askAiIndexError && !row.askAiIndexed ? (
+                              <button
+                                type="button"
+                                className="btn-soft"
+                                disabled={Boolean(indexingId)}
+                                onClick={() => onRetryIndex(row.id)}
+                              >
+                                Retry index
+                              </button>
+                            ) : null}
+                            {row.kind === 'opened' ? (
+                              <button
+                                type="button"
+                                className="icon-btn soft"
+                                aria-label={`Remove ${row.name}`}
+                                onClick={() => lib.removeFile(row.id)}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            ) : null}
+                          </div>
+                        </>
+                      )}
+                    </li>
+                  )
+                })
+              )}
+            </ul>
+          </>
+        ) : null}
       </div>
 
       <div className="library-read-stack case-at-bar-read">
-        <div className="library-read">
+        <div
+          className={
+            annoCollapsed
+              ? 'library-read articles-read anno-collapsed'
+              : 'library-read articles-read'
+          }
+        >
           <PdfViewer
             file={fileBlob}
             fileName={fileMeta?.name}
@@ -594,9 +708,29 @@ export function ArticlesPage() {
           <AnnotationPanel
             caseId={CORPUS_ARTICLES_ID}
             page={page}
+            articleTitle={activeTitle || fileMeta?.name || ''}
             annotations={lib.annotations.filter(
               (a) => a.caseId === CORPUS_ARTICLES_ID && (!a.fileId || a.fileId === activeId)
             )}
+            collapsed={annoCollapsed}
+            onToggleCollapsed={setAnnoCollapsed}
+            onExportToNotes={async () => {
+              if (!activeId && !fileMeta?.name) {
+                throw new Error('Open an article first.')
+              }
+              const annotations = lib.annotations.filter(
+                (a) =>
+                  a.caseId === CORPUS_ARTICLES_ID && (!a.fileId || a.fileId === activeId)
+              )
+              const result = exportArticleTakeawaysToNotes({
+                fileId: activeId,
+                fileName: fileMeta?.name || '',
+                title: activeTitle || fileMeta?.name || 'Article',
+                annotations,
+              })
+              window.setTimeout(() => navigate(result.notesPath), 450)
+              return result
+            }}
             onAdd={({ page: p, text }) =>
               lib.upsertAnnotation({
                 caseId: CORPUS_ARTICLES_ID,

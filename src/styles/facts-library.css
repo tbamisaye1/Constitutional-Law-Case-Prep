@@ -3917,3 +3917,286 @@ button.ai-ev-card:disabled {
   gap: 6px;
   margin-top: 10px;
 }
+
+/* —— Articles shelf collapse + takeaways review —— */
+
+.articles-shelf-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-bottom: 0;
+}
+
+.articles-shelf:not(.is-collapsed) .articles-shelf-bar {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.articles-shelf.is-collapsed {
+  padding: 8px 12px;
+}
+
+.articles-shelf-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.articles-shelf-toggle:hover {
+  border-color: var(--ink);
+}
+
+.articles-shelf-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 180px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.articles-shelf-current-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.articles-shelf-current-empty {
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.articles-shelf .articles-add {
+  margin-left: 0;
+}
+
+.articles-shelf:not(.is-collapsed) .articles-shelf-list {
+  max-height: min(220px, 28vh);
+}
+
+.library-read.articles-read {
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.95fr);
+}
+
+.library-read.articles-read.anno-collapsed {
+  grid-template-columns: minmax(0, 1fr) 52px;
+}
+
+.anno-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.anno-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.anno-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.anno-export-flash {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.anno-panel.is-collapsed {
+  min-height: 520px;
+  padding: 10px 6px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.anno-rail-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  padding: 8px 4px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.anno-rail-toggle:hover {
+  color: var(--ink);
+}
+
+.anno-panel .anno-list {
+  max-height: min(72vh, 720px);
+}
+
+.takeaways-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 480;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+
+.takeaways-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(28, 30, 28, 0.42);
+  cursor: pointer;
+}
+
+.takeaways-sheet {
+  position: relative;
+  z-index: 1;
+  width: min(640px, 100vw);
+  height: 100%;
+  background: var(--paper);
+  border-left: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.12);
+}
+
+.takeaways-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--rule-soft);
+  flex-shrink: 0;
+}
+
+.takeaways-kicker {
+  margin: 0 0 4px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.takeaways-head h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.takeaways-sub {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.takeaways-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.takeaways-flash {
+  margin: 0;
+  padding: 8px 20px;
+  font-size: 11px;
+  background: var(--gold-soft);
+  color: var(--ink);
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.takeaways-body {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 20px 40px;
+}
+
+.takeaways-empty {
+  color: var(--ink-3);
+  font-size: 14px;
+}
+
+.takeaways-page {
+  margin: 18px 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.takeaways-card:first-child .takeaways-page {
+  margin-top: 0;
+}
+
+.takeaways-card-inner {
+  padding: 12px 14px;
+  border: 1px solid var(--rule-soft);
+  border-left-width: 3px;
+  border-left-color: var(--rule);
+  background: var(--paper-2);
+  margin-bottom: 10px;
+}
+
+.takeaways-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.takeaways-note {
+  margin: 8px 0 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+.takeaways-note.empty {
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+@media (max-width: 900px) {
+  .library-read.articles-read,
+  .library-read.articles-read.anno-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .anno-panel.is-collapsed {
+    min-height: 0;
+  }
+
+  .anno-rail-toggle {
+    writing-mode: horizontal-tb;
+    flex-direction: row;
+  }
+
+  .takeaways-sheet {
+    width: 100vw;
+  }
+}
