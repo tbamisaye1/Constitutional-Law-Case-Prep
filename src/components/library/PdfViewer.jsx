@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Document, Page, pdfjs } from 'react-pdf'
 import {
@@ -92,6 +92,7 @@ export function PdfViewer({
   const focusKeyRef = useRef('')
   const lastFocusHighlightRef = useRef('')
   const objectUrlRef = useRef('')
+  const textLayerRenderedRef = useRef(null)
   const { openBubble } = useAiUi()
 
   const pageBookmarked = useMemo(
@@ -324,7 +325,8 @@ export function PdfViewer({
 
   function applySearchHighlights() {
     if (!searchQuery.trim() || !searchMatches.length) {
-      setSearchHits([])
+      // A fresh [] would re-render, rebuild the text layer, and call this again forever.
+      setSearchHits((prev) => (prev.length ? [] : prev))
       return
     }
     const pageEl = stageRef.current?.querySelector('.react-pdf__Page')
@@ -403,6 +405,17 @@ export function PdfViewer({
     if (!searchQuery || !searchMatches.length) return
     requestAnimationFrame(() => applySearchHighlights())
   }, [page, searchQuery, activeMatch, searchMatches.length, scale]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // react-pdf rebuilds the whole text layer whenever this callback changes identity,
+  // which destroys any live text selection, so it must stay stable across renders.
+  textLayerRenderedRef.current = () => {
+    applyFocusQuote()
+    applySearchHighlights()
+  }
+  const onTextLayerRendered = useCallback(() => {
+    // Text layer paints after this callback; wait one frame so spans exist.
+    requestAnimationFrame(() => textLayerRenderedRef.current?.())
+  }, [])
 
   function onMouseUp() {
     if (!onHighlight) return
@@ -755,13 +768,7 @@ export function PdfViewer({
               renderTextLayer
               renderAnnotationLayer
               loading={<p className="pdf-loading mono">Rendering page…</p>}
-              onRenderTextLayerSuccess={() => {
-                // Text layer paints after this callback; wait one frame so spans exist.
-                requestAnimationFrame(() => {
-                  applyFocusQuote()
-                  applySearchHighlights()
-                })
-              }}
+              onRenderTextLayerSuccess={onTextLayerRendered}
             />
           </Document>
 
