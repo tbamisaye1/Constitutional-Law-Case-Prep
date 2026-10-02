@@ -179,3 +179,55 @@ export function movePages(nodes, dragIds, parentId, index) {
 
   return insert(root)
 }
+
+/**
+ * Lift a nested page (and its children) to the section root, right after the
+ * top-level ancestor it came from. No-op when the page is already top-level.
+ */
+export function promotePage(nodes, id) {
+  const list = nodes || []
+  if (!id) return list
+
+  const path = findPath(list, id)
+  if (!path || path.length < 2) return list
+
+  const rootAncestorId = path[0]
+  let moved = null
+
+  function remove(siblings) {
+    const next = []
+    for (const n of siblings) {
+      if (n.id === id) {
+        moved = n
+        continue
+      }
+      if (n.children?.length) next.push({ ...n, children: remove(n.children) })
+      else next.push(n)
+    }
+    return next
+  }
+
+  const without = remove(list)
+  if (!moved) return list
+
+  const rootIndex = without.findIndex((n) => n.id === rootAncestorId)
+  if (rootIndex === -1) return [...without, moved]
+  return [
+    ...without.slice(0, rootIndex + 1),
+    moved,
+    ...without.slice(rootIndex + 1),
+  ]
+}
+
+/** Ids from root ancestor down to `id` (inclusive), or null if missing. */
+export function findPath(nodes, id, trail = []) {
+  for (const n of nodes || []) {
+    const next = [...trail, n.id]
+    if (n.id === id) return next
+    if (n.children?.length) {
+      const hit = findPath(n.children, id, next)
+      if (hit) return hit
+    }
+  }
+  return null
+}

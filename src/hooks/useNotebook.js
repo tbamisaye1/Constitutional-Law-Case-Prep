@@ -9,6 +9,7 @@ import {
   mapPages,
   movePages,
   pickPageAfterDelete,
+  promotePage,
   removePage,
 } from '../lib/pageTree'
 
@@ -180,6 +181,21 @@ export function useNotebook() {
     [sectionId]
   )
 
+  /**
+   * Lift a nested page to the section root (keeps its own subpages).
+   * No-op for pages that are already top-level.
+   */
+  const promotePageToMain = useCallback(
+    (id) => {
+      if (!sectionId || !id) return
+      setPagesBySection((prev) => ({
+        ...prev,
+        [sectionId]: promotePage(prev[sectionId] || [], id),
+      }))
+    },
+    [sectionId]
+  )
+
   const addSection = useCallback((parentGroupId) => {
     const id = `sec-${Date.now()}`
     const color = SECTION_COLORS[Math.floor(Math.random() * SECTION_COLORS.length)]
@@ -248,6 +264,7 @@ export function useNotebook() {
     addSubpage,
     deletePage,
     reorderPages,
+    promotePageToMain,
     addSection,
     addSectionGroup,
     renameTreeNode,

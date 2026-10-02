@@ -101,6 +101,7 @@ export function NotesPage() {
               onSelectPage={nb.selectPage}
               onAddPage={nb.addPage}
               onAddSubpage={nb.addSubpage}
+              onPromotePage={nb.promotePageToMain}
               onDeletePage={nb.deletePage}
               onMovePages={nb.reorderPages}
               sectionName={sectionName}

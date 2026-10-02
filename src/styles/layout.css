@@ -699,13 +699,14 @@
 }
 
 .page-delete,
-.page-subpage {
+.page-subpage,
+.page-promote {
   flex-shrink: 0;
   opacity: 0;
   border: none;
   background: transparent;
   color: var(--ink-3);
-  padding: 0 10px;
+  padding: 0 8px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -714,7 +715,9 @@
 .page-row:hover .page-delete,
 .page-row.on .page-delete,
 .page-row:hover .page-subpage,
-.page-row.on .page-subpage {
+.page-row.on .page-subpage,
+.page-row:hover .page-promote,
+.page-row.on .page-promote {
   opacity: 1;
 }
 
@@ -722,8 +725,38 @@
   color: var(--two, #a33);
 }
 
-.page-subpage:hover {
+.page-subpage:hover,
+.page-promote:hover {
   color: var(--ink);
+}
+
+.page-row.is-nested .page-card {
+  border-left: 2px solid var(--rule);
+  padding-left: 10px;
+}
+
+.page-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.page-card-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-nest-badge {
+  flex-shrink: 0;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border: 1px solid var(--rule-soft);
+  padding: 1px 5px;
+  line-height: 1.3;
 }
 
 .page-card strong {

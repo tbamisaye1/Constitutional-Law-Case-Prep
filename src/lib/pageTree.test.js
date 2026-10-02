@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   findPage,
+  findPath,
   firstPageId,
   insertAfter,
   insertAsChild,
   movePages,
   pickPageAfterDelete,
+  promotePage,
   removePage,
 } from './pageTree'
 
@@ -17,7 +19,12 @@ const sample = [
     html: '<p>b</p>',
     children: [
       { id: 'b1', title: 'B1', html: '<p>b1</p>' },
-      { id: 'b2', title: 'B2', html: '<p>b2</p>' },
+      {
+        id: 'b2',
+        title: 'B2',
+        html: '<p>b2</p>',
+        children: [{ id: 'b2a', title: 'B2a', html: '<p>b2a</p>' }],
+      },
     ],
   },
   { id: 'c', title: 'C', html: '<p>c</p>' },
@@ -64,11 +71,34 @@ describe('pageTree', () => {
   it('removes a page and its subpages', () => {
     const { tree, removedIds } = removePage(sample, 'b')
     expect(tree.map((p) => p.id)).toEqual(['a', 'c'])
-    expect([...removedIds].sort()).toEqual(['b', 'b1', 'b2'])
+    expect([...removedIds].sort()).toEqual(['b', 'b1', 'b2', 'b2a'])
   })
 
   it('picks the next sibling after delete', () => {
     expect(pickPageAfterDelete(sample, 'a')).toBe('b')
     expect(firstPageId(sample)).toBe('a')
+  })
+
+  it('promotes a subpage to the root after its top-level ancestor', () => {
+    const next = promotePage(sample, 'b1')
+    expect(next.map((p) => p.id)).toEqual(['a', 'b', 'b1', 'c'])
+    expect(findPage(next, 'b').children.map((p) => p.id)).toEqual(['b2'])
+    expect(findPage(next, 'b1').children || []).toEqual([])
+  })
+
+  it('promotes a deeply nested page and keeps its children', () => {
+    const next = promotePage(sample, 'b2')
+    expect(next.map((p) => p.id)).toEqual(['a', 'b', 'b2', 'c'])
+    expect(findPage(next, 'b2').children.map((p) => p.id)).toEqual(['b2a'])
+    expect(findPage(next, 'b').children.map((p) => p.id)).toEqual(['b1'])
+  })
+
+  it('does nothing when promoting a top-level page', () => {
+    expect(promotePage(sample, 'a')).toEqual(sample)
+  })
+
+  it('finds the path from root to a nested page', () => {
+    expect(findPath(sample, 'b2a')).toEqual(['b', 'b2', 'b2a'])
+    expect(findPath(sample, 'missing')).toBeNull()
   })
 })
