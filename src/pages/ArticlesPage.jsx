@@ -731,13 +731,13 @@ export function ArticlesPage() {
               window.setTimeout(() => navigate(result.notesPath), 450)
               return result
             }}
-            onAdd={({ page: p, text }) =>
+            onAdd={({ page: p, text, kind }) =>
               lib.upsertAnnotation({
                 caseId: CORPUS_ARTICLES_ID,
                 fileId: activeId,
-                page: p,
+                page: kind === 'general' ? 0 : p,
                 text,
-                kind: 'page',
+                kind: kind || 'page',
               })
             }
             onUpdate={(id, patch) => lib.updateAnnotation(id, patch)}

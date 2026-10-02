@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareAnnotations } from './AnnotationPanel'
+import { compareAnnotations, isGeneralAnnotation } from './AnnotationPanel'
 
 describe('compareAnnotations', () => {
   it('keeps pinned notes above everything else', () => {
@@ -35,5 +35,12 @@ describe('compareAnnotations', () => {
       'lower',
       'page',
     ])
+  })
+
+  it('puts general article notes before page-linked notes', () => {
+    const general = { id: 'g', kind: 'general', page: 0, text: 'themes', savedAt: 1 }
+    const page = { id: 'p', kind: 'page', page: 1, text: 'on page', savedAt: 9 }
+    expect(isGeneralAnnotation(general)).toBe(true)
+    expect([page, general].sort(compareAnnotations).map((a) => a.id)).toEqual(['g', 'p'])
   })
 })

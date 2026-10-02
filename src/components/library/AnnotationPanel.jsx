@@ -25,6 +25,11 @@ import {
 
 const PAGE_SIZE = 24
 
+/** Article-level note: not tied to a PDF page or highlight. */
+export function isGeneralAnnotation(annotation) {
+  return annotation?.kind === 'general' || Number(annotation?.page) === 0
+}
+
 /** Top-most rect on the page (fractional 0–1). Missing rects sort after positioned highlights. */
 function highlightTop(annotation) {
   const rects = annotation?.rects
@@ -39,13 +44,18 @@ function highlightLeft(annotation) {
 }
 
 /**
- * Reading order on a page: pinned first, then page number, then highlight
- * position top→bottom / left→right. Page notes without rects follow highlights
- * on that page, then fall back to most recently edited.
+ * Reading order: pinned first, then general (article-level) notes, then by
+ * page, then highlight position top→bottom / left→right. Page notes without
+ * rects follow highlights on that page, then fall back to most recently edited.
  */
 export function compareAnnotations(a, b) {
   const pinDiff = Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))
   if (pinDiff) return pinDiff
+
+  const aGeneral = isGeneralAnnotation(a)
+  const bGeneral = isGeneralAnnotation(b)
+  if (aGeneral !== bGeneral) return aGeneral ? -1 : 1
+  if (aGeneral && bGeneral) return (b.savedAt || 0) - (a.savedAt || 0)
 
   if (a.page !== b.page) return a.page - b.page
 
@@ -95,7 +105,9 @@ function AnnotationItem({
   const text = a.text || ''
   const preview = previewText(text)
   const color = highlightColorMeta(a.color)
-  const isHighlight = a.kind === 'highlight' || Boolean(a.quote)
+  const isGeneral = isGeneralAnnotation(a)
+  const isHighlight = !isGeneral && (a.kind === 'highlight' || Boolean(a.quote))
+  const onCurrentPage = !isGeneral && a.page === currentPage
 
   useEffect(() => {
     if (expanded) resizeTextarea(textRef.current)
@@ -112,7 +124,8 @@ function AnnotationItem({
       data-anno-id={a.id}
       className={[
         'anno-item',
-        a.page === currentPage ? 'on' : '',
+        onCurrentPage ? 'on' : '',
+        isGeneral ? 'general' : '',
         a.pinned ? 'pinned' : '',
         focused ? 'focused' : '',
         expanded ? 'expanded' : 'compact',
@@ -122,23 +135,31 @@ function AnnotationItem({
       style={isHighlight ? { borderLeftColor: color.solid, borderLeftWidth: 3 } : undefined}
     >
       <div className="anno-side">
-        <button
-          type="button"
-          className="anno-jump"
-          title="Go to this place in the PDF"
-          onClick={() => onJump?.(a)}
-        >
-          <span className="mono">p. {a.page}</span>
-        </button>
-        <button
-          type="button"
-          className="icon-btn soft"
-          aria-label="Go to this highlight in the PDF"
-          title="Go to highlight"
-          onClick={() => onJump?.(a)}
-        >
-          <LocateFixed size={14} />
-        </button>
+        {isGeneral ? (
+          <span className="anno-jump mono anno-general-label" title="Article-level note">
+            All
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="anno-jump"
+            title="Go to this place in the PDF"
+            onClick={() => onJump?.(a)}
+          >
+            <span className="mono">p. {a.page}</span>
+          </button>
+        )}
+        {!isGeneral ? (
+          <button
+            type="button"
+            className="icon-btn soft"
+            aria-label="Go to this highlight in the PDF"
+            title="Go to highlight"
+            onClick={() => onJump?.(a)}
+          >
+            <LocateFixed size={14} />
+          </button>
+        ) : null}
         <button
           type="button"
           className={a.pinned ? 'icon-btn soft pinned-btn on' : 'icon-btn soft pinned-btn'}
@@ -187,9 +208,11 @@ function AnnotationItem({
             onChange={(e) => onUpdate(a.id, { text: e.target.value })}
             onBlur={() => onFlush?.()}
             placeholder={
-              a.quote
-                ? 'Your note on this highlight…'
-                : 'Quote scrap, rule left behind, how you will use it…'
+              isGeneral
+                ? 'Overall takeaways, themes, how this article fits the case…'
+                : a.quote
+                  ? 'Your note on this highlight…'
+                  : 'Quote scrap, rule left behind, how you will use it…'
             }
           />
         ) : (
@@ -200,7 +223,11 @@ function AnnotationItem({
           >
             {preview || (
               <span className="anno-preview-empty">
-                {a.quote ? 'Add a note on this highlight…' : 'Empty page note. Click to edit.'}
+                {isGeneral
+                  ? 'Empty general note. Click to edit.'
+                  : a.quote
+                    ? 'Add a note on this highlight…'
+                    : 'Empty page note. Click to edit.'}
               </span>
             )}
           </button>
@@ -209,7 +236,7 @@ function AnnotationItem({
         <div className="anno-card-foot">
           <span className="anno-kind mono">
             {a.pinned ? 'pinned · ' : ''}
-            {isHighlight ? 'highlight' : 'page note'}
+            {isGeneral ? 'general' : isHighlight ? 'highlight' : 'page note'}
           </span>
           <button
             type="button"
@@ -258,7 +285,8 @@ function TakeawaysCard({ annotation: a, onJump, onUpdate, onFlush, onTogglePin }
   const textRef = useRef(null)
   const text = a.text || ''
   const color = highlightColorMeta(a.color)
-  const isHighlight = a.kind === 'highlight' || Boolean(a.quote)
+  const isGeneral = isGeneralAnnotation(a)
+  const isHighlight = !isGeneral && (a.kind === 'highlight' || Boolean(a.quote))
 
   useEffect(() => {
     resizeTextarea(textRef.current)
@@ -266,15 +294,15 @@ function TakeawaysCard({ annotation: a, onJump, onUpdate, onFlush, onTogglePin }
 
   return (
     <article
-      className="takeaways-card-inner"
+      className={isGeneral ? 'takeaways-card-inner is-general' : 'takeaways-card-inner'}
       style={isHighlight ? { borderLeftColor: color.solid } : undefined}
       data-anno-id={a.id}
     >
       <div className="takeaways-card-meta">
         <span className="anno-kind mono">
           {a.pinned ? 'pinned · ' : ''}
-          {isHighlight ? 'highlight' : 'page note'}
-          {' · '}p. {a.page}
+          {isGeneral ? 'general note' : isHighlight ? 'highlight' : 'page note'}
+          {!isGeneral ? ` · p. ${a.page}` : ''}
         </span>
         <div className="takeaways-card-actions">
           <button
@@ -285,9 +313,11 @@ function TakeawaysCard({ annotation: a, onJump, onUpdate, onFlush, onTogglePin }
           >
             {a.pinned ? <PinOff size={14} /> : <Pin size={14} />}
           </button>
-          <button type="button" className="anno-expand-btn" onClick={() => onJump?.(a)}>
-            <LocateFixed size={14} /> Go to PDF
-          </button>
+          {!isGeneral ? (
+            <button type="button" className="anno-expand-btn" onClick={() => onJump?.(a)}>
+              <LocateFixed size={14} /> Go to PDF
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -307,7 +337,7 @@ function TakeawaysCard({ annotation: a, onJump, onUpdate, onFlush, onTogglePin }
         id={`takeaway-text-${a.id}`}
         ref={textRef}
         className="takeaways-note-edit"
-        rows={Math.min(12, Math.max(3, text.split('\n').length + 1))}
+        rows={Math.min(12, Math.max(isGeneral ? 5 : 3, text.split('\n').length + 1))}
         value={text}
         onChange={(e) => {
           onUpdate?.(a.id, { text: e.target.value })
@@ -315,9 +345,11 @@ function TakeawaysCard({ annotation: a, onJump, onUpdate, onFlush, onTogglePin }
         }}
         onBlur={() => onFlush?.()}
         placeholder={
-          a.quote
-            ? 'What this highlight means / how you will use it…'
-            : 'Reading goals, rules, takeaways…'
+          isGeneral
+            ? 'Overall takeaways, themes, how this article fits the case…'
+            : a.quote
+              ? 'What this highlight means / how you will use it…'
+              : 'Reading goals, rules, takeaways…'
         }
       />
 
@@ -360,16 +392,22 @@ function TakeawaysReview({
   exportMessage,
 }) {
   const [query, setQuery] = useState('')
-  const [kind, setKind] = useState('all') // all | highlight | page
-  const [activePage, setActivePage] = useState(null)
+  const [kind, setKind] = useState('all') // all | general | highlight | page
+  const [activePage, setActivePage] = useState(null) // null | 'general' | number
   const bodyRef = useRef(null)
   const searchRef = useRef(null)
 
   const sorted = useMemo(() => [...annotations].sort(compareAnnotations), [annotations])
 
+  const generalNotes = useMemo(
+    () => sorted.filter((a) => isGeneralAnnotation(a)),
+    [sorted]
+  )
+
   const pageIndex = useMemo(() => {
     const map = new Map()
     for (const a of sorted) {
+      if (isGeneralAnnotation(a)) continue
       const p = Number(a.page) || 1
       map.set(p, (map.get(p) || 0) + 1)
     }
@@ -379,10 +417,15 @@ function TakeawaysReview({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return sorted.filter((a) => {
-      const isHighlight = a.kind === 'highlight' || Boolean(a.quote)
+      const isGeneral = isGeneralAnnotation(a)
+      const isHighlight = !isGeneral && (a.kind === 'highlight' || Boolean(a.quote))
+      if (kind === 'general' && !isGeneral) return false
       if (kind === 'highlight' && !isHighlight) return false
-      if (kind === 'page' && isHighlight) return false
-      if (activePage != null && Number(a.page) !== activePage) return false
+      if (kind === 'page' && (isGeneral || isHighlight)) return false
+      if (activePage === 'general' && !isGeneral) return false
+      if (typeof activePage === 'number' && (isGeneral || Number(a.page) !== activePage)) {
+        return false
+      }
       if (!q) return true
       const hay = `${a.quote || ''} ${a.text || ''}`.toLowerCase()
       return hay.includes(q)
@@ -422,7 +465,15 @@ function TakeawaysReview({
     })
   }
 
-  let lastPage = null
+  function jumpToGeneral() {
+    setActivePage('general')
+    requestAnimationFrame(() => {
+      const el = bodyRef.current?.querySelector('[data-page-header="general"]')
+      el?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    })
+  }
+
+  let lastSection = null
 
   return (
     <div className="takeaways-overlay" role="dialog" aria-modal="true" aria-label="Article takeaways">
@@ -474,6 +525,7 @@ function TakeawaysReview({
           <div className="takeaways-kind" role="group" aria-label="Filter by kind">
             {[
               { id: 'all', label: 'All' },
+              { id: 'general', label: 'General' },
               { id: 'highlight', label: 'Highlights' },
               { id: 'page', label: 'Page notes' },
             ].map((opt) => (
@@ -489,14 +541,14 @@ function TakeawaysReview({
           </div>
           {activePage != null ? (
             <button type="button" className="btn-soft" onClick={() => setActivePage(null)}>
-              Show all pages
+              Show all
             </button>
           ) : null}
         </div>
 
         <div className="takeaways-layout">
           <aside className="takeaways-nav" aria-label="Pages with notes">
-            <p className="mono takeaways-nav-label">Pages</p>
+            <p className="mono takeaways-nav-label">Jump</p>
             <button
               type="button"
               className={activePage == null ? 'takeaways-nav-item on' : 'takeaways-nav-item'}
@@ -506,6 +558,15 @@ function TakeawaysReview({
               }}
             >
               All <span className="mono">{sorted.length}</span>
+            </button>
+            <button
+              type="button"
+              className={
+                activePage === 'general' ? 'takeaways-nav-item on' : 'takeaways-nav-item'
+              }
+              onClick={jumpToGeneral}
+            >
+              General <span className="mono">{generalNotes.length}</span>
             </button>
             {pageIndex.map(([pageNum, count]) => (
               <button
@@ -525,23 +586,24 @@ function TakeawaysReview({
             {filtered.length === 0 ? (
               <p className="takeaways-empty">
                 {sorted.length === 0
-                  ? 'No highlights or page notes yet on this article.'
+                  ? 'No notes yet. Add a general note, a page note, or highlight text in the PDF.'
                   : 'Nothing matches that search or filter.'}
               </p>
             ) : (
               filtered.map((a) => {
-                const pageNum = Number(a.page) || 1
-                const showPage = pageNum !== lastPage
-                lastPage = pageNum
+                const isGeneral = isGeneralAnnotation(a)
+                const sectionKey = isGeneral ? 'general' : String(Number(a.page) || 1)
+                const showSection = sectionKey !== lastSection
+                lastSection = sectionKey
                 return (
                   <div key={a.id} className="takeaways-card">
-                    {showPage ? (
+                    {showSection ? (
                       <h3
                         className="takeaways-page mono"
-                        data-page-header={pageNum}
-                        id={`takeaways-page-${pageNum}`}
+                        data-page-header={sectionKey}
+                        id={`takeaways-page-${sectionKey}`}
                       >
-                        Page {pageNum}
+                        {isGeneral ? 'General notes' : `Page ${Number(a.page) || 1}`}
                       </h3>
                     ) : null}
                     <TakeawaysCard
@@ -586,7 +648,7 @@ export function AnnotationPanel({
   collapsed = false,
   onToggleCollapsed = null,
 }) {
-  const [scope, setScope] = useState('all') // all | page
+  const [scope, setScope] = useState('all') // all | page | general
   const [listPage, setListPage] = useState(1)
   const [expandedIds, setExpandedIds] = useState(() => new Set())
   const [expandAll, setExpandAll] = useState(false)
@@ -600,15 +662,23 @@ export function AnnotationPanel({
     [annotations, caseId]
   )
 
+  const generalNotes = useMemo(
+    () => forCase.filter((a) => isGeneralAnnotation(a)),
+    [forCase]
+  )
+
   const filtered = useMemo(() => {
-    if (scope === 'page') return forCase.filter((a) => a.page === page)
+    if (scope === 'general') return generalNotes
+    if (scope === 'page') {
+      return forCase.filter((a) => !isGeneralAnnotation(a) && a.page === page)
+    }
     return forCase
-  }, [forCase, scope, page])
+  }, [forCase, generalNotes, scope, page])
 
   const totalListPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safeListPage = Math.min(listPage, totalListPages)
   const slice = filtered.slice((safeListPage - 1) * PAGE_SIZE, safeListPage * PAGE_SIZE)
-  const onThisPage = forCase.filter((a) => a.page === page)
+  const onThisPage = forCase.filter((a) => !isGeneralAnnotation(a) && a.page === page)
 
   useEffect(() => {
     setListPage(1)
@@ -703,7 +773,26 @@ export function AnnotationPanel({
               <PanelRightClose size={15} />
             </button>
           ) : null}
-          <button type="button" className="btn-ink" onClick={() => onAdd({ page, text: '' })}>
+          <button
+            type="button"
+            className="btn-soft"
+            title="Add a note for the whole article (not tied to a page)"
+            onClick={() => {
+              onAdd({ page: 0, text: '', kind: 'general' })
+              setScope('general')
+            }}
+          >
+            <Plus size={14} /> General
+          </button>
+          <button
+            type="button"
+            className="btn-ink"
+            title={`Add a note on page ${page}`}
+            onClick={() => {
+              onAdd({ page, text: '', kind: 'page' })
+              setScope('page')
+            }}
+          >
             <Plus size={14} /> Page {page}
           </button>
         </div>
@@ -741,7 +830,14 @@ export function AnnotationPanel({
           className={scope === 'all' ? 'on' : ''}
           onClick={() => setScope('all')}
         >
-          All notes ({forCase.length})
+          All ({forCase.length})
+        </button>
+        <button
+          type="button"
+          className={scope === 'general' ? 'on' : ''}
+          onClick={() => setScope('general')}
+        >
+          General ({generalNotes.length})
         </button>
         <button
           type="button"
@@ -767,8 +863,9 @@ export function AnnotationPanel({
       </div>
 
       <p className="anno-hint mono">
-        Click a note or locate to jump in the PDF. Review takeaways for a wider scan. Send to Notes
-        keeps one page per article under Notes → Articles.
+        General notes cover the whole article. Page notes and highlights stay tied to the PDF.
+        Review takeaways for a wider edit/scan. Send to Notes keeps one page per article under
+        Notes → Articles.
       </p>
 
       <ul className="anno-list" ref={listRef}>
@@ -776,7 +873,9 @@ export function AnnotationPanel({
           <li className="anno-empty">
             {scope === 'page'
               ? 'No notes on this page yet.'
-              : 'No notes yet. Add a page note or highlight text in the PDF.'}
+              : scope === 'general'
+                ? 'No general notes yet. Add one for themes and overall takeaways.'
+                : 'No notes yet. Add a general note, a page note, or highlight text in the PDF.'}
           </li>
         ) : (
           slice.map((a) => (

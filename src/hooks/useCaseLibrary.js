@@ -890,7 +890,13 @@ export function useCaseLibrary() {
           id,
           caseId: payload.caseId,
           fileId: payload.fileId || null,
-          page: payload.page || 1,
+          // page 0 = article-level general note (not tied to a PDF page)
+          page:
+            payload.kind === 'general'
+              ? 0
+              : Number.isFinite(payload.page)
+                ? payload.page
+                : 1,
           text: payload.text || '',
           quote: payload.quote || '',
           rects: payload.rects || null,

@@ -5,7 +5,7 @@
 
 import { SEED_PAGES, SEED_TREE, SECTION_COLORS } from '../data/notebookSeed'
 import { readJson, writeJson } from './persist'
-import { compareAnnotations } from '../components/library/AnnotationPanel'
+import { compareAnnotations, isGeneralAnnotation } from '../components/library/AnnotationPanel'
 import { findPage, mapPages } from './pageTree'
 
 export const NOTEBOOK_STORAGE_KEY = 'case-prep-notebook-v3'
@@ -61,26 +61,31 @@ export function formatArticleTakeawaysHtml({
   }
 
   if (!sorted.length) {
-    parts.push('<p>No highlights or page notes yet.</p>')
+    parts.push('<p>No highlights or notes yet.</p>')
     return parts.join('')
   }
 
-  let lastPage = null
+  let lastSection = null
   for (const row of sorted) {
-    const page = Number(row.page) || 1
-    if (page !== lastPage) {
-      parts.push(`<h3>Page ${page}</h3>`)
-      lastPage = page
+    const isGeneral = isGeneralAnnotation(row)
+    const sectionKey = isGeneral ? 'general' : `page-${Number(row.page) || 1}`
+    if (sectionKey !== lastSection) {
+      parts.push(isGeneral ? '<h3>General notes</h3>' : `<h3>Page ${Number(row.page) || 1}</h3>`)
+      lastSection = sectionKey
     }
 
-    const isHighlight = row.kind === 'highlight' || Boolean(row.quote)
+    const isHighlight = !isGeneral && (row.kind === 'highlight' || Boolean(row.quote))
     const label = row.pinned
-      ? isHighlight
-        ? 'Pinned highlight'
-        : 'Pinned page note'
-      : isHighlight
-        ? 'Highlight'
-        : 'Page note'
+      ? isGeneral
+        ? 'Pinned general note'
+        : isHighlight
+          ? 'Pinned highlight'
+          : 'Pinned page note'
+      : isGeneral
+        ? 'General note'
+        : isHighlight
+          ? 'Highlight'
+          : 'Page note'
 
     parts.push(`<h4>${label}</h4>`)
     if (row.quote) {

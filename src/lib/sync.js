@@ -136,7 +136,7 @@ export function collectChanges(store, syncMeta) {
         id: row.id,
         caseId: row.caseId,
         fileId: row.fileId || null,
-        page: row.page || 1,
+        page: row.kind === 'general' ? 0 : row.page || 1,
         kind: row.kind || 'page',
         quote: row.quote || '',
         text: row.text || '',

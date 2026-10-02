@@ -57,6 +57,12 @@ describe('articleTakeaways', () => {
           rects: [{ top: 0.2, left: 0.1, width: 0.3, height: 0.02 }],
         },
         {
+          id: 'a0',
+          page: 0,
+          kind: 'general',
+          text: 'Overall: Hamdi vs Milligan tension.',
+        },
+        {
           id: 'a1',
           page: 1,
           kind: 'page',
@@ -66,10 +72,13 @@ describe('articleTakeaways', () => {
     })
 
     expect(html).toContain('<h2>CRS report</h2>')
+    expect(html).toContain('<h3>General notes</h3>')
     expect(html).toContain('<h3>Page 1</h3>')
     expect(html).toContain('<h3>Page 2</h3>')
+    expect(html).toContain('Hamdi vs Milligan')
     expect(html).toContain('enemy belligerents')
     expect(html).toContain('Reading goals')
+    expect(html.indexOf('General notes')).toBeLessThan(html.indexOf('Page 1'))
   })
 
   it('upserts an Articles section page in the notebook store', () => {

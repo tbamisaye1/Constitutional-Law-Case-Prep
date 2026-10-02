@@ -4275,6 +4275,22 @@ button.ai-ev-card:disabled {
   margin-bottom: 14px;
 }
 
+.anno-item.general {
+  background: var(--paper);
+  border-left: 3px solid var(--ink-2);
+}
+
+.anno-general-label {
+  cursor: default;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.takeaways-card-inner.is-general {
+  border-left-color: var(--ink-2);
+  background: var(--paper);
+}
+
 .takeaways-card-meta {
   display: flex;
   align-items: center;

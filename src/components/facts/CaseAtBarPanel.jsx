@@ -135,13 +135,13 @@ export function CaseAtBarPanel({ lib }) {
               annotations={lib.annotations.filter(
                 (a) => a.caseId === CASE_AT_BAR_ID && (!a.fileId || a.fileId === activeId)
               )}
-              onAdd={({ page: p, text }) =>
+              onAdd={({ page: p, text, kind }) =>
                 lib.upsertAnnotation({
                   caseId: CASE_AT_BAR_ID,
                   fileId: activeId,
-                  page: p,
+                  page: kind === 'general' ? 0 : p,
                   text,
-                  kind: 'page',
+                  kind: kind || 'page',
                 })
               }
               onUpdate={(id, patch) => lib.updateAnnotation(id, patch)}

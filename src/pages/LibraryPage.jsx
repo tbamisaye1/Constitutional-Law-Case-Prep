@@ -467,13 +467,13 @@ export function LibraryPage() {
                   annotations={lib.annotations.filter(
                     (a) => a.caseId === selected.id && (!a.fileId || a.fileId === activeId)
                   )}
-                  onAdd={({ page: p, text }) =>
+                  onAdd={({ page: p, text, kind }) =>
                     lib.upsertAnnotation({
                       caseId: selected.id,
                       fileId: activeId,
-                      page: p,
+                      page: kind === 'general' ? 0 : p,
                       text,
-                      kind: 'page',
+                      kind: kind || 'page',
                     })
                   }
                   onUpdate={(id, patch) => lib.updateAnnotation(id, patch)}
