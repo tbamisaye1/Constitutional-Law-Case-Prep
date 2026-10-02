@@ -26,6 +26,7 @@ import 'react-pdf/dist/Page/TextLayer.css'
 import { useAiUi } from '../../ai/AiUiContext'
 import { findQuoteOnPage } from '../../lib/pdfQuoteFocus'
 import { findAllOnPage, searchPdfDocument } from '../../lib/pdfTextSearch'
+import { mergeHighlightRects } from '../../lib/mergeHighlightRects'
 import {
   DEFAULT_HIGHLIGHT_COLOR,
   HIGHLIGHT_COLORS,
@@ -442,14 +443,16 @@ export function PdfViewer({
       return
     }
 
-    const rects = [...range.getClientRects()]
-      .filter((r) => r.width > 0 && r.height > 0)
-      .map((r) => ({
-        top: (r.top - pageRect.top) / pageRect.height,
-        left: (r.left - pageRect.left) / pageRect.width,
-        width: r.width / pageRect.width,
-        height: r.height / pageRect.height,
-      }))
+    const rects = mergeHighlightRects(
+      [...range.getClientRects()]
+        .filter((r) => r.width > 1 && r.height > 1)
+        .map((r) => ({
+          top: (r.top - pageRect.top) / pageRect.height,
+          left: (r.left - pageRect.left) / pageRect.width,
+          width: r.width / pageRect.width,
+          height: r.height / pageRect.height,
+        }))
+    )
 
     if (!rects.length) return
 
@@ -479,6 +482,10 @@ export function PdfViewer({
     })
     setPending(null)
     window.getSelection()?.removeAllRanges()
+    // Drop focus outlines on highlight hit-targets so black boxes do not stick.
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
   }
 
   const activeOnPage =
@@ -790,7 +797,8 @@ export function PdfViewer({
                 {pageHighlights.map((h) => {
                   const color = highlightColorMeta(h.color)
                   const pulsing = pulseHighlightId === h.id
-                  return (h.rects || []).map((r, i) => (
+                  const bands = mergeHighlightRects(h.rects || [])
+                  return bands.map((r, i) => (
                     <button
                       key={`${h.id}-${i}`}
                       type="button"
@@ -810,6 +818,7 @@ export function PdfViewer({
                         event.preventDefault()
                         event.stopPropagation()
                         onSelectHighlight?.(h.id)
+                        event.currentTarget.blur()
                       }}
                     />
                   ))

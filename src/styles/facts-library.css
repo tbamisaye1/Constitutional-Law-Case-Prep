@@ -2526,27 +2526,39 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   position: absolute;
   background: rgba(156, 122, 34, 0.28);
   mix-blend-mode: multiply;
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
 
 .pdf-hl-hit {
   pointer-events: auto;
+  appearance: none;
+  -webkit-appearance: none;
   border: none;
   padding: 0;
   margin: 0;
   cursor: pointer;
   mix-blend-mode: multiply;
+  /* Global :focus-visible outlines read as thick black boxes on every line
+     fragment and stick after click. Keep hits quiet. */
+  outline: none !important;
+  box-shadow: none;
 }
 
-.pdf-hl-hit:hover,
-.pdf-hl-hit:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 1px;
+.pdf-hl-hit:hover {
   filter: brightness(0.92);
 }
 
+.pdf-hl-hit:focus,
+.pdf-hl-hit:focus-visible {
+  outline: none !important;
+  box-shadow: none;
+  filter: brightness(0.9);
+}
+
 .pdf-hl-pulse {
-  outline: 2px solid var(--ink);
-  outline-offset: 1px;
+  outline: none !important;
   animation: pdf-hl-pulse 1.6s ease-out 1;
   z-index: 2;
 }
