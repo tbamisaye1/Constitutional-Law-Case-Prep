@@ -44,7 +44,7 @@ export function PageList({
             width={treeWidth}
             height={treeHeight}
             indent={12}
-            rowHeight={64}
+            rowHeight={82}
             openByDefault
             selection={activePageId || undefined}
             className="page-tree-list"
