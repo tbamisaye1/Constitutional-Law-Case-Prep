@@ -3402,6 +3402,13 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   color: var(--paper-2);
 }
 
+.ai-bubble-source {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.35;
+}
+
 .ai-bubble-quote {
   margin: 0 0 8px;
   padding: 8px 10px;

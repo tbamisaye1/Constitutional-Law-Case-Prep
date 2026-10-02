@@ -436,6 +436,7 @@ export function LibraryPage() {
                   fileName={fileMeta?.name}
                   page={page}
                   caseId={selected.id}
+                  fileId={activeId}
                   focusQuote={focusQuote}
                   emptyHint={emptyHint}
                   onPageChange={(p) => activeId && lib.setPage(activeId, p)}

@@ -61,7 +61,8 @@ export async function chatPrep(
   message,
   matterId = "bronner-2026",
   groundingSource = "documents",
-  selection = ""
+  selection = "",
+  options = {}
 ) {
   const body = {
     message,
@@ -70,6 +71,13 @@ export async function chatPrep(
   };
   const sel = typeof selection === "string" ? selection.trim() : "";
   if (sel) body.selection = sel;
+  const sourceFile =
+    typeof options?.source_file === "string" ? options.source_file.trim() : "";
+  if (sourceFile) body.source_file = sourceFile;
+  const page = options?.page;
+  if (page != null && Number.isFinite(Number(page)) && Number(page) > 0) {
+    body.page = Number(page);
+  }
 
   const res = await fetch(`${BASE}/chat`, {
     method: "POST",

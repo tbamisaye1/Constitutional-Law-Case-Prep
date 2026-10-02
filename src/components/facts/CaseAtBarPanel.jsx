@@ -105,6 +105,7 @@ export function CaseAtBarPanel({ lib }) {
               fileName={fileMeta?.name}
               page={page}
               caseId={CASE_AT_BAR_ID}
+              fileId={activeId}
               focusQuote={focusQuote}
               onPageChange={(p) => activeId && lib.setPage(activeId, p)}
               suggestedFile="Upload the case at bar PDF above"

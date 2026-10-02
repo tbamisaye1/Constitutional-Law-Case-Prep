@@ -44,6 +44,9 @@ export function AiSelectionBubble() {
   const webPlus = groundingSource === 'web_plus'
 
   const hasSelection = Boolean(ctx.selection?.trim())
+  const sourceFile = (ctx.source_file || '').trim()
+  const readingArticle = Boolean(sourceFile) || ctx.surface === 'pdf'
+  const showSideToggles = hasSelection && !readingArticle
   const showSamples = !hasSelection && !loading && !reply
   const sampleGroups = webPlus ? WEB_SAMPLE_PROMPT_GROUPS : SAMPLE_PROMPT_GROUPS
   const quickActions = webPlus ? WEB_SELECTION_QUICK : SELECTION_QUICK
@@ -137,18 +140,28 @@ export function AiSelectionBubble() {
 
         {hasSelection ? (
           <>
-            <div className="ai-side-row" role="group" aria-label="Side">
-              {['both', 'petitioner', 'respondent'].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className={ctx.side === s ? 'on' : ''}
-                  onClick={() => setCtx((c) => ({ ...c, side: s }))}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
+            {showSideToggles ? (
+              <div className="ai-side-row" role="group" aria-label="Side">
+                {['both', 'petitioner', 'respondent'].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={ctx.side === s ? 'on' : ''}
+                    onClick={() => setCtx((c) => ({ ...c, side: s }))}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {readingArticle ? (
+              <p className="ai-bubble-source mono">
+                From {sourceFile || 'this PDF'}
+                {ctx.page != null ? ` · p.${ctx.page}` : ''}
+                {' · '}
+                reading mode (not tied to petitioner/respondent)
+              </p>
+            ) : null}
             <blockquote className="ai-bubble-quote">
               “{ctx.selection.slice(0, 220)}
               {ctx.selection.length > 220 ? '…' : ''}”

@@ -24,6 +24,8 @@ export function AiUiProvider({ children }) {
     case_id: null,
     page: null,
     side: 'both',
+    source_file: '',
+    file_id: null,
   })
   const [groundingSource, setGroundingSource] = useState('documents')
   const [prompt, setPrompt] = useState('')
@@ -34,6 +36,8 @@ export function AiUiProvider({ children }) {
     setCtx((prev) => ({
       ...prev,
       matter_id: MATTER.id,
+      source_file: '',
+      file_id: null,
       ...partial,
     }))
     if (position) setAnchor(position)
@@ -67,7 +71,11 @@ export function AiUiProvider({ children }) {
           user_prompt,
           ctx.matter_id || MATTER.id,
           groundingSource,
-          ctx.selection || ''
+          ctx.selection || '',
+          {
+            source_file: ctx.source_file || '',
+            page: ctx.page,
+          }
         )
         const status = groundingStatusFromReply(data.grounding_status, data.reply)
         setReply({
@@ -92,7 +100,7 @@ export function AiUiProvider({ children }) {
         setLoading(false)
       }
     },
-    [ctx.matter_id, ctx.selection, prompt, groundingSource]
+    [ctx.matter_id, ctx.selection, ctx.source_file, ctx.page, prompt, groundingSource]
   )
 
   const askAi = useCallback(() => runPrompt(prompt), [prompt, runPrompt])

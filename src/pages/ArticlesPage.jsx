@@ -667,6 +667,7 @@ export function ArticlesPage() {
             fileName={fileMeta?.name}
             page={page}
             caseId={CORPUS_ARTICLES_ID}
+            fileId={activeId}
             focusQuote={focusQuote}
             onPageChange={(p) => {
               if (!activeId) return
