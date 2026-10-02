@@ -50,6 +50,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.vers
  * Optional reading bookmarks (`bookmarks` + `onAddBookmark` / `onRemoveBookmark`)
  * save a page so you can step away and jump back. Expand fills the viewport;
  * Download / Open in browser use the loaded PDF blob.
+ *
+ * Click an existing highlight to reopen Ask AI / color / remove. Hold Shift
+ * while selecting to drag through saved highlights.
  */
 export function PdfViewer({
   file,
@@ -60,6 +63,8 @@ export function PdfViewer({
   highlights = [],
   onHighlight,
   onSelectHighlight,
+  onUpdateHighlight = null,
+  onDeleteHighlight = null,
   caseId = null,
   fileId = null,
   focusQuote = '',
@@ -74,6 +79,8 @@ export function PdfViewer({
   const [error, setError] = useState('')
   const [pending, setPending] = useState(null)
   const [pendingColor, setPendingColor] = useState(DEFAULT_HIGHLIGHT_COLOR)
+  const [activeHl, setActiveHl] = useState(null)
+  const [selectThrough, setSelectThrough] = useState(false)
   const [focusRects, setFocusRects] = useState([])
   const [pageDraft, setPageDraft] = useState(String(page || 1))
   const [searchOpen, setSearchOpen] = useState(false)
@@ -111,6 +118,7 @@ export function PdfViewer({
     setNumPages(null)
     setError('')
     setPending(null)
+    setActiveHl(null)
     setFocusRects([])
     focusKeyRef.current = ''
     pdfDocRef.current = null
@@ -119,6 +127,7 @@ export function PdfViewer({
 
   useEffect(() => {
     setPending(null)
+    setActiveHl(null)
     setFocusRects([])
     focusKeyRef.current = ''
   }, [page, focusQuote])
@@ -132,6 +141,28 @@ export function PdfViewer({
       requestAnimationFrame(() => searchInputRef.current?.focus())
     }
   }, [searchOpen])
+
+  useEffect(() => {
+    function onShift(event) {
+      if (event.key === 'Shift') setSelectThrough(event.type === 'keydown')
+    }
+    function onBlur() {
+      setSelectThrough(false)
+    }
+    window.addEventListener('keydown', onShift)
+    window.addEventListener('keyup', onShift)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onShift)
+      window.removeEventListener('keyup', onShift)
+      window.removeEventListener('blur', onBlur)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!activeHl?.id) return
+    if (!highlights.some((h) => h.id === activeHl.id)) setActiveHl(null)
+  }, [highlights, activeHl?.id])
 
   useEffect(() => {
     function onKey(event) {
@@ -459,6 +490,7 @@ export function PdfViewer({
     const first = range.getBoundingClientRect()
     const wrapEl = stageRef.current?.querySelector('.pdf-page-wrap')
     const wrapRect = wrapEl?.getBoundingClientRect() || pageRect
+    setActiveHl(null)
     setPendingColor(DEFAULT_HIGHLIGHT_COLOR)
     setPending({
       quote,
@@ -469,6 +501,54 @@ export function PdfViewer({
         left: Math.min(Math.max(first.left - wrapRect.left, 8), wrapRect.width - 180),
       },
     })
+  }
+
+  function openSavedHighlight(h, event) {
+    const wrapEl = stageRef.current?.querySelector('.pdf-page-wrap')
+    const wrapRect = wrapEl?.getBoundingClientRect()
+    const bands = mergeHighlightRects(h.rects || [])
+    const first = bands[0]
+    let anchor = { top: 24, left: 16 }
+    if (wrapRect && first) {
+      anchor = {
+        top: Math.min(first.top * wrapRect.height + first.height * wrapRect.height + 8, wrapRect.height - 40),
+        left: Math.min(Math.max(first.left * wrapRect.width, 8), Math.max(8, wrapRect.width - 180)),
+      }
+    } else if (event?.currentTarget && wrapRect) {
+      const hit = event.currentTarget.getBoundingClientRect()
+      anchor = {
+        top: hit.bottom - wrapRect.top + 8,
+        left: Math.min(Math.max(hit.left - wrapRect.left, 8), Math.max(8, wrapRect.width - 180)),
+      }
+    }
+    setPending(null)
+    setActiveHl({
+      id: h.id,
+      quote: h.quote || '',
+      page: h.page,
+      color: normalizeHighlightColor(h.color),
+      anchor,
+    })
+    onSelectHighlight?.(h.id)
+  }
+
+  function askAboutPassage(quote, pageNum, anchor) {
+    const rect = stageRef.current?.getBoundingClientRect()
+    openBubble(
+      {
+        surface: 'pdf',
+        selection: quote,
+        case_id: caseId,
+        file_id: fileId,
+        source_file: fileName || '',
+        page: pageNum,
+        side: 'both',
+      },
+      {
+        top: (rect?.top || 0) + (anchor?.top || 40) + 40,
+        left: (rect?.left || 0) + (anchor?.left || 16),
+      }
+    )
   }
 
   function confirmHighlight() {
@@ -521,7 +601,9 @@ export function PdfViewer({
           {fileName || 'PDF'}
         </span>
         <span className="pdf-hint mono">
-          {expanded ? 'Esc exits · ← → change page' : 'Select text → highlight or Ask AI'}
+          {expanded
+            ? 'Esc exits · ← → change page · click a highlight · Shift-drag to select through'
+            : 'Select text → highlight or Ask AI · click a highlight to reopen'}
         </span>
         <div className="pdf-toolbar-right">
           {onAddBookmark ? (
@@ -793,20 +875,31 @@ export function PdfViewer({
               loading={<p className="pdf-loading mono">Rendering page…</p>}
               onRenderTextLayerSuccess={onTextLayerRendered}
             >
-              <div className="pdf-highlight-layer" aria-hidden={false}>
+              <div
+                className={
+                  selectThrough ? 'pdf-highlight-layer allow-select-through' : 'pdf-highlight-layer'
+                }
+                aria-hidden={false}
+              >
                 {pageHighlights.map((h) => {
                   const color = highlightColorMeta(h.color)
                   const pulsing = pulseHighlightId === h.id
+                  const isActive = activeHl?.id === h.id
                   const bands = mergeHighlightRects(h.rects || [])
                   return bands.map((r, i) => (
                     <button
                       key={`${h.id}-${i}`}
                       type="button"
                       data-hl-id={i === 0 ? h.id : undefined}
-                      className={
-                        pulsing ? 'pdf-hl pdf-hl-hit pdf-hl-pulse' : 'pdf-hl pdf-hl-hit'
-                      }
-                      aria-label={`Open note for highlight: ${(h.quote || '').slice(0, 80)}`}
+                      className={[
+                        'pdf-hl',
+                        'pdf-hl-hit',
+                        pulsing ? 'pdf-hl-pulse' : '',
+                        isActive ? 'pdf-hl-active' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      aria-label={`Open highlight actions: ${(h.quote || '').slice(0, 80)}`}
                       style={{
                         top: `${r.top * 100}%`,
                         left: `${r.left * 100}%`,
@@ -817,7 +910,8 @@ export function PdfViewer({
                       onClick={(event) => {
                         event.preventDefault()
                         event.stopPropagation()
-                        onSelectHighlight?.(h.id)
+                        if (selectThrough) return
+                        openSavedHighlight(h, event)
                         event.currentTarget.blur()
                       }}
                     />
@@ -886,22 +980,7 @@ export function PdfViewer({
                 type="button"
                 className="btn-soft"
                 onClick={() => {
-                  const rect = stageRef.current?.getBoundingClientRect()
-                  openBubble(
-                    {
-                      surface: 'pdf',
-                      selection: pending.quote,
-                      case_id: caseId,
-                      file_id: fileId,
-                      source_file: fileName || '',
-                      page: pending.page,
-                      side: 'both',
-                    },
-                    {
-                      top: (rect?.top || 0) + pending.anchor.top + 40,
-                      left: (rect?.left || 0) + pending.anchor.left,
-                    }
-                  )
+                  askAboutPassage(pending.quote, pending.page, pending.anchor)
                   setPending(null)
                 }}
               >
@@ -910,6 +989,72 @@ export function PdfViewer({
               <button type="button" className="btn-soft" onClick={() => setPending(null)}>
                 Cancel
               </button>
+            </div>
+          ) : null}
+
+          {activeHl && !pending ? (
+            <div
+              className="pdf-hl-popover"
+              style={{ top: activeHl.anchor.top, left: activeHl.anchor.left }}
+            >
+              <p className="pdf-hl-quote">
+                “{(activeHl.quote || '').slice(0, 120)}
+                {(activeHl.quote || '').length > 120 ? '…' : ''}”
+              </p>
+              <div className="hl-color-row" role="group" aria-label="Highlight color">
+                {HIGHLIGHT_COLORS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={activeHl.color === c.id ? 'hl-swatch on' : 'hl-swatch'}
+                    style={{ background: c.solid }}
+                    aria-label={c.label}
+                    aria-pressed={activeHl.color === c.id}
+                    onClick={() => {
+                      onUpdateHighlight?.(activeHl.id, { color: c.id })
+                      setActiveHl((prev) => (prev ? { ...prev, color: c.id } : prev))
+                    }}
+                  />
+                ))}
+              </div>
+              <button
+                type="button"
+                className="btn-ink"
+                onClick={() => {
+                  askAboutPassage(activeHl.quote, activeHl.page, activeHl.anchor)
+                  setActiveHl(null)
+                }}
+              >
+                <Sparkles size={14} /> Ask AI
+              </button>
+              <button
+                type="button"
+                className="btn-soft"
+                onClick={() => {
+                  onSelectHighlight?.(activeHl.id)
+                  setActiveHl(null)
+                }}
+              >
+                Open note
+              </button>
+              {onDeleteHighlight ? (
+                <button
+                  type="button"
+                  className="btn-soft"
+                  onClick={() => {
+                    onDeleteHighlight(activeHl.id)
+                    setActiveHl(null)
+                  }}
+                >
+                  <Trash2 size={14} /> Remove
+                </button>
+              ) : null}
+              <button type="button" className="btn-soft" onClick={() => setActiveHl(null)}>
+                Close
+              </button>
+              <p className="pdf-hl-popover-hint mono">
+                Hold Shift and drag to select text through this highlight.
+              </p>
             </div>
           ) : null}
         </div>

@@ -2522,6 +2522,10 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   z-index: 3;
 }
 
+.pdf-highlight-layer.allow-select-through .pdf-hl-hit {
+  pointer-events: none !important;
+}
+
 .pdf-hl {
   position: absolute;
   background: rgba(156, 122, 34, 0.28);
@@ -2555,6 +2559,12 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   outline: none !important;
   box-shadow: none;
   filter: brightness(0.9);
+}
+
+.pdf-hl-active {
+  outline: 2px solid color-mix(in srgb, var(--gold) 70%, transparent) !important;
+  outline-offset: 1px;
+  filter: brightness(0.95);
 }
 
 .pdf-hl-pulse {
@@ -2618,6 +2628,13 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   font-size: 13px;
   line-height: 1.4;
   color: var(--ink-2);
+}
+
+.pdf-hl-popover-hint {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: var(--ink-3);
+  line-height: 1.35;
 }
 
 .anno-scope {

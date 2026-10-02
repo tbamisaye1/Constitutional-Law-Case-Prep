@@ -460,6 +460,8 @@ export function LibraryPage() {
                     })
                   }
                   onSelectHighlight={(id) => setFocusAnnotationId(id)}
+                  onUpdateHighlight={(id, patch) => lib.updateAnnotation(id, patch)}
+                  onDeleteHighlight={(id) => lib.removeAnnotation(id)}
                   focusHighlightId={focusHighlightId}
                 />
                 <AnnotationPanel

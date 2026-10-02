@@ -698,6 +698,8 @@ export function ArticlesPage() {
               })
             }
             onSelectHighlight={(id) => setFocusAnnotationId(id)}
+            onUpdateHighlight={(id, patch) => lib.updateAnnotation(id, patch)}
+            onDeleteHighlight={(id) => lib.removeAnnotation(id)}
             focusHighlightId={focusHighlightId}
             bookmarks={(lib.pdfBookmarks || []).filter((b) => b.fileId === activeId)}
             onAddBookmark={(p) => {
