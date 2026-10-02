@@ -40,10 +40,12 @@ export function PageList({
             data={data}
             width="100%"
             height={480}
-            indent={16}
+            indent={12}
             rowHeight={64}
             openByDefault
             selection={activePageId || undefined}
+            rowClassName="page-tree-row"
+            className="page-tree-list"
             onMove={({ dragIds, parentId, index }) => {
               onMovePages?.(dragIds, parentId, index)
             }}
@@ -52,10 +54,16 @@ export function PageList({
           >
             {({ node, style, dragHandle }) => {
               const nested = node.level > 0
+              // Keep arborist's vertical placement; drop its indent padding and
+              // handle nesting ourselves so root pages sit flush left.
+              const { paddingLeft: _ignored, ...rowPlace } = style || {}
               return (
                 <div
                   ref={dragHandle}
-                  style={style}
+                  style={{
+                    ...rowPlace,
+                    paddingLeft: nested ? Math.min(node.level, 5) * 10 : 0,
+                  }}
                   className={[
                     'page-row',
                     node.isSelected ? 'on' : '',
@@ -78,7 +86,10 @@ export function PageList({
                       {node.isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </button>
                   ) : (
-                    <span className="page-chevron-spacer" aria-hidden />
+                    <span
+                      className={nested ? 'page-nest-mark' : 'page-chevron-spacer'}
+                      aria-hidden
+                    />
                   )}
                   <button
                     type="button"
@@ -96,44 +107,46 @@ export function PageList({
                       <span className="page-preview">{node.data.preview}</span>
                     ) : null}
                   </button>
-                  {nested ? (
+                  <div className="page-row-actions">
+                    {nested ? (
+                      <button
+                        type="button"
+                        className="page-promote"
+                        aria-label={`Promote ${node.data.title} to a main page`}
+                        title="Promote to main page"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onPromotePage?.(node.id)
+                        }}
+                      >
+                        <ArrowUpToLine size={14} strokeWidth={1.75} />
+                      </button>
+                    ) : null}
                     <button
                       type="button"
-                      className="page-promote"
-                      aria-label={`Promote ${node.data.title} to a main page`}
-                      title="Promote to main page"
+                      className="page-subpage"
+                      aria-label={`Add subpage under ${node.data.title}`}
+                      title="Add subpage"
                       onClick={(e) => {
                         e.stopPropagation()
-                        onPromotePage?.(node.id)
+                        onAddSubpage?.(node.id)
                       }}
                     >
-                      <ArrowUpToLine size={14} strokeWidth={1.75} />
+                      <CornerDownRight size={14} strokeWidth={1.75} />
                     </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="page-subpage"
-                    aria-label={`Add subpage under ${node.data.title}`}
-                    title="Add subpage"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onAddSubpage?.(node.id)
-                    }}
-                  >
-                    <CornerDownRight size={14} strokeWidth={1.75} />
-                  </button>
-                  <button
-                    type="button"
-                    className="page-delete"
-                    aria-label={`Delete ${node.data.title}`}
-                    title="Delete page"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onDeletePage?.(node.id)
-                    }}
-                  >
-                    <Trash2 size={14} strokeWidth={1.75} />
-                  </button>
+                    <button
+                      type="button"
+                      className="page-delete"
+                      aria-label={`Delete ${node.data.title}`}
+                      title="Delete page"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDeletePage?.(node.id)
+                      }}
+                    >
+                      <Trash2 size={14} strokeWidth={1.75} />
+                    </button>
+                  </div>
                 </div>
               )
             }}

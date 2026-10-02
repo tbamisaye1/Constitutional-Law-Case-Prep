@@ -627,8 +627,24 @@
   flex: 1;
   height: 100%;
   min-height: 400px;
-  padding: 6px 0 8px;
+  padding: 4px 0 8px;
   overflow: hidden;
+  min-width: 0;
+}
+
+/* react-arborist sets min-width: max-content on rows, which opens a horizontal
+   scroll gutter and leaves a blank strip beside the page list. Keep rows in the pane. */
+.onenote-pages-body [role='tree'],
+.onenote-pages-body [role='tree'] > div {
+  overflow-x: hidden !important;
+  max-width: 100%;
+}
+
+.onenote-pages-body [role='treeitem'] {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .onenote-empty {
@@ -646,6 +662,9 @@
   cursor: grab;
   box-sizing: border-box;
   height: 100%;
+  width: 100%;
+  min-width: 0;
+  padding-right: 2px;
 }
 
 .page-row:active {
@@ -653,9 +672,10 @@
 }
 
 .page-chevron,
-.page-chevron-spacer {
+.page-chevron-spacer,
+.page-nest-mark {
   flex-shrink: 0;
-  width: 22px;
+  width: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -668,6 +688,21 @@
 
 .page-chevron-spacer {
   cursor: default;
+  width: 4px;
+}
+
+.page-nest-mark {
+  cursor: default;
+  width: 14px;
+  margin-left: 10px;
+}
+
+.page-nest-mark::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--rule);
 }
 
 .page-row.on {
@@ -678,13 +713,13 @@
 .page-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   flex: 1;
   min-width: 0;
   text-align: left;
   border: none;
   background: transparent;
-  padding: 12px 14px;
+  padding: 10px 6px 10px 4px;
   cursor: pointer;
   color: inherit;
 }
@@ -698,27 +733,31 @@
   box-shadow: none;
 }
 
+.page-row-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.page-row:hover .page-row-actions,
+.page-row.on .page-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .page-delete,
 .page-subpage,
 .page-promote {
   flex-shrink: 0;
-  opacity: 0;
   border: none;
   background: transparent;
   color: var(--ink-3);
-  padding: 0 8px;
+  padding: 0 5px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-}
-
-.page-row:hover .page-delete,
-.page-row.on .page-delete,
-.page-row:hover .page-subpage,
-.page-row.on .page-subpage,
-.page-row:hover .page-promote,
-.page-row.on .page-promote {
-  opacity: 1;
 }
 
 .page-delete:hover {
@@ -732,7 +771,7 @@
 
 .page-row.is-nested .page-card {
   border-left: 2px solid var(--rule);
-  padding-left: 10px;
+  padding-left: 8px;
 }
 
 .page-card-title {
@@ -742,10 +781,14 @@
   min-width: 0;
 }
 
-.page-card-title strong {
+.page-card-title strong,
+.page-card strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  font-weight: 700;
 }
 
 .page-nest-badge {
@@ -757,12 +800,6 @@
   border: 1px solid var(--rule-soft);
   padding: 1px 5px;
   line-height: 1.3;
-}
-
-.page-card strong {
-  font-family: var(--font-display);
-  font-size: 14.5px;
-  font-weight: 700;
 }
 
 .page-preview {
