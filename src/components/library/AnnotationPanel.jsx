@@ -22,6 +22,14 @@ import {
   highlightColorMeta,
   normalizeHighlightColor,
 } from '../../lib/highlightColors'
+import {
+  addTopic,
+  annotationHasTopic,
+  normalizeTopicLabel,
+  normalizeTopicsList,
+  removeTopic,
+  topicsInList,
+} from '../../lib/annotationTopics'
 
 const PAGE_SIZE = 24
 
@@ -79,6 +87,112 @@ function previewText(text) {
   return value.length > 140 ? `${value.slice(0, 140)}…` : value
 }
 
+/**
+ * Multi-select topic chips for one annotation. Vocabulary comes from other
+ * tags already used on this article (plus whatever the user types next).
+ */
+function TopicEditor({ topics, vocabulary, onChange, onFlush }) {
+  const [draft, setDraft] = useState('')
+  const [open, setOpen] = useState(false)
+  const inputRef = useRef(null)
+  const current = normalizeTopicsList(topics, vocabulary)
+  const q = normalizeTopicLabel(draft).toLowerCase()
+  const suggestions = (vocabulary || []).filter((label) => {
+    if (annotationHasTopic(current, label)) return false
+    if (!q) return true
+    return label.toLowerCase().includes(q)
+  })
+
+  function commit(raw) {
+    const next = addTopic(current, raw, vocabulary)
+    if (next.length === current.length) {
+      setDraft('')
+      return
+    }
+    onChange(next)
+    onFlush?.()
+    setDraft('')
+    setOpen(false)
+  }
+
+  return (
+    <div className="anno-topics">
+      <div className="anno-topic-chips" aria-label="Topics">
+        {current.map((label) => (
+          <span key={label.toLowerCase()} className="anno-topic-chip">
+            {label}
+            <button
+              type="button"
+              className="anno-topic-remove"
+              aria-label={`Remove topic ${label}`}
+              onClick={() => {
+                onChange(removeTopic(current, label))
+                onFlush?.()
+              }}
+            >
+              <X size={11} />
+            </button>
+          </span>
+        ))}
+        {!open ? (
+          <button
+            type="button"
+            className="anno-topic-add"
+            onClick={() => {
+              setOpen(true)
+              requestAnimationFrame(() => inputRef.current?.focus())
+            }}
+          >
+            <Plus size={12} /> Topic
+          </button>
+        ) : null}
+      </div>
+      {open ? (
+        <div className="anno-topic-compose">
+          <input
+            ref={inputRef}
+            className="anno-topic-input"
+            value={draft}
+            maxLength={40}
+            placeholder="Topic for this article…"
+            aria-label="Add topic"
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                if (draft.trim()) commit(draft)
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                setDraft('')
+                setOpen(false)
+              }
+            }}
+            onBlur={() => {
+              if (!draft.trim()) setOpen(false)
+            }}
+          />
+          {suggestions.length ? (
+            <div className="anno-topic-suggestions" role="listbox">
+              {suggestions.slice(0, 8).map((label) => (
+                <button
+                  key={label.toLowerCase()}
+                  type="button"
+                  className="anno-topic-suggestion"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => commit(label)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function resizeTextarea(el) {
   if (!el) return
   el.style.height = 'auto'
@@ -93,6 +207,7 @@ function AnnotationItem({
   currentPage,
   expanded,
   focused,
+  vocabulary,
   onToggleExpand,
   onTogglePin,
   onUpdate,
@@ -276,12 +391,19 @@ function AnnotationItem({
             ))}
           </div>
         ) : null}
+
+        <TopicEditor
+          topics={a.topics}
+          vocabulary={vocabulary}
+          onChange={(topics) => onUpdate(a.id, { topics })}
+          onFlush={onFlush}
+        />
       </div>
     </li>
   )
 }
 
-function TakeawaysCard({ annotation: a, onJump, onUpdate, onFlush, onTogglePin }) {
+function TakeawaysCard({ annotation: a, vocabulary, onJump, onUpdate, onFlush, onTogglePin }) {
   const textRef = useRef(null)
   const text = a.text || ''
   const color = highlightColorMeta(a.color)
@@ -371,6 +493,13 @@ function TakeawaysCard({ annotation: a, onJump, onUpdate, onFlush, onTogglePin }
           ))}
         </div>
       ) : null}
+
+      <TopicEditor
+        topics={a.topics}
+        vocabulary={vocabulary}
+        onChange={(topics) => onUpdate?.(a.id, { topics })}
+        onFlush={onFlush}
+      />
     </article>
   )
 }
@@ -398,6 +527,7 @@ function TakeawaysReview({
   const searchRef = useRef(null)
 
   const sorted = useMemo(() => [...annotations].sort(compareAnnotations), [annotations])
+  const vocabulary = useMemo(() => topicsInList(sorted), [sorted])
 
   const generalNotes = useMemo(
     () => sorted.filter((a) => isGeneralAnnotation(a)),
@@ -427,7 +557,8 @@ function TakeawaysReview({
         return false
       }
       if (!q) return true
-      const hay = `${a.quote || ''} ${a.text || ''}`.toLowerCase()
+      const topicHay = normalizeTopicsList(a.topics).join(' ').toLowerCase()
+      const hay = `${a.quote || ''} ${a.text || ''} ${topicHay}`.toLowerCase()
       return hay.includes(q)
     })
   }, [sorted, query, kind, activePage])
@@ -608,6 +739,7 @@ function TakeawaysReview({
                     ) : null}
                     <TakeawaysCard
                       annotation={a}
+                      vocabulary={vocabulary}
                       onJump={onJump}
                       onUpdate={onUpdate}
                       onFlush={onFlush}
@@ -649,6 +781,8 @@ export function AnnotationPanel({
   onToggleCollapsed = null,
 }) {
   const [scope, setScope] = useState('all') // all | page | general
+  const [topicFilters, setTopicFilters] = useState([]) // selected topic labels (OR)
+  const [untaggedOnly, setUntaggedOnly] = useState(false)
   const [listPage, setListPage] = useState(1)
   const [expandedIds, setExpandedIds] = useState(() => new Set())
   const [expandAll, setExpandAll] = useState(false)
@@ -662,18 +796,45 @@ export function AnnotationPanel({
     [annotations, caseId]
   )
 
+  const vocabulary = useMemo(() => topicsInList(forCase), [forCase])
+
   const generalNotes = useMemo(
     () => forCase.filter((a) => isGeneralAnnotation(a)),
     [forCase]
   )
 
-  const filtered = useMemo(() => {
-    if (scope === 'general') return generalNotes
-    if (scope === 'page') {
-      return forCase.filter((a) => !isGeneralAnnotation(a) && a.page === page)
+  const topicCounts = useMemo(() => {
+    const map = new Map()
+    for (const label of vocabulary) map.set(label, 0)
+    let untagged = 0
+    for (const a of forCase) {
+      const list = normalizeTopicsList(a.topics, vocabulary)
+      if (!list.length) {
+        untagged += 1
+        continue
+      }
+      for (const label of list) {
+        map.set(label, (map.get(label) || 0) + 1)
+      }
     }
-    return forCase
-  }, [forCase, generalNotes, scope, page])
+    return { byTopic: map, untagged }
+  }, [forCase, vocabulary])
+
+  const filtered = useMemo(() => {
+    let rows = forCase
+    if (scope === 'general') rows = generalNotes
+    else if (scope === 'page') {
+      rows = forCase.filter((a) => !isGeneralAnnotation(a) && a.page === page)
+    }
+    if (untaggedOnly) {
+      rows = rows.filter((a) => normalizeTopicsList(a.topics).length === 0)
+    } else if (topicFilters.length) {
+      rows = rows.filter((a) =>
+        topicFilters.some((label) => annotationHasTopic(a.topics, label))
+      )
+    }
+    return rows
+  }, [forCase, generalNotes, scope, page, topicFilters, untaggedOnly])
 
   const totalListPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safeListPage = Math.min(listPage, totalListPages)
@@ -682,7 +843,21 @@ export function AnnotationPanel({
 
   useEffect(() => {
     setListPage(1)
-  }, [scope, caseId, page, filtered.length])
+  }, [scope, caseId, page, filtered.length, topicFilters, untaggedOnly])
+
+  useEffect(() => {
+    setTopicFilters([])
+    setUntaggedOnly(false)
+  }, [caseId])
+
+  function toggleTopicFilter(label) {
+    setUntaggedOnly(false)
+    setTopicFilters((prev) => {
+      const on = prev.some((t) => t.toLowerCase() === label.toLowerCase())
+      if (on) return prev.filter((t) => t.toLowerCase() !== label.toLowerCase())
+      return [...prev, label]
+    })
+  }
 
   useEffect(() => {
     if (!focusAnnotationId) return
@@ -848,6 +1023,49 @@ export function AnnotationPanel({
         </button>
       </div>
 
+      {vocabulary.length || topicCounts.untagged ? (
+        <div className="anno-topic-filters" role="group" aria-label="Filter by topic">
+          {vocabulary.map((label) => {
+            const selected = topicFilters.some((t) => t.toLowerCase() === label.toLowerCase())
+            const count = topicCounts.byTopic.get(label) || 0
+            return (
+              <button
+                key={label.toLowerCase()}
+                type="button"
+                className={selected ? 'anno-topic-filter on' : 'anno-topic-filter'}
+                aria-pressed={selected}
+                onClick={() => toggleTopicFilter(label)}
+              >
+                {label} <span className="mono">{count}</span>
+              </button>
+            )
+          })}
+          <button
+            type="button"
+            className={untaggedOnly ? 'anno-topic-filter on' : 'anno-topic-filter'}
+            aria-pressed={untaggedOnly}
+            onClick={() => {
+              setTopicFilters([])
+              setUntaggedOnly((v) => !v)
+            }}
+          >
+            Untagged <span className="mono">{topicCounts.untagged}</span>
+          </button>
+          {topicFilters.length || untaggedOnly ? (
+            <button
+              type="button"
+              className="anno-topic-filter-clear"
+              onClick={() => {
+                setTopicFilters([])
+                setUntaggedOnly(false)
+              }}
+            >
+              Clear topics
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="anno-bulk">
         <button type="button" className="anno-expand-btn" onClick={toggleExpandAll}>
           {expandAll ? (
@@ -863,9 +1081,8 @@ export function AnnotationPanel({
       </div>
 
       <p className="anno-hint mono">
-        General notes cover the whole article. Page notes and highlights stay tied to the PDF.
-        Review takeaways for a wider edit/scan. Send to Notes keeps one page per article under
-        Notes → Articles.
+        Tag notes with topics for this article (AUMF, Hamdi, …). Filter by topic above. Send to
+        Notes groups by topic when tags are set.
       </p>
 
       <ul className="anno-list" ref={listRef}>
@@ -885,6 +1102,7 @@ export function AnnotationPanel({
               currentPage={page}
               expanded={isExpanded(a.id)}
               focused={a.id === focusAnnotationId}
+              vocabulary={vocabulary}
               onToggleExpand={toggleExpand}
               onTogglePin={togglePin}
               onUpdate={onUpdate}

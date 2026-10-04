@@ -1084,6 +1084,7 @@ export function useCaseLibrary() {
           kind: payload.kind || (payload.quote ? 'highlight' : 'page'),
           pinned: Boolean(payload.pinned),
           color: payload.color || 'gold',
+          topics: Array.isArray(payload.topics) ? payload.topics : [],
           savedAt: Date.now(),
         }
         return { ...prev, annotations: [next, ...prev.annotations] }
@@ -1096,9 +1097,14 @@ export function useCaseLibrary() {
     updateStore(
       (prev) => ({
         ...prev,
-        annotations: prev.annotations.map((a) =>
-          a.id === id ? { ...a, ...patch, savedAt: Date.now() } : a
-        ),
+        annotations: prev.annotations.map((a) => {
+          if (a.id !== id) return a
+          const next = { ...a, ...patch, savedAt: Date.now() }
+          if (Object.prototype.hasOwnProperty.call(patch, 'topics')) {
+            next.topics = Array.isArray(patch.topics) ? patch.topics : []
+          }
+          return next
+        }),
       }),
       [metaKey('annotations', id)]
     )

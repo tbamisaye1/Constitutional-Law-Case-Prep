@@ -13,6 +13,12 @@
 import { SEED_PAGES, SEED_TREE, SECTION_COLORS } from '../data/notebookSeed'
 import { readJson } from './persist'
 import { compareAnnotations, isGeneralAnnotation } from '../components/library/AnnotationPanel'
+import {
+  anyAnnotationHasTopics,
+  normalizeTopicsList,
+  primaryTopic,
+  topicsInList,
+} from './annotationTopics'
 import { HIGHLIGHT_COLORS, normalizeHighlightColor } from './highlightColors'
 import { findPage, mapPages } from './pageTree'
 import { saveNotebookSnapshot } from './notebookWorkspace'
@@ -53,7 +59,7 @@ function pageCite(row) {
  * One study card: quote (if any) + note body + page cite.
  * Skips empty "(no note text)" noise when the quote alone is enough.
  */
-function renderTakeawayCard(row) {
+function renderTakeawayCard(row, { showExtraTopics = false, vocabulary = [] } = {}) {
   const parts = []
   if (row.quote) {
     parts.push(`<blockquote><p>“${escapeHtml(row.quote)}”</p></blockquote>`)
@@ -63,6 +69,17 @@ function renderTakeawayCard(row) {
     parts.push(body)
   } else if (!row.quote) {
     parts.push('<p><em>(empty note)</em></p>')
+  }
+  if (showExtraTopics) {
+    const topics = normalizeTopicsList(row.topics, vocabulary)
+    if (topics.length > 1) {
+      parts.push(
+        `<p><em>Also: ${topics
+          .slice(1)
+          .map((t) => escapeHtml(t))
+          .join(', ')}</em></p>`
+      )
+    }
   }
   const cite = pageCite(row)
   if (cite) parts.push(cite)
@@ -136,36 +153,79 @@ export function formatArticleTakeawaysHtml({
   highlights.sort(readingOrder)
   working.sort(readingOrder)
 
+  const vocabulary = topicsInList(annotations)
+  const useTopics = anyAnnotationHasTopics(annotations)
+
   if (overview.length) {
     parts.push('<h3>Overview</h3>')
-    for (const row of overview) parts.push(renderTakeawayCard(row))
+    for (const row of overview) {
+      parts.push(renderTakeawayCard(row, { showExtraTopics: useTopics, vocabulary }))
+    }
   }
 
   if (keyPoints.length) {
     parts.push('<h3>Key points</h3>')
-    for (const row of keyPoints) parts.push(renderTakeawayCard(row))
+    for (const row of keyPoints) {
+      parts.push(renderTakeawayCard(row, { showExtraTopics: useTopics, vocabulary }))
+    }
   }
 
   if (highlights.length) {
-    const colorsUsed = new Set(highlights.map((r) => normalizeHighlightColor(r.color)))
-    const multiTopic = colorsUsed.size > 1
-
-    if (multiTopic) {
-      for (const colorId of COLOR_ORDER) {
-        if (!colorsUsed.has(colorId)) continue
-        const group = highlights.filter((r) => normalizeHighlightColor(r.color) === colorId)
-        parts.push(`<h3>${escapeHtml(colorSectionTitle(colorId))}</h3>`)
-        for (const row of group) parts.push(renderTakeawayCard(row))
+    if (useTopics) {
+      const byTopic = new Map()
+      const untagged = []
+      for (const row of highlights) {
+        const topic = primaryTopic(row, vocabulary)
+        if (!topic) {
+          untagged.push(row)
+          continue
+        }
+        if (!byTopic.has(topic)) byTopic.set(topic, [])
+        byTopic.get(topic).push(row)
+      }
+      for (const topic of vocabulary) {
+        const group = byTopic.get(topic)
+        if (!group?.length) continue
+        parts.push(`<h3>${escapeHtml(topic)}</h3>`)
+        for (const row of group) {
+          parts.push(renderTakeawayCard(row, { showExtraTopics: true, vocabulary }))
+        }
+      }
+      // Topics that somehow aren't in vocabulary order (shouldn't happen)
+      for (const [topic, group] of byTopic) {
+        if (vocabulary.some((v) => v.toLowerCase() === topic.toLowerCase())) continue
+        parts.push(`<h3>${escapeHtml(topic)}</h3>`)
+        for (const row of group) {
+          parts.push(renderTakeawayCard(row, { showExtraTopics: true, vocabulary }))
+        }
+      }
+      if (untagged.length) {
+        parts.push('<h3>Untagged</h3>')
+        for (const row of untagged) parts.push(renderTakeawayCard(row))
       }
     } else {
-      parts.push('<h3>Takeaways</h3>')
-      for (const row of highlights) parts.push(renderTakeawayCard(row))
+      const colorsUsed = new Set(highlights.map((r) => normalizeHighlightColor(r.color)))
+      const multiColor = colorsUsed.size > 1
+
+      if (multiColor) {
+        for (const colorId of COLOR_ORDER) {
+          if (!colorsUsed.has(colorId)) continue
+          const group = highlights.filter((r) => normalizeHighlightColor(r.color) === colorId)
+          parts.push(`<h3>${escapeHtml(colorSectionTitle(colorId))}</h3>`)
+          for (const row of group) parts.push(renderTakeawayCard(row))
+        }
+      } else {
+        parts.push('<h3>Takeaways</h3>')
+        for (const row of highlights) parts.push(renderTakeawayCard(row))
+      }
     }
   }
 
   if (working.length) {
     parts.push('<h3>Working notes</h3>')
-    for (const row of working) parts.push(renderTakeawayCard(row))
+    for (const row of working) {
+      parts.push(renderTakeawayCard(row, { showExtraTopics: useTopics, vocabulary }))
+    }
   }
 
   return parts.join('')

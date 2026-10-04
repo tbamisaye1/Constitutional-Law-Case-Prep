@@ -5,6 +5,7 @@
  */
 
 import { isGeneralAnnotation } from '../components/library/AnnotationPanel'
+import { normalizeTopicsList } from './annotationTopics'
 import {
   notebookChunksForAskAi,
   notesSearchQuery,
@@ -80,9 +81,11 @@ export function flattenAnnotations({
     if (pageNum) titleParts.push(`p.${pageNum}`)
     const title = titleParts.join(' · ')
 
+    const topics = normalizeTopicsList(a.topics)
     const bodyParts = []
     if (quote) bodyParts.push(`Quote: “${quote}”`)
     if (note) bodyParts.push(note)
+    if (topics.length) bodyParts.push(`Topics: ${topics.join(', ')}`)
     const text = bodyParts.join('\n')
 
     const params = new URLSearchParams()

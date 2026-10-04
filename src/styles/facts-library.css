@@ -2662,6 +2662,137 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   color: var(--paper-2);
 }
 
+.anno-topic-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.anno-topic-filter {
+  border: 1px solid var(--rule-soft);
+  background: var(--paper);
+  color: var(--ink-2);
+  font-size: 11.5px;
+  padding: 3px 8px;
+  cursor: pointer;
+  border-radius: 999px;
+}
+
+.anno-topic-filter.on {
+  border-color: var(--ink);
+  background: var(--paper-2);
+  color: var(--ink);
+}
+
+.anno-topic-filter .mono {
+  margin-left: 4px;
+  opacity: 0.7;
+}
+
+.anno-topic-filter-clear {
+  border: 0;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 11px;
+  padding: 3px 4px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.anno-topics {
+  margin-top: 8px;
+}
+
+.anno-topic-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+.anno-topic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border: 1px solid var(--rule-soft);
+  background: var(--paper);
+  font-size: 11px;
+  color: var(--ink-2);
+  border-radius: 999px;
+}
+
+.anno-topic-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: var(--ink-3);
+  line-height: 1;
+}
+
+.anno-topic-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px dashed var(--rule);
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 11px;
+  padding: 2px 7px;
+  cursor: pointer;
+  border-radius: 999px;
+}
+
+.anno-topic-compose {
+  position: relative;
+  margin-top: 6px;
+}
+
+.anno-topic-input {
+  width: 100%;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.anno-topic-suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 5;
+  border: 1px solid var(--rule);
+  background: var(--paper-2);
+  max-height: 160px;
+  overflow: auto;
+}
+
+.anno-topic-suggestion {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--ink-2);
+}
+
+.anno-topic-suggestion:hover,
+.anno-topic-suggestion:focus-visible {
+  background: var(--paper);
+  color: var(--ink);
+}
+
 .anno-pager {
   display: flex;
   align-items: center;

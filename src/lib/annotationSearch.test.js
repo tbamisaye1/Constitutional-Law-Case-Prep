@@ -45,6 +45,26 @@ describe('annotationSearch', () => {
     expect(hit.path).toContain('page=3')
   })
 
+  it('includes topic labels in flattened annotation text for Ask AI', () => {
+    const rows = flattenAnnotations({
+      annotations: [
+        {
+          ...ANNOTATIONS[0],
+          topics: ['AUMF', 'Hamdi'],
+        },
+      ],
+      cases: CASES,
+      filesMeta: FILES,
+    })
+    expect(rows[0].text).toContain('Topics: AUMF, Hamdi')
+    const hits = searchAnnotations('AUMF', {
+      annotations: [{ ...ANNOTATIONS[0], topics: ['AUMF', 'Hamdi'] }],
+      cases: CASES,
+      filesMeta: FILES,
+    })
+    expect(hits.some((h) => h.id === 'anno:a-1')).toBe(true)
+  })
+
   it('finds Enemy in annotations for Ask AI', () => {
     const hits = searchAnnotations('Enemy', {
       annotations: ANNOTATIONS,

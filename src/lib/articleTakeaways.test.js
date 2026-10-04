@@ -87,7 +87,7 @@ describe('articleTakeaways', () => {
     expect(html.indexOf('Takeaways')).toBeLessThan(html.indexOf('Working notes'))
   })
 
-  it('puts pinned items under Key points and groups multi-color highlights by topic', () => {
+  it('puts pinned items under Key points and groups multi-color highlights by color', () => {
     const html = formatArticleTakeawaysHtml({
       title: 'Detention memo',
       annotations: [
@@ -126,6 +126,45 @@ describe('articleTakeaways', () => {
     expect(html.indexOf('Key points')).toBeLessThan(html.indexOf('Green'))
     expect(html.indexOf('Green')).toBeLessThan(html.indexOf('Blue'))
     expect(html.indexOf('citizen-detainee')).toBeLessThan(html.indexOf('AUMF'))
+  })
+
+  it('groups tagged highlights by topic and lists extra topics inline', () => {
+    const html = formatArticleTakeawaysHtml({
+      title: 'Bradley & Goldsmith',
+      annotations: [
+        {
+          id: 't1',
+          page: 2,
+          kind: 'highlight',
+          quote: 'AUMF',
+          text: 'Statutory basis.',
+          topics: ['AUMF', 'Hamdi'],
+        },
+        {
+          id: 't2',
+          page: 5,
+          kind: 'highlight',
+          quote: 'citizen-detainee',
+          text: 'Domestic detention.',
+          topics: ['Hamdi'],
+        },
+        {
+          id: 't3',
+          page: 8,
+          kind: 'highlight',
+          quote: 'no tag',
+          text: 'Loose note.',
+          topics: [],
+        },
+      ],
+    })
+
+    expect(html).toContain('<h3>AUMF</h3>')
+    expect(html).toContain('<h3>Hamdi</h3>')
+    expect(html).toContain('<h3>Untagged</h3>')
+    expect(html).toContain('Also: Hamdi')
+    expect(html).not.toContain('<h3>Takeaways</h3>')
+    expect(html.indexOf('AUMF')).toBeLessThan(html.indexOf('<h3>Hamdi</h3>'))
   })
 
   it('upserts an Articles section page in the notebook store', () => {
