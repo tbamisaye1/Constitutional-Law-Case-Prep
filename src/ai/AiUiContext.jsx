@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import { chatPrep } from '../api/client'
 import { groundingStatusFromReply } from './samplePrompts'
 import { MATTER } from '../data/seed'
@@ -10,6 +10,7 @@ import {
   readAskAiMemory,
   writeAskAiMemory,
 } from './askAiMemory'
+import { notebookChunksForAskAi, queryWantsNotes } from '../lib/notebookSearch'
 
 /**
  * Selection context for the Ask AI bubble.
@@ -19,10 +20,23 @@ import {
  *   documents — FAISS RAG only (default)
  *   web_plus  — uploaded articles + OpenRouter web search
  *
+ * includeNotes: when on (or when the prompt clearly asks for "my notes"),
+ * matching notebook pages are searched in this browser and sent with /chat.
+ * Notes are never uploaded silently.
+ *
  * memory: prior user/assistant turns for this browser tab (sessionStorage).
  */
 
 const AiUiContext = createContext(null)
+const INCLUDE_NOTES_KEY = 'case-prep-ask-ai-include-notes'
+
+function readIncludeNotes() {
+  try {
+    return localStorage.getItem(INCLUDE_NOTES_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 export function AiUiProvider({ children }) {
   const [open, setOpen] = useState(false)
@@ -38,6 +52,7 @@ export function AiUiProvider({ children }) {
     file_id: null,
   })
   const [groundingSource, setGroundingSource] = useState('documents')
+  const [includeNotes, setIncludeNotesState] = useState(readIncludeNotes)
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
   const [reply, setReply] = useState(null)
@@ -48,6 +63,19 @@ export function AiUiProvider({ children }) {
     writeAskAiMemory(next)
   }, [])
 
+  const setIncludeNotes = useCallback((next) => {
+    const on = Boolean(next)
+    setIncludeNotesState(on)
+    try {
+      localStorage.setItem(INCLUDE_NOTES_KEY, on ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const openRef = useRef(false)
+  openRef.current = open
+
   const openBubble = useCallback((partial, position) => {
     setCtx((prev) => ({
       ...prev,
@@ -57,8 +85,12 @@ export function AiUiProvider({ children }) {
       ...partial,
     }))
     if (position) setAnchor(position)
-    setReply(null)
-    setPrompt('')
+    // Keep the current answer / draft when Ask AI is already open (e.g. new
+    // highlight while you are still reading the reply and typing notes).
+    if (!openRef.current) {
+      setReply(null)
+      setPrompt('')
+    }
     setOpen(true)
   }, [])
 
@@ -95,6 +127,9 @@ export function AiUiProvider({ children }) {
         content: t.content,
       }))
 
+      const wantsNotes = includeNotes || queryWantsNotes(user_prompt)
+      const notes = wantsNotes ? notebookChunksForAskAi(user_prompt, { limit: 5 }) : []
+
       try {
         const data = await chatPrep(
           user_prompt,
@@ -105,6 +140,7 @@ export function AiUiProvider({ children }) {
             source_file: ctx.source_file || '',
             page: ctx.page,
             history: historyForApi,
+            notes,
           }
         )
         const status = groundingStatusFromReply(data.grounding_status, data.reply)
@@ -122,15 +158,14 @@ export function AiUiProvider({ children }) {
           evidence: data.evidence,
           claims_verified: data.claims_verified,
           claims_total: data.claims_total,
+          notes_used: notes.length,
         })
       } catch (err) {
         setReply({
           grounding_status: 'no_evidence',
           grounding_source: groundingSource,
-          text:
-            `Could not reach the agent backend.\n\n${err.message || 'Request failed'}\n\n` +
-            'Start it with: uvicorn app.main:app --reload --port 8000\n' +
-            'Then: python demo/bootstrap_moot_index.py (once, for indexed cases)',
+          text: formatAskAiFailure(err, groundingSource),
+          notes_used: notes.length,
         })
       } finally {
         setLoading(false)
@@ -143,6 +178,7 @@ export function AiUiProvider({ children }) {
       ctx.page,
       prompt,
       groundingSource,
+      includeNotes,
       memory,
       persistMemory,
     ]
@@ -164,6 +200,8 @@ export function AiUiProvider({ children }) {
       setCtx,
       groundingSource,
       switchGroundingSource,
+      includeNotes,
+      setIncludeNotes,
       prompt,
       setPrompt,
       loading,
@@ -184,6 +222,8 @@ export function AiUiProvider({ children }) {
       ctx,
       groundingSource,
       switchGroundingSource,
+      includeNotes,
+      setIncludeNotes,
       prompt,
       loading,
       reply,
@@ -204,4 +244,40 @@ export function useAiUi() {
   const v = useContext(AiUiContext)
   if (!v) throw new Error('useAiUi must be used inside AiUiProvider')
   return v
+}
+
+/**
+ * Production timeouts used to dump local uvicorn instructions. Say what
+ * actually failed instead.
+ */
+export function formatAskAiFailure(err, groundingSource = 'documents') {
+  const raw = String(err?.message || err || 'Request failed')
+  const lower = raw.toLowerCase()
+  const web = groundingSource === 'web_plus'
+  const timedOut =
+    lower.includes('function_invocation_timeout') ||
+    lower.includes('timeout') ||
+    lower.includes('timed out') ||
+    lower.includes('504')
+
+  if (timedOut) {
+    return (
+      'Ask AI timed out on the server.\n\n' +
+      (web
+        ? 'Web mode (corpus + live search) often needs more than a minute. Switch to Uploaded articles, or ask a shorter question, then try again.'
+        : 'The agent took too long. Try a shorter question, or retry in a moment.') +
+      `\n\nDetail: ${raw.slice(0, 280)}`
+    )
+  }
+
+  if (lower.includes('failed to fetch') || lower.includes('networkerror')) {
+    return (
+      'Could not reach the agent backend (network).\n\n' +
+      'If you are developing locally, start it with:\n' +
+      'uvicorn app.main:app --reload --port 8000\n' +
+      'Then: python demo/bootstrap_moot_index.py (once, for indexed cases)'
+    )
+  }
+
+  return `Ask AI failed.\n\n${raw.slice(0, 600)}`
 }
