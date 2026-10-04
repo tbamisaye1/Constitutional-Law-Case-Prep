@@ -1,11 +1,19 @@
 /**
- * Format article annotations as readable HTML and upsert them into the
+ * Format article annotations as study-friendly HTML and upsert them into the
  * OneNote-shaped notebook under an Articles section (one page per PDF).
+ *
+ * Layout (meant for reading / revision, not PDF page dump):
+ *   1. Overview — article-level notes
+ *   2. Key points — pinned items
+ *   3. Color / topic groups — highlights (Gold, Green, …) when you used
+ *      more than one color; otherwise a single Takeaways section
+ *   4. Working notes — page notes without a quoted passage
  */
 
 import { SEED_PAGES, SEED_TREE, SECTION_COLORS } from '../data/notebookSeed'
 import { readJson } from './persist'
 import { compareAnnotations, isGeneralAnnotation } from '../components/library/AnnotationPanel'
+import { HIGHLIGHT_COLORS, normalizeHighlightColor } from './highlightColors'
 import { findPage, mapPages } from './pageTree'
 import { saveNotebookSnapshot } from './notebookWorkspace'
 
@@ -13,6 +21,9 @@ export const NOTEBOOK_STORAGE_KEY = 'case-prep-notebook-v3'
 export const ARTICLES_SECTION_ID = 'sec-articles'
 export const ARTICLES_SECTION_NAME = 'Articles'
 export const ARTICLES_GROUP_ID = 'grp-bronner'
+
+const COLOR_ORDER = HIGHLIGHT_COLORS.map((c) => c.id)
+const COLOR_LABEL = Object.fromEntries(HIGHLIGHT_COLORS.map((c) => [c.id, c.label]))
 
 function escapeHtml(value) {
   return String(value || '')
@@ -29,6 +40,47 @@ function paragraphsFromText(text) {
     .split(/\n{2,}/)
     .map((block) => `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`)
     .join('')
+}
+
+function pageCite(row) {
+  if (isGeneralAnnotation(row)) return ''
+  const page = Number(row.page)
+  if (!Number.isFinite(page) || page < 1) return ''
+  return `<p><em>p. ${page}</em></p>`
+}
+
+/**
+ * One study card: quote (if any) + note body + page cite.
+ * Skips empty "(no note text)" noise when the quote alone is enough.
+ */
+function renderTakeawayCard(row) {
+  const parts = []
+  if (row.quote) {
+    parts.push(`<blockquote><p>“${escapeHtml(row.quote)}”</p></blockquote>`)
+  }
+  const body = paragraphsFromText(row.text)
+  if (body) {
+    parts.push(body)
+  } else if (!row.quote) {
+    parts.push('<p><em>(empty note)</em></p>')
+  }
+  const cite = pageCite(row)
+  if (cite) parts.push(cite)
+  return parts.join('')
+}
+
+function isHighlightRow(row) {
+  if (isGeneralAnnotation(row)) return false
+  return row.kind === 'highlight' || Boolean(row.quote)
+}
+
+function readingOrder(a, b) {
+  if (a.page !== b.page) return (Number(a.page) || 0) - (Number(b.page) || 0)
+  return compareAnnotations(a, b)
+}
+
+function colorSectionTitle(colorId) {
+  return COLOR_LABEL[colorId] || 'Takeaways'
 }
 
 export function articleNotesPageId(fileId, fileName = '') {
@@ -50,50 +102,70 @@ export function formatArticleTakeawaysHtml({
   annotations = [],
   exportedAt = Date.now(),
 }) {
-  const sorted = [...annotations].sort(compareAnnotations)
-  const when = new Date(exportedAt).toLocaleString()
-  const parts = [
-    `<h2>${escapeHtml(title || fileName || 'Article takeaways')}</h2>`,
-    `<p><em>Exported from Articles · ${escapeHtml(when)}</em></p>`,
-  ]
+  void exportedAt
+  const parts = [`<h2>${escapeHtml(title || fileName || 'Article takeaways')}</h2>`]
 
-  if (fileName && fileName !== title) {
-    parts.push(`<p class="mono"><code>${escapeHtml(fileName)}</code></p>`)
-  }
-
-  if (!sorted.length) {
+  if (!annotations.length) {
     parts.push('<p>No highlights or notes yet.</p>')
     return parts.join('')
   }
 
-  let lastSection = null
-  for (const row of sorted) {
-    const isGeneral = isGeneralAnnotation(row)
-    const sectionKey = isGeneral ? 'general' : `page-${Number(row.page) || 1}`
-    if (sectionKey !== lastSection) {
-      parts.push(isGeneral ? '<h3>General notes</h3>' : `<h3>Page ${Number(row.page) || 1}</h3>`)
-      lastSection = sectionKey
-    }
+  const overview = []
+  const keyPoints = []
+  const highlights = []
+  const working = []
 
-    const isHighlight = !isGeneral && (row.kind === 'highlight' || Boolean(row.quote))
-    const label = row.pinned
-      ? isGeneral
-        ? 'Pinned general note'
-        : isHighlight
-          ? 'Pinned highlight'
-          : 'Pinned page note'
-      : isGeneral
-        ? 'General note'
-        : isHighlight
-          ? 'Highlight'
-          : 'Page note'
-
-    parts.push(`<h4>${label}</h4>`)
-    if (row.quote) {
-      parts.push(`<blockquote><p>“${escapeHtml(row.quote)}”</p></blockquote>`)
+  for (const row of annotations) {
+    if (row.pinned) {
+      keyPoints.push(row)
+      continue
     }
-    const body = paragraphsFromText(row.text)
-    parts.push(body || '<p><em>(no note text)</em></p>')
+    if (isGeneralAnnotation(row)) {
+      overview.push(row)
+      continue
+    }
+    if (isHighlightRow(row)) {
+      highlights.push(row)
+      continue
+    }
+    working.push(row)
+  }
+
+  overview.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
+  keyPoints.sort(compareAnnotations)
+  highlights.sort(readingOrder)
+  working.sort(readingOrder)
+
+  if (overview.length) {
+    parts.push('<h3>Overview</h3>')
+    for (const row of overview) parts.push(renderTakeawayCard(row))
+  }
+
+  if (keyPoints.length) {
+    parts.push('<h3>Key points</h3>')
+    for (const row of keyPoints) parts.push(renderTakeawayCard(row))
+  }
+
+  if (highlights.length) {
+    const colorsUsed = new Set(highlights.map((r) => normalizeHighlightColor(r.color)))
+    const multiTopic = colorsUsed.size > 1
+
+    if (multiTopic) {
+      for (const colorId of COLOR_ORDER) {
+        if (!colorsUsed.has(colorId)) continue
+        const group = highlights.filter((r) => normalizeHighlightColor(r.color) === colorId)
+        parts.push(`<h3>${escapeHtml(colorSectionTitle(colorId))}</h3>`)
+        for (const row of group) parts.push(renderTakeawayCard(row))
+      }
+    } else {
+      parts.push('<h3>Takeaways</h3>')
+      for (const row of highlights) parts.push(renderTakeawayCard(row))
+    }
+  }
+
+  if (working.length) {
+    parts.push('<h3>Working notes</h3>')
+    for (const row of working) parts.push(renderTakeawayCard(row))
   }
 
   return parts.join('')

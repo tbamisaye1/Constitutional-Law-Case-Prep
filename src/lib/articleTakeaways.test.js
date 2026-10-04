@@ -42,7 +42,7 @@ describe('articleTakeaways', () => {
     expect(articleNotesPageId('pdf-123', 'x.pdf')).toBe('pg-article-pdf-123')
   })
 
-  it('formats highlights and notes by page', () => {
+  it('formats a study-friendly layout: overview, takeaways, working notes', () => {
     const html = formatArticleTakeawaysHtml({
       title: 'CRS report',
       fileName: 'R42337.pdf',
@@ -52,6 +52,7 @@ describe('articleTakeaways', () => {
           id: 'a2',
           page: 2,
           kind: 'highlight',
+          color: 'gold',
           quote: 'enemy belligerents',
           text: 'Key phrase for detention argument.',
           rects: [{ top: 0.2, left: 0.1, width: 0.3, height: 0.02 }],
@@ -72,13 +73,59 @@ describe('articleTakeaways', () => {
     })
 
     expect(html).toContain('<h2>CRS report</h2>')
-    expect(html).toContain('<h3>General notes</h3>')
-    expect(html).toContain('<h3>Page 1</h3>')
-    expect(html).toContain('<h3>Page 2</h3>')
+    expect(html).toContain('<h3>Overview</h3>')
+    expect(html).toContain('<h3>Takeaways</h3>')
+    expect(html).toContain('<h3>Working notes</h3>')
     expect(html).toContain('Hamdi vs Milligan')
     expect(html).toContain('enemy belligerents')
     expect(html).toContain('Reading goals')
-    expect(html.indexOf('General notes')).toBeLessThan(html.indexOf('Page 1'))
+    expect(html).toContain('<em>p. 2</em>')
+    expect(html).not.toContain('<h4>Highlight</h4>')
+    expect(html).not.toContain('<h3>Page 1</h3>')
+    expect(html).not.toContain('Exported from Articles')
+    expect(html.indexOf('Overview')).toBeLessThan(html.indexOf('Takeaways'))
+    expect(html.indexOf('Takeaways')).toBeLessThan(html.indexOf('Working notes'))
+  })
+
+  it('puts pinned items under Key points and groups multi-color highlights by topic', () => {
+    const html = formatArticleTakeawaysHtml({
+      title: 'Detention memo',
+      annotations: [
+        {
+          id: 'p1',
+          page: 3,
+          kind: 'highlight',
+          color: 'rose',
+          pinned: true,
+          quote: 'citizen-detainee',
+          text: 'Pin this for oral argument.',
+        },
+        {
+          id: 'g1',
+          page: 2,
+          kind: 'highlight',
+          color: 'green',
+          quote: 'AUMF',
+          text: 'Statutory hook.',
+        },
+        {
+          id: 'b1',
+          page: 4,
+          kind: 'highlight',
+          color: 'blue',
+          quote: 'habeas',
+          text: 'Procedure track.',
+        },
+      ],
+    })
+
+    expect(html).toContain('<h3>Key points</h3>')
+    expect(html).toContain('<h3>Green</h3>')
+    expect(html).toContain('<h3>Blue</h3>')
+    expect(html).not.toContain('<h3>Takeaways</h3>')
+    expect(html.indexOf('Key points')).toBeLessThan(html.indexOf('Green'))
+    expect(html.indexOf('Green')).toBeLessThan(html.indexOf('Blue'))
+    expect(html.indexOf('citizen-detainee')).toBeLessThan(html.indexOf('AUMF'))
   })
 
   it('upserts an Articles section page in the notebook store', () => {
@@ -95,6 +142,7 @@ describe('articleTakeaways', () => {
 
     const saved = JSON.parse(localStorage.getItem(NOTEBOOK_STORAGE_KEY))
     expect(saved.pagesBySection[ARTICLES_SECTION_ID][0].html).toContain('First takeaway')
+    expect(saved.pagesBySection[ARTICLES_SECTION_ID][0].html).toContain('Working notes')
 
     exportArticleTakeawaysToNotes({
       fileId: 'pdf-abc',
