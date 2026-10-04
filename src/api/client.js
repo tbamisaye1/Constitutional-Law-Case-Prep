@@ -93,14 +93,21 @@ export async function chatPrep(
     body.notes = options.notes
       .filter((n) => n && typeof n.text === "string" && n.text.trim())
       .slice(0, 8)
-      .map((n, i) => ({
-        id: String(n.id || `note-${i}`),
-        title: String(n.title || "Untitled note").trim() || "Untitled note",
-        text: n.text.trim(),
-        section_name: n.section_name ? String(n.section_name) : undefined,
-        page_id: n.page_id ? String(n.page_id) : undefined,
-        notes_path: n.notes_path ? String(n.notes_path) : undefined,
-      }));
+      .map((n, i) => {
+        const row = {
+          id: String(n.id || `note-${i}`),
+          title: String(n.title || "Untitled note").trim() || "Untitled note",
+          text: n.text.trim(),
+          section_name: n.section_name ? String(n.section_name) : undefined,
+          page_id: n.page_id ? String(n.page_id) : undefined,
+          notes_path: n.notes_path ? String(n.notes_path) : undefined,
+        };
+        if (n.source_type) row.source_type = String(n.source_type);
+        if (n.page != null && Number.isFinite(Number(n.page)) && Number(n.page) > 0) {
+          row.page = Number(n.page);
+        }
+        return row;
+      });
   }
 
   const res = await fetch(`${BASE}/chat`, {

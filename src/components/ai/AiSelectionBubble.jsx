@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Maximize2, Minimize2, Sparkles, X } from 'lucide-react'
+import { GripVertical, Maximize2, Minimize2, Sparkles, X } from 'lucide-react'
 import { GroundingBadge } from '../GroundingBadge'
 import { useAiUi } from '../../ai/AiUiContext'
 import { useCaseLibrary } from '../../hooks/useCaseLibrary'
@@ -15,6 +15,7 @@ import {
 } from '../../ai/samplePrompts'
 
 const EXPAND_KEY = 'case-prep-ask-ai-expanded'
+const POS_KEY = 'case-prep-ask-ai-pos'
 
 function readExpanded() {
   try {
@@ -24,11 +25,41 @@ function readExpanded() {
   }
 }
 
+/** @returns {{ left: number, top: number } | null} */
+function readPos() {
+  try {
+    const raw = localStorage.getItem(POS_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (typeof parsed?.left === 'number' && typeof parsed?.top === 'number') return parsed
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+function clampPos(left, top, width, height) {
+  const margin = 8
+  const maxLeft = Math.max(margin, window.innerWidth - width - margin)
+  const maxTop = Math.max(margin, window.innerHeight - height - margin)
+  return {
+    left: Math.min(maxLeft, Math.max(margin, left)),
+    top: Math.min(maxTop, Math.max(margin, top)),
+  }
+}
+
+function isNotebookEvidence(ev) {
+  return (
+    ev?.source_type === 'notebook' ||
+    ev?.source_type === 'annotation' ||
+    Boolean(ev?.notes_path)
+  )
+}
+
 /**
  * Floating AI bubble.
- * Mode switch: Uploaded articles (RAG only) | Web (corpus + OpenRouter search).
- * Corpus evidence cards open the PDF viewer on the cited page + quote.
- * Expand grows the panel for long answers; Esc exits expand, then closes.
+ * Drag the header to park it beside Highlights & Notes without closing the thread.
+ * Mode switch: Uploaded articles | Web. Optional Include my notes.
  */
 export function AiSelectionBubble() {
   const {
@@ -37,6 +68,8 @@ export function AiSelectionBubble() {
     setCtx,
     groundingSource,
     switchGroundingSource,
+    includeNotes,
+    setIncludeNotes,
     prompt,
     setPrompt,
     loading,
@@ -55,8 +88,12 @@ export function AiSelectionBubble() {
   const [openingId, setOpeningId] = useState('')
   const [openError, setOpenError] = useState('')
   const [expanded, setExpanded] = useState(readExpanded)
+  const [pos, setPos] = useState(readPos)
+  const [dragging, setDragging] = useState(false)
 
   const focusRef = useRef(null)
+  const panelRef = useRef(null)
+  const dragRef = useRef(null)
   const webPlus = groundingSource === 'web_plus'
 
   const hasSelection = Boolean(ctx.selection?.trim())
@@ -74,6 +111,31 @@ export function AiSelectionBubble() {
       /* ignore */
     }
   }, [expanded])
+
+  useEffect(() => {
+    try {
+      if (!pos) localStorage.removeItem(POS_KEY)
+      else localStorage.setItem(POS_KEY, JSON.stringify(pos))
+    } catch {
+      /* ignore */
+    }
+  }, [pos])
+
+  // Keep a dragged panel inside the viewport after resize / expand.
+  useEffect(() => {
+    if (!open || !pos || !panelRef.current) return undefined
+    function onResize() {
+      const rect = panelRef.current?.getBoundingClientRect()
+      if (!rect) return
+      setPos((prev) => {
+        if (!prev) return prev
+        return clampPos(prev.left, prev.top, rect.width, rect.height)
+      })
+    }
+    window.addEventListener('resize', onResize)
+    onResize()
+    return () => window.removeEventListener('resize', onResize)
+  }, [open, pos, expanded])
 
   useEffect(() => {
     if (!open) return undefined
@@ -102,8 +164,65 @@ export function AiSelectionBubble() {
     setOpeningId('')
   }, [reply])
 
+  function onHeaderPointerDown(event) {
+    if (event.button !== 0) return
+    if (event.target.closest('button, a, input, textarea, select')) return
+    const el = panelRef.current
+    if (!el) return
+    event.preventDefault()
+    const rect = el.getBoundingClientRect()
+    const startLeft = pos?.left ?? rect.left
+    const startTop = pos?.top ?? rect.top
+    dragRef.current = {
+      offsetX: event.clientX - startLeft,
+      offsetY: event.clientY - startTop,
+      width: rect.width,
+      height: rect.height,
+      pointerId: event.pointerId,
+    }
+    setDragging(true)
+    try {
+      el.setPointerCapture(event.pointerId)
+    } catch {
+      /* ignore */
+    }
+
+    function onMove(ev) {
+      const drag = dragRef.current
+      if (!drag) return
+      setPos(
+        clampPos(
+          ev.clientX - drag.offsetX,
+          ev.clientY - drag.offsetY,
+          drag.width,
+          drag.height
+        )
+      )
+    }
+
+    function onUp() {
+      dragRef.current = null
+      setDragging(false)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+  }
+
   async function onOpenEvidence(ev) {
     if (!ev || ev.source_type === 'web') return
+    if (isNotebookEvidence(ev)) {
+      const path = ev.notes_path
+      if (path) {
+        navigate(path)
+        closeBubble()
+      }
+      return
+    }
     setOpeningId(ev.id)
     setOpenError('')
     try {
@@ -123,20 +242,59 @@ export function AiSelectionBubble() {
 
   if (!open) return null
 
-  const corpusEvidence = (reply?.evidence || []).filter((ev) => ev.source_type !== 'web')
+  const noteEvidence = (reply?.evidence || []).filter(isNotebookEvidence)
+  const corpusEvidence = (reply?.evidence || []).filter(
+    (ev) => ev.source_type !== 'web' && !isNotebookEvidence(ev)
+  )
   const webEvidence = (reply?.evidence || []).filter((ev) => ev.source_type === 'web')
+
+  const className = [
+    'ai-bubble',
+    expanded ? 'is-expanded' : '',
+    pos ? 'is-placed' : '',
+    dragging ? 'is-dragging' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  const style = pos
+    ? {
+        left: pos.left,
+        top: pos.top,
+        right: 'auto',
+        bottom: 'auto',
+      }
+    : undefined
 
   return (
     <div
-      className={expanded ? 'ai-bubble is-expanded' : 'ai-bubble'}
+      ref={panelRef}
+      className={className}
+      style={style}
       role="dialog"
       aria-label={webPlus ? 'Ask AI with uploaded articles and web search' : 'Ask AI about uploaded articles'}
     >
-      <div className="ai-bubble-header">
+      <div
+        className="ai-bubble-header ai-bubble-drag-handle"
+        onPointerDown={onHeaderPointerDown}
+        title="Drag to move — chat stays open"
+      >
         <span className="ai-bubble-title">
+          <GripVertical size={14} className="ai-bubble-grip" aria-hidden />
           <Sparkles size={14} /> Ask AI
+          <span className="ai-bubble-drag-hint mono">drag</span>
         </span>
         <div className="ai-bubble-header-actions">
+          {pos ? (
+            <button
+              type="button"
+              className="btn-soft"
+              onClick={() => setPos(null)}
+              title="Dock back to bottom-right"
+            >
+              Dock
+            </button>
+          ) : null}
           <button
             type="button"
             className={expanded ? 'btn-ink notes-expand-exit' : 'btn-soft'}
@@ -182,16 +340,34 @@ export function AiSelectionBubble() {
           </button>
         </div>
 
+        <label className="ai-notes-toggle">
+          <input
+            type="checkbox"
+            checked={includeNotes}
+            onChange={(e) => setIncludeNotes(e.target.checked)}
+          />
+          <span>
+            Include my notes
+            <span className="ai-notes-toggle-hint">
+              Searches notebook pages, PDF highlights/page notes, and case-library tabs.
+              Off by default.
+            </span>
+          </span>
+        </label>
+
         <p className="ai-bubble-policy">
           {webPlus ? (
             <>
-              <strong>Uploaded articles + web.</strong> Prefers your PDFs; searches the web when the
+              <strong>Uploaded articles + web.</strong> Prefers your PDFs
+              {includeNotes ? ' and matching notes/annotations' : ''}; searches the web when the
               corpus is thin or you ask for outside definitions and background.
             </>
           ) : (
             <>
-              <strong>Uploaded articles only.</strong> Answers cite retrieved passages; refuses if the
-              corpus is not enough.
+              <strong>Uploaded articles only.</strong> Answers cite retrieved passages
+              {includeNotes ? ' and your notes/annotations when they match' : ''}; refuses if the
+              corpus is not enough. Say “in my notes” or “my highlights” anytime to pull local
+              notes for one question.
             </>
           )}
         </p>
@@ -299,9 +475,11 @@ export function AiSelectionBubble() {
             <div className="ai-sample-label mono">Working</div>
             {prompt ? <p className="ai-bubble-loading-q">{prompt}</p> : null}
             <p className="ai-bubble-loading-status">
-              {webPlus
-                ? 'Checking uploaded articles, then web search if needed…'
-                : 'Retrieving passages from uploaded articles and generating a grounded answer…'}
+              {includeNotes || /my notes|notebook/i.test(prompt)
+                ? 'Searching your notes and uploaded articles…'
+                : webPlus
+                  ? 'Checking uploaded articles, then web search if needed…'
+                  : 'Retrieving passages from uploaded articles and generating a grounded answer…'}
             </p>
           </div>
         ) : null}
@@ -323,8 +501,44 @@ export function AiSelectionBubble() {
             {prompt ? <p className="ai-bubble-asked">Q: {prompt}</p> : null}
             {reply.grounding_notes ? <p className="ai-bubble-notes">{reply.grounding_notes}</p> : null}
 
-            {corpusEvidence.length ? (
+            {noteEvidence.length ? (
               <div className="ai-bubble-evidence ai-bubble-evidence-first">
+                <div className="ai-sample-label mono">From your notes & annotations</div>
+                <p className="ai-ev-hint mono">
+                  Click to open the notebook page or the PDF annotation in the library.
+                </p>
+                {noteEvidence.slice(0, 5).map((ev) => (
+                  <button
+                    key={ev.id}
+                    type="button"
+                    className="ai-ev-card"
+                    onClick={() => onOpenEvidence(ev)}
+                    disabled={!ev.notes_path}
+                  >
+                    <div className="mono ai-ev-src">
+                      [{ev.id}] {ev.source}
+                    </div>
+                    <p>{ev.preview}</p>
+                    <span className="mono ai-ev-open">
+                      {ev.notes_path
+                        ? ev.notes_path.startsWith('/library')
+                          ? 'Open in Library →'
+                          : 'Open in Notes →'
+                        : 'No deep link'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {corpusEvidence.length ? (
+              <div
+                className={
+                  noteEvidence.length
+                    ? 'ai-bubble-evidence'
+                    : 'ai-bubble-evidence ai-bubble-evidence-first'
+                }
+              >
                 <div className="ai-sample-label mono">Retrieved from Ask AI corpus</div>
                 <p className="ai-ev-hint mono">
                   Click a PDF cite to open it. Oyez summaries are text-only until you attach the
@@ -383,9 +597,13 @@ export function AiSelectionBubble() {
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder={
-            webPlus
-              ? 'Ask from your articles and the web…'
-              : 'Ask from your uploaded articles…'
+            includeNotes
+              ? webPlus
+                ? 'Ask from notes, articles, and the web…'
+                : 'Ask from your notes and uploaded articles…'
+              : webPlus
+                ? 'Ask from your articles and the web…'
+                : 'Ask from your uploaded articles…'
           }
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {

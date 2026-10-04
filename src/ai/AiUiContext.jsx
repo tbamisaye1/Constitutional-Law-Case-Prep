@@ -10,7 +10,9 @@ import {
   readAskAiMemory,
   writeAskAiMemory,
 } from './askAiMemory'
-import { notebookChunksForAskAi, queryWantsNotes } from '../lib/notebookSearch'
+import { prepNotesForAskAi } from '../lib/annotationSearch'
+import { queryWantsNotes } from '../lib/notebookSearch'
+import { useCaseLibrary } from '../hooks/useCaseLibrary'
 
 /**
  * Selection context for the Ask AI bubble.
@@ -21,8 +23,8 @@ import { notebookChunksForAskAi, queryWantsNotes } from '../lib/notebookSearch'
  *   web_plus  — uploaded articles + OpenRouter web search
  *
  * includeNotes: when on (or when the prompt clearly asks for "my notes"),
- * matching notebook pages are searched in this browser and sent with /chat.
- * Notes are never uploaded silently.
+ * matching notebook pages, PDF annotations, and case-library note tabs are
+ * searched in this browser and sent with /chat. Never uploaded silently.
  *
  * memory: prior user/assistant turns for this browser tab (sessionStorage).
  */
@@ -39,6 +41,7 @@ function readIncludeNotes() {
 }
 
 export function AiUiProvider({ children }) {
+  const lib = useCaseLibrary()
   const [open, setOpen] = useState(false)
   const [anchor, setAnchor] = useState({ top: 80, left: 80 })
   const [ctx, setCtx] = useState({
@@ -128,7 +131,16 @@ export function AiUiProvider({ children }) {
       }))
 
       const wantsNotes = includeNotes || queryWantsNotes(user_prompt)
-      const notes = wantsNotes ? notebookChunksForAskAi(user_prompt, { limit: 5 }) : []
+      const notes = wantsNotes
+        ? prepNotesForAskAi(user_prompt, {
+            annotations: lib.annotations || [],
+            cases: lib.cases || [],
+            filesMeta: lib.filesMeta || [],
+            notesByCase: lib.notesByCase || {},
+            noteTabs: lib.noteTabs || [],
+            totalLimit: 8,
+          })
+        : []
 
       try {
         const data = await chatPrep(
@@ -181,6 +193,11 @@ export function AiUiProvider({ children }) {
       includeNotes,
       memory,
       persistMemory,
+      lib.annotations,
+      lib.cases,
+      lib.filesMeta,
+      lib.notesByCase,
+      lib.noteTabs,
     ]
   )
 

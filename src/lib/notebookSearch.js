@@ -262,13 +262,13 @@ export function notebookChunksForAskAi(query, { limit = 5, chunkSize = 900, note
   return chunks.slice(0, limit)
 }
 
-/** Heuristic: user is asking Ask AI to use their notebook. */
+/** Heuristic: user is asking Ask AI to use their notebook / annotations. */
 export function queryWantsNotes(prompt) {
   const q = String(prompt || '').toLowerCase()
   if (!q.trim()) return false
   return (
-    /\b(my notes?|notebook|onenote|what did i (write|note|say)|from my notes?|in my notes?|according to my notes?)\b/.test(
+    /\b(my notes?|notebook|onenote|what did i (write|note|say)|from my notes?|in my notes?|according to my notes?|my (highlights?|annotations?)|from my (highlights?|annotations?))\b/.test(
       q
-    ) || /\b(search|find|look)\b.{0,24}\bnotes?\b/.test(q)
+    ) || /\b(search|find|look)\b.{0,24}\b(notes?|highlights?|annotations?)\b/.test(q)
   )
 }
