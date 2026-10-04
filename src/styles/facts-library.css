@@ -3306,6 +3306,17 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   box-shadow: 0 14px 40px rgba(20, 22, 26, 0.24);
 }
 
+.ai-bubble.is-placed {
+  right: auto;
+  bottom: auto;
+}
+
+.ai-bubble.is-dragging {
+  user-select: none;
+  box-shadow: 0 18px 48px rgba(20, 22, 26, 0.32);
+  cursor: grabbing;
+}
+
 .ai-bubble.is-expanded {
   top: 16px;
   right: 16px;
@@ -3318,6 +3329,13 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   box-shadow: 0 18px 48px rgba(20, 22, 26, 0.28);
 }
 
+.ai-bubble.is-expanded.is-placed {
+  right: auto;
+  bottom: auto;
+  height: min(88vh, 820px);
+  max-height: calc(100vh - 24px);
+}
+
 .ai-bubble-header {
   flex: 0 0 auto;
   display: flex;
@@ -3326,6 +3344,29 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   gap: 10px;
   padding: 12px 14px 8px;
   border-bottom: 1px solid var(--rule-soft);
+}
+
+.ai-bubble-drag-handle {
+  cursor: grab;
+  touch-action: none;
+}
+
+.ai-bubble.is-dragging .ai-bubble-drag-handle {
+  cursor: grabbing;
+}
+
+.ai-bubble-grip {
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+
+.ai-bubble-drag-hint {
+  margin-left: 4px;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
 }
 
 .ai-bubble-header-actions {
@@ -3455,6 +3496,34 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
 .ai-mode-row button.on {
   background: var(--ink);
   color: var(--paper-2);
+}
+
+.ai-notes-toggle {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.ai-notes-toggle input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.ai-notes-toggle-hint {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-3);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
 }
 
 .ai-ev-url {
