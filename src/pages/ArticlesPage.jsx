@@ -389,12 +389,18 @@ export function ArticlesPage() {
         lastSavedAt={lib.lastSavedAt}
         onSyncNow={lib.syncNow}
         onRetrySaveError={
-          indexFailMeta
-            ? () => onRetryIndex(indexFailMeta.id)
+          indexFailMeta || lib.saveError
+            ? () => {
+                const target =
+                  indexFailMeta ||
+                  caseFiles.find((f) => f.askAiIndexError || !f.stored) ||
+                  caseFiles[0]
+                if (target) return onRetryIndex(target.id)
+              }
             : undefined
         }
         retrySaveLabel={
-          indexingId === indexFailMeta?.id ? 'Indexing…' : 'Retry Ask AI index'
+          indexingId ? 'Retrying upload…' : 'Retry upload & index'
         }
       />
 

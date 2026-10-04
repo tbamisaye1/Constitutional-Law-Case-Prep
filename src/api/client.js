@@ -2,6 +2,11 @@
  * Chat helper for the grounded agent API.
  * Returns reply + grounding_status so the UI can distrust fluent wrong answers.
  */
+import {
+  isNetworkFailure,
+  putPdfToBlob,
+  withNetworkRetries,
+} from "../lib/blobUpload";
 import { getWorkspaceId } from "../lib/workspace";
 
 const BASE = import.meta.env.VITE_API_BASE || "/api";
@@ -131,14 +136,6 @@ export async function chatPrep(
  */
 const INGEST_PROXY_LIMIT_BYTES = 2.5 * 1024 * 1024;
 
-function isProxyIngestNetworkFailure(error) {
-  const message = error?.message || String(error || "");
-  return (
-    error?.name === "TypeError" ||
-    /failed to fetch|networkerror|network request failed|load failed/i.test(message)
-  );
-}
-
 /** Upload a PDF; backend chunks it and merges into the FAISS index for Ask AI. */
 export async function ingestPdf(file) {
   if (file.size > INGEST_PROXY_LIMIT_BYTES) {
@@ -162,7 +159,7 @@ export async function ingestPdf(file) {
     // Vercel often resets oversized multipart uploads before returning 413.
     // Retry via Blob so Instant Case opinions (Milligan, Youngstown, etc.)
     // still reach FAISS instead of stranding as "readable but not indexed".
-    if (isProxyIngestNetworkFailure(error)) {
+    if (isNetworkFailure(error)) {
       return ingestPdfDirect(file);
     }
     throw error;
@@ -178,73 +175,58 @@ export async function ingestPdf(file) {
  */
 export async function ingestPdfDirect(file) {
   const name = file.name || "upload.pdf";
-  const tokenRes = await fetch(`${BASE}/ingest/blob-client-upload`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      type: "blob.generate-client-token",
-      payload: {
-        pathname: `case-law-agent/ingest/${name}`,
-        clientPayload: JSON.stringify({ name }),
-        multipart: false,
-      },
-    }),
+  const tokenBody = await withNetworkRetries("Ask AI index token", async () => {
+    const tokenRes = await fetch(`${BASE}/ingest/blob-client-upload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "blob.generate-client-token",
+        payload: {
+          pathname: `case-law-agent/ingest/${name}`,
+          clientPayload: JSON.stringify({ name }),
+          multipart: false,
+        },
+      }),
+    });
+    if (!tokenRes.ok) {
+      throw new Error(
+        await errorDetail(
+          tokenRes,
+          `This PDF is ${(file.size / (1024 * 1024)).toFixed(1)} MB and needs direct Blob ingest, but the token request failed (${tokenRes.status}).`
+        )
+      );
+    }
+    return tokenRes.json();
   });
-  if (!tokenRes.ok) {
-    throw new Error(
-      await errorDetail(
-        tokenRes,
-        `This PDF is ${(file.size / (1024 * 1024)).toFixed(1)} MB and needs direct Blob ingest, but the token request failed (${tokenRes.status}).`
-      )
-    );
-  }
-  const tokenBody = await tokenRes.json();
   const clientToken = tokenBody.clientToken;
   const pathname = tokenBody.pathname;
   if (!clientToken || !pathname) {
     throw new Error("Blob upload token response was incomplete.");
   }
 
-  const putRes = await fetch(`https://blob.vercel-storage.com/${pathname}`, {
-    method: "PUT",
-    headers: {
-      authorization: `Bearer ${clientToken}`,
-      "x-api-version": "7",
-      "x-content-type": file.type || "application/pdf",
-      "x-content-length": String(file.size),
-      "x-add-random-suffix": "0",
-    },
-    body: file,
-  });
-  if (!putRes.ok) {
-    const detail = await putRes.text();
-    throw new Error(detail || `Blob PUT failed: ${putRes.status}`);
-  }
-  let stored = {};
-  try {
-    stored = await putRes.json();
-  } catch {
-    stored = {};
-  }
+  const stored = await withNetworkRetries("Ask AI Blob upload", () =>
+    putPdfToBlob(clientToken, pathname, file, name)
+  );
   const blobUrl = stored.url || stored.downloadUrl || "";
-  if (!blobUrl) {
-    throw new Error("Blob accepted the upload but returned no URL.");
-  }
 
-  const completeRes = await fetch(`${BASE}/ingest/from-blob`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      filename: name,
-      blob_url: blobUrl,
-      blob_pathname: pathname,
-      size_bytes: file.size,
-    }),
+  return withNetworkRetries("Ask AI index from Blob", async () => {
+    const completeRes = await fetch(`${BASE}/ingest/from-blob`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: name,
+        blob_url: blobUrl,
+        blob_pathname: pathname,
+        size_bytes: file.size,
+      }),
+    });
+    if (!completeRes.ok) {
+      throw new Error(
+        await errorDetail(completeRes, `ingest from Blob failed: ${completeRes.status}`)
+      );
+    }
+    return completeRes.json();
   });
-  if (!completeRes.ok) {
-    throw new Error(await errorDetail(completeRes, `ingest from Blob failed: ${completeRes.status}`));
-  }
-  return completeRes.json();
 }
 
 export async function listIngestSources() {
@@ -339,70 +321,57 @@ export async function uploadDocument(file, { documentId, caseId, name }) {
  * 3. POST /documents/complete so Postgres knows the file is stored
  */
 export async function uploadDocumentDirect(file, { documentId, caseId, name }) {
-  const tokenRes = await fetch(`${BASE}/documents/blob-client-upload`, {
-    method: "POST",
-    headers: workspaceHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({
-      type: "blob.generate-client-token",
-      payload: {
-        pathname: `case-law-agent/workspaces/pending/${documentId}/upload.pdf`,
-        clientPayload: JSON.stringify({ documentId, caseId, name }),
-        multipart: false,
-      },
-    }),
+  const tokenBody = await withNetworkRetries("Backend storage token", async () => {
+    const tokenRes = await fetch(`${BASE}/documents/blob-client-upload`, {
+      method: "POST",
+      headers: workspaceHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        type: "blob.generate-client-token",
+        payload: {
+          pathname: `case-law-agent/workspaces/pending/${documentId}/upload.pdf`,
+          clientPayload: JSON.stringify({ documentId, caseId, name }),
+          multipart: false,
+        },
+      }),
+    });
+    if (!tokenRes.ok) {
+      throw new Error(
+        await errorDetail(tokenRes, `direct upload token failed: ${tokenRes.status}`)
+      );
+    }
+    return tokenRes.json();
   });
-  if (!tokenRes.ok) {
-    throw new Error(await errorDetail(tokenRes, `direct upload token failed: ${tokenRes.status}`));
-  }
-  const tokenBody = await tokenRes.json();
   const clientToken = tokenBody.clientToken;
   const pathname = tokenBody.pathname;
   if (!clientToken || !pathname) {
     throw new Error("Blob upload token response was incomplete.");
   }
 
-  const putRes = await fetch(`https://blob.vercel-storage.com/${pathname}`, {
-    method: "PUT",
-    headers: {
-      authorization: `Bearer ${clientToken}`,
-      "x-api-version": "7",
-      "x-content-type": file.type || "application/pdf",
-      "x-content-length": String(file.size),
-      "x-add-random-suffix": "0",
-    },
-    body: file,
-  });
-  if (!putRes.ok) {
-    const detail = await putRes.text();
-    throw new Error(detail || `Blob PUT failed: ${putRes.status}`);
-  }
-  let stored = {};
-  try {
-    stored = await putRes.json();
-  } catch {
-    stored = {};
-  }
+  const stored = await withNetworkRetries("Backend Blob upload", () =>
+    putPdfToBlob(clientToken, pathname, file, name)
+  );
   const blobUrl = stored.url || stored.downloadUrl || "";
-  if (!blobUrl) {
-    throw new Error("Blob accepted the upload but returned no URL.");
-  }
 
-  const completeRes = await fetch(`${BASE}/documents/complete`, {
-    method: "POST",
-    headers: workspaceHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({
-      document_id: documentId,
-      case_id: caseId,
-      name,
-      size_bytes: file.size,
-      blob_pathname: pathname,
-      blob_url: blobUrl,
-    }),
+  return withNetworkRetries("Backend storage complete", async () => {
+    const completeRes = await fetch(`${BASE}/documents/complete`, {
+      method: "POST",
+      headers: workspaceHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        document_id: documentId,
+        case_id: caseId,
+        name,
+        size_bytes: file.size,
+        blob_pathname: pathname,
+        blob_url: blobUrl,
+      }),
+    });
+    if (!completeRes.ok) {
+      throw new Error(
+        await errorDetail(completeRes, `complete upload failed: ${completeRes.status}`)
+      );
+    }
+    return completeRes.json();
   });
-  if (!completeRes.ok) {
-    throw new Error(await errorDetail(completeRes, `complete upload failed: ${completeRes.status}`));
-  }
-  return completeRes.json();
 }
 
 /**

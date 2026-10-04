@@ -597,7 +597,7 @@ async function indexFileForAskAi(meta, blob, options = {}) {
     }
 
     const file = new File([blob], meta.name, {
-      type: blob.type || 'application/pdf',
+      type: 'application/pdf',
     })
     await ingestPdf(file)
     markFileAskAiIndexed(meta.id, meta.name)
@@ -841,7 +841,10 @@ export function useCaseLibrary() {
     try {
       for (const file of files) {
         const id = `pdf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-        const blob = file.slice(0, file.size, file.type || 'application/pdf')
+        // Force application/pdf so the Blob client token (PDF-only) accepts the
+        // PUT. Empty / octet-stream types from some browsers used to fail as a
+        // bare "Failed to fetch" after CORS hid the 400.
+        const blob = file.slice(0, file.size, 'application/pdf')
         await idbPutFile({ id, caseId, name: file.name, blob })
         blobPatch[id] = blob
         added.push({ id, caseId, name: file.name, size: file.size, savedAt: Date.now() })
@@ -911,18 +914,35 @@ export function useCaseLibrary() {
   }, [])
 
   /**
-   * Re-try FAISS indexing for a PDF that is readable locally but failed earlier
-   * (common for large Instant Case opinions when the proxy path dies mid-upload).
+   * Re-try backend storage and/or FAISS indexing for a PDF that is readable
+   * locally but failed earlier (common for ~5 MB+ Articles PDFs when the Blob
+   * PUT died mid-flight, or when MIME type made Blob reject the upload).
    */
   const retryAskAiIndex = useCallback(async (fileId) => {
-    const meta = memory.store.filesMeta.find((f) => f.id === fileId)
+    let meta = memory.store.filesMeta.find((f) => f.id === fileId)
     const blob = memory.blobs[fileId]
-    if (!meta || !blob || meta.askAiIndexed) return false
+    if (!meta || !blob) return false
     askAiIndexCooldownUntil.delete(fileId)
     setMemory({ saveError: '' })
-    await indexFileForAskAi(meta, blob, { force: true })
+
+    const typed =
+      blob.type === 'application/pdf'
+        ? blob
+        : blob.slice(0, blob.size, 'application/pdf')
+
+    // Retry storage first when the file never landed on the backend. The banner
+    // used to say "not on the backend" while the button only re-ran Ask AI.
+    if (!meta.stored && memory.syncStatus !== 'off') {
+      await uploadFileBytes(meta, typed)
+      meta = memory.store.filesMeta.find((f) => f.id === fileId) || meta
+    }
+
+    if (!meta.askAiIndexed) {
+      await indexFileForAskAi(meta, typed, { force: true })
+    }
+
     const next = memory.store.filesMeta.find((f) => f.id === fileId)
-    return Boolean(next?.askAiIndexed)
+    return Boolean(next?.askAiIndexed || next?.stored)
   }, [])
 
   /**
