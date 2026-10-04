@@ -4,6 +4,8 @@
  */
 
 export const ASK_AI_MEMORY_KEY = 'case-prep-ask-ai-memory'
+/** Last on-screen Q + reply so closing Ask AI does not wipe what you were reading. */
+export const ASK_AI_LAST_VIEW_KEY = 'case-prep-ask-ai-last-view'
 /** Soft cap: drop oldest turns after this many messages (user + assistant). */
 export const ASK_AI_MEMORY_MAX_TURNS = 12
 /** Warn the user once memory reaches this many turns. */
@@ -48,6 +50,54 @@ export function writeAskAiMemory(turns) {
 export function clearAskAiMemoryStore() {
   try {
     sessionStorage.removeItem(ASK_AI_MEMORY_KEY)
+    sessionStorage.removeItem(ASK_AI_LAST_VIEW_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Persist the visible Ask AI answer so close → reopen shows the same Q + reply.
+ * Cleared with memory, or when the user starts a new question.
+ *
+ * @returns {{ prompt: string, reply: object } | null}
+ */
+export function readAskAiLastView() {
+  try {
+    const raw = sessionStorage.getItem(ASK_AI_LAST_VIEW_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return null
+    const prompt = typeof parsed.prompt === 'string' ? parsed.prompt : ''
+    const reply = parsed.reply && typeof parsed.reply === 'object' ? parsed.reply : null
+    if (!reply || typeof reply.text !== 'string' || !reply.text.trim()) return null
+    return { prompt, reply }
+  } catch {
+    return null
+  }
+}
+
+export function writeAskAiLastView(prompt, reply) {
+  try {
+    if (!reply || typeof reply.text !== 'string' || !reply.text.trim()) {
+      sessionStorage.removeItem(ASK_AI_LAST_VIEW_KEY)
+      return
+    }
+    sessionStorage.setItem(
+      ASK_AI_LAST_VIEW_KEY,
+      JSON.stringify({
+        prompt: typeof prompt === 'string' ? prompt : '',
+        reply,
+      })
+    )
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+export function clearAskAiLastView() {
+  try {
+    sessionStorage.removeItem(ASK_AI_LAST_VIEW_KEY)
   } catch {
     /* ignore */
   }

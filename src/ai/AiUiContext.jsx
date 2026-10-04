@@ -4,10 +4,13 @@ import { groundingStatusFromReply } from './samplePrompts'
 import { MATTER } from '../data/seed'
 import {
   appendAskAiTurn,
+  clearAskAiLastView,
   clearAskAiMemoryStore,
   memoryIsFull,
   memoryIsNearFull,
+  readAskAiLastView,
   readAskAiMemory,
+  writeAskAiLastView,
   writeAskAiMemory,
 } from './askAiMemory'
 import { prepNotesForAskAi } from '../lib/annotationSearch'
@@ -56,14 +59,19 @@ export function AiUiProvider({ children }) {
   })
   const [groundingSource, setGroundingSource] = useState('documents')
   const [includeNotes, setIncludeNotesState] = useState(readIncludeNotes)
-  const [prompt, setPrompt] = useState('')
+  const [prompt, setPrompt] = useState(() => readAskAiLastView()?.prompt || '')
   const [loading, setLoading] = useState(false)
-  const [reply, setReply] = useState(null)
+  const [reply, setReply] = useState(() => readAskAiLastView()?.reply || null)
   const [memory, setMemory] = useState(() => readAskAiMemory())
 
   const persistMemory = useCallback((next) => {
     setMemory(next)
     writeAskAiMemory(next)
+  }, [])
+
+  const persistReply = useCallback((nextReply, nextPrompt) => {
+    setReply(nextReply)
+    writeAskAiLastView(nextPrompt, nextReply)
   }, [])
 
   const setIncludeNotes = useCallback((next) => {
@@ -88,14 +96,17 @@ export function AiUiProvider({ children }) {
       ...partial,
     }))
     if (position) setAnchor(position)
-    // Keep the current answer / draft when Ask AI is already open (e.g. new
-    // highlight while you are still reading the reply and typing notes).
-    if (!openRef.current) {
-      setReply(null)
-      setPrompt('')
+    // Keep the last answer when reopening. Closing used to wipe reply/prompt
+    // even though chat memory was still in sessionStorage.
+    if (!openRef.current && !reply) {
+      const saved = readAskAiLastView()
+      if (saved?.reply) {
+        setReply(saved.reply)
+        if (saved.prompt) setPrompt(saved.prompt)
+      }
     }
     setOpen(true)
-  }, [])
+  }, [reply])
 
   const closeBubble = useCallback(() => {
     setOpen(false)
@@ -106,6 +117,7 @@ export function AiUiProvider({ children }) {
     const mode = next === 'web_plus' ? 'web_plus' : 'documents'
     setGroundingSource(mode)
     setReply(null)
+    clearAskAiLastView()
     setLoading(false)
   }, [])
 
@@ -124,6 +136,8 @@ export function AiUiProvider({ children }) {
       setPrompt(user_prompt)
       setLoading(true)
       setReply(null)
+      // Keep the previous last-view in sessionStorage until the new reply
+      // lands, so closing mid-request still restores the prior answer.
 
       const historyForApi = memory.map((t) => ({
         role: t.role,
@@ -162,23 +176,29 @@ export function AiUiProvider({ children }) {
           { role: 'assistant', content: replyText }
         )
         persistMemory(nextMemory)
-        setReply({
-          grounding_status: status,
-          grounding_source: data.grounding_source || groundingSource,
-          text: replyText,
-          grounding_notes: data.grounding_notes,
-          evidence: data.evidence,
-          claims_verified: data.claims_verified,
-          claims_total: data.claims_total,
-          notes_used: notes.length,
-        })
+        persistReply(
+          {
+            grounding_status: status,
+            grounding_source: data.grounding_source || groundingSource,
+            text: replyText,
+            grounding_notes: data.grounding_notes,
+            evidence: data.evidence,
+            claims_verified: data.claims_verified,
+            claims_total: data.claims_total,
+            notes_used: notes.length,
+          },
+          user_prompt
+        )
       } catch (err) {
-        setReply({
-          grounding_status: 'no_evidence',
-          grounding_source: groundingSource,
-          text: formatAskAiFailure(err, groundingSource),
-          notes_used: notes.length,
-        })
+        persistReply(
+          {
+            grounding_status: 'no_evidence',
+            grounding_source: groundingSource,
+            text: formatAskAiFailure(err, groundingSource),
+            notes_used: notes.length,
+          },
+          user_prompt
+        )
       } finally {
         setLoading(false)
       }
@@ -193,6 +213,7 @@ export function AiUiProvider({ children }) {
       includeNotes,
       memory,
       persistMemory,
+      persistReply,
       lib.annotations,
       lib.cases,
       lib.filesMeta,
@@ -205,6 +226,7 @@ export function AiUiProvider({ children }) {
 
   const clearReply = useCallback(() => {
     setReply(null)
+    clearAskAiLastView()
     setLoading(false)
     setPrompt('')
   }, [])
