@@ -150,6 +150,7 @@ export function collectChanges(store, syncMeta) {
         rects: row.rects || null,
         pinned: Boolean(row.pinned),
         color: row.color || 'gold',
+        topics: Array.isArray(row.topics) ? row.topics : [],
       },
       metaKey('annotations', row.id)
     )
@@ -196,6 +197,7 @@ export function collectChanges(store, syncMeta) {
         rects: null,
         pinned: false,
         color: 'gold',
+        topics: [],
       })
     } else if (entity === 'documents') {
       Object.assign(tombstone, {
@@ -307,6 +309,7 @@ export function applyChanges(store, syncMeta, changes) {
   for (const row of changes.annotations || []) {
     const key = metaKey('annotations', row.id)
     if (!isNewer(key, row)) continue
+    const previous = nextStore.annotations.find((item) => item.id === row.id)
     nextStore = {
       ...nextStore,
       annotations: row.deleted
@@ -322,6 +325,12 @@ export function applyChanges(store, syncMeta, changes) {
             rects: row.rects,
             pinned: Boolean(row.pinned),
             color: row.color || 'gold',
+            // Keep local topics if an older server row omitted the field.
+            topics: Array.isArray(row.topics)
+              ? row.topics
+              : Array.isArray(previous?.topics)
+                ? previous.topics
+                : [],
             savedAt: row.updatedAt,
           }),
     }

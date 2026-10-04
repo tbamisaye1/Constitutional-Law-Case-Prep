@@ -88,8 +88,11 @@ function previewText(text) {
 }
 
 /**
- * Multi-select topic chips for one annotation. Vocabulary comes from other
- * tags already used on this article (plus whatever the user types next).
+ * Multi-select topic chips for one annotation.
+ *
+ * Reuse: unused labels already on this article show as one-click picks.
+ * New: type in the field and press Enter / Add. Stays open so you can stack
+ * several topics without reopening the picker each time.
  */
 function TopicEditor({ topics, vocabulary, onChange, onFlush }) {
   const [draft, setDraft] = useState('')
@@ -97,13 +100,14 @@ function TopicEditor({ topics, vocabulary, onChange, onFlush }) {
   const inputRef = useRef(null)
   const current = normalizeTopicsList(topics, vocabulary)
   const q = normalizeTopicLabel(draft).toLowerCase()
-  const suggestions = (vocabulary || []).filter((label) => {
-    if (annotationHasTopic(current, label)) return false
-    if (!q) return true
-    return label.toLowerCase().includes(q)
-  })
+  const available = (vocabulary || []).filter((label) => !annotationHasTopic(current, label))
+  const filteredAvailable = q
+    ? available.filter((label) => label.toLowerCase().includes(q))
+    : available
+  const canCreate =
+    Boolean(q) && !annotationHasTopic(current, draft) && !available.some((l) => l.toLowerCase() === q)
 
-  function commit(raw) {
+  function commit(raw, { keepOpen = true } = {}) {
     const next = addTopic(current, raw, vocabulary)
     if (next.length === current.length) {
       setDraft('')
@@ -112,14 +116,15 @@ function TopicEditor({ topics, vocabulary, onChange, onFlush }) {
     onChange(next)
     onFlush?.()
     setDraft('')
-    setOpen(false)
+    if (!keepOpen) setOpen(false)
+    else requestAnimationFrame(() => inputRef.current?.focus())
   }
 
   return (
     <div className="anno-topics">
-      <div className="anno-topic-chips" aria-label="Topics">
+      <div className="anno-topic-chips" aria-label="Topics on this note">
         {current.map((label) => (
-          <span key={label.toLowerCase()} className="anno-topic-chip">
+          <span key={label.toLowerCase()} className="anno-topic-chip on">
             {label}
             <button
               type="button"
@@ -149,44 +154,70 @@ function TopicEditor({ topics, vocabulary, onChange, onFlush }) {
       </div>
       {open ? (
         <div className="anno-topic-compose">
-          <input
-            ref={inputRef}
-            className="anno-topic-input"
-            value={draft}
-            maxLength={40}
-            placeholder="Topic for this article…"
-            aria-label="Add topic"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                if (draft.trim()) commit(draft)
-              }
-              if (e.key === 'Escape') {
-                e.preventDefault()
+          {available.length ? (
+            <div className="anno-topic-pick-row" role="listbox" aria-label="Reuse a topic from this article">
+              <span className="mono anno-topic-pick-label">Reuse</span>
+              {filteredAvailable.length ? (
+                filteredAvailable.map((label) => (
+                  <button
+                    key={label.toLowerCase()}
+                    type="button"
+                    className="anno-topic-chip pick"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => commit(label)}
+                  >
+                    {label}
+                  </button>
+                ))
+              ) : (
+                <span className="anno-topic-pick-empty mono">No match — type a new topic</span>
+              )}
+            </div>
+          ) : (
+            <p className="anno-topic-pick-empty mono">No topics on this article yet. Type one below.</p>
+          )}
+          <div className="anno-topic-input-row">
+            <input
+              ref={inputRef}
+              className="anno-topic-input"
+              value={draft}
+              maxLength={40}
+              placeholder="New topic for this article…"
+              aria-label="New topic"
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  if (draft.trim()) commit(draft)
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setDraft('')
+                  setOpen(false)
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="btn-soft anno-topic-create"
+              disabled={!canCreate}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => commit(draft)}
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              className="btn-soft"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
                 setDraft('')
                 setOpen(false)
-              }
-            }}
-            onBlur={() => {
-              if (!draft.trim()) setOpen(false)
-            }}
-          />
-          {suggestions.length ? (
-            <div className="anno-topic-suggestions" role="listbox">
-              {suggestions.slice(0, 8).map((label) => (
-                <button
-                  key={label.toLowerCase()}
-                  type="button"
-                  className="anno-topic-suggestion"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => commit(label)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          ) : null}
+              }}
+            >
+              Done
+            </button>
+          </div>
         </div>
       ) : null}
     </div>
@@ -782,6 +813,7 @@ export function AnnotationPanel({
 }) {
   const [scope, setScope] = useState('all') // all | page | general
   const [topicFilters, setTopicFilters] = useState([]) // selected topic labels (OR)
+  const [taggedOnly, setTaggedOnly] = useState(false)
   const [untaggedOnly, setUntaggedOnly] = useState(false)
   const [listPage, setListPage] = useState(1)
   const [expandedIds, setExpandedIds] = useState(() => new Set())
@@ -807,17 +839,19 @@ export function AnnotationPanel({
     const map = new Map()
     for (const label of vocabulary) map.set(label, 0)
     let untagged = 0
+    let tagged = 0
     for (const a of forCase) {
       const list = normalizeTopicsList(a.topics, vocabulary)
       if (!list.length) {
         untagged += 1
         continue
       }
+      tagged += 1
       for (const label of list) {
         map.set(label, (map.get(label) || 0) + 1)
       }
     }
-    return { byTopic: map, untagged }
+    return { byTopic: map, untagged, tagged }
   }, [forCase, vocabulary])
 
   const filtered = useMemo(() => {
@@ -828,13 +862,15 @@ export function AnnotationPanel({
     }
     if (untaggedOnly) {
       rows = rows.filter((a) => normalizeTopicsList(a.topics).length === 0)
+    } else if (taggedOnly) {
+      rows = rows.filter((a) => normalizeTopicsList(a.topics).length > 0)
     } else if (topicFilters.length) {
       rows = rows.filter((a) =>
         topicFilters.some((label) => annotationHasTopic(a.topics, label))
       )
     }
     return rows
-  }, [forCase, generalNotes, scope, page, topicFilters, untaggedOnly])
+  }, [forCase, generalNotes, scope, page, topicFilters, taggedOnly, untaggedOnly])
 
   const totalListPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safeListPage = Math.min(listPage, totalListPages)
@@ -843,14 +879,22 @@ export function AnnotationPanel({
 
   useEffect(() => {
     setListPage(1)
-  }, [scope, caseId, page, filtered.length, topicFilters, untaggedOnly])
+  }, [scope, caseId, page, filtered.length, topicFilters, taggedOnly, untaggedOnly])
 
   useEffect(() => {
     setTopicFilters([])
+    setTaggedOnly(false)
     setUntaggedOnly(false)
   }, [caseId])
 
+  function clearTopicFilters() {
+    setTopicFilters([])
+    setTaggedOnly(false)
+    setUntaggedOnly(false)
+  }
+
   function toggleTopicFilter(label) {
+    setTaggedOnly(false)
     setUntaggedOnly(false)
     setTopicFilters((prev) => {
       const on = prev.some((t) => t.toLowerCase() === label.toLowerCase())
@@ -1023,8 +1067,32 @@ export function AnnotationPanel({
         </button>
       </div>
 
-      {vocabulary.length || topicCounts.untagged ? (
+      {forCase.length ? (
         <div className="anno-topic-filters" role="group" aria-label="Filter by topic">
+          <button
+            type="button"
+            className={taggedOnly ? 'anno-topic-filter on' : 'anno-topic-filter'}
+            aria-pressed={taggedOnly}
+            onClick={() => {
+              setTopicFilters([])
+              setUntaggedOnly(false)
+              setTaggedOnly((v) => !v)
+            }}
+          >
+            Tagged <span className="mono">{topicCounts.tagged}</span>
+          </button>
+          <button
+            type="button"
+            className={untaggedOnly ? 'anno-topic-filter on' : 'anno-topic-filter'}
+            aria-pressed={untaggedOnly}
+            onClick={() => {
+              setTopicFilters([])
+              setTaggedOnly(false)
+              setUntaggedOnly((v) => !v)
+            }}
+          >
+            Untagged <span className="mono">{topicCounts.untagged}</span>
+          </button>
           {vocabulary.map((label) => {
             const selected = topicFilters.some((t) => t.toLowerCase() === label.toLowerCase())
             const count = topicCounts.byTopic.get(label) || 0
@@ -1040,26 +1108,8 @@ export function AnnotationPanel({
               </button>
             )
           })}
-          <button
-            type="button"
-            className={untaggedOnly ? 'anno-topic-filter on' : 'anno-topic-filter'}
-            aria-pressed={untaggedOnly}
-            onClick={() => {
-              setTopicFilters([])
-              setUntaggedOnly((v) => !v)
-            }}
-          >
-            Untagged <span className="mono">{topicCounts.untagged}</span>
-          </button>
-          {topicFilters.length || untaggedOnly ? (
-            <button
-              type="button"
-              className="anno-topic-filter-clear"
-              onClick={() => {
-                setTopicFilters([])
-                setUntaggedOnly(false)
-              }}
-            >
+          {topicFilters.length || taggedOnly || untaggedOnly ? (
+            <button type="button" className="anno-topic-filter-clear" onClick={clearTopicFilters}>
               Clear topics
             </button>
           ) : null}

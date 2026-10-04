@@ -2723,6 +2723,63 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   border-radius: 999px;
 }
 
+.anno-topic-chip.on {
+  border-color: var(--ink);
+  background: var(--paper-2);
+  color: var(--ink);
+}
+
+button.anno-topic-chip.pick {
+  cursor: pointer;
+  border-style: dashed;
+  font: inherit;
+}
+
+button.anno-topic-chip.pick:hover,
+button.anno-topic-chip.pick:focus-visible {
+  border-style: solid;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.anno-topic-pick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.anno-topic-pick-label {
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.anno-topic-pick-empty {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  margin: 0 0 6px;
+}
+
+.anno-topic-input-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.anno-topic-input-row .anno-topic-input {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.anno-topic-create:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .anno-topic-remove {
   display: inline-flex;
   align-items: center;

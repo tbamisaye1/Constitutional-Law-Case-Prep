@@ -88,10 +88,26 @@ describe('collectChanges', () => {
         rects: null,
         pinned: false,
         color: 'gold',
+        topics: [],
         updatedAt: 2_000,
         deleted: true,
       },
     ])
+  })
+
+  it('round-trips annotation topics through collect and apply', () => {
+    const base = store({
+      annotations: [{ ...annotation('a-1', 'tagged'), topics: ['AUMF', 'Hamdi'] }],
+    })
+    const meta = markDirty(base.syncMeta, [metaKey('annotations', 'a-1')], 3_000)
+    const { changes } = collectChanges(base, meta)
+    expect(changes.annotations[0].topics).toEqual(['AUMF', 'Hamdi'])
+
+    const empty = store()
+    const applied = applyChanges(empty, emptySyncMeta(), {
+      annotations: [{ ...changes.annotations[0], updatedAt: 3_000 }],
+    })
+    expect(applied.store.annotations[0].topics).toEqual(['AUMF', 'Hamdi'])
   })
 
   it('keys notes by case and layer', () => {
