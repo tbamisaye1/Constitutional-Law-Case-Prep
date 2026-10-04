@@ -154,40 +154,22 @@ function TopicEditor({ topics, vocabulary, onChange, onFlush }) {
       </div>
       {open ? (
         <div className="anno-topic-compose">
-          {available.length ? (
-            <div className="anno-topic-pick-row" role="listbox" aria-label="Reuse a topic from this article">
-              <span className="mono anno-topic-pick-label">Reuse</span>
-              {filteredAvailable.length ? (
-                filteredAvailable.map((label) => (
-                  <button
-                    key={label.toLowerCase()}
-                    type="button"
-                    className="anno-topic-chip pick"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => commit(label)}
-                  >
-                    {label}
-                  </button>
-                ))
-              ) : (
-                <span className="anno-topic-pick-empty mono">No match — type a new topic</span>
-              )}
-            </div>
-          ) : (
-            <p className="anno-topic-pick-empty mono">No topics on this article yet. Type one below.</p>
-          )}
           <div className="anno-topic-input-row">
             <input
               ref={inputRef}
               className="anno-topic-input"
               value={draft}
               maxLength={40}
-              placeholder="New topic for this article…"
-              aria-label="New topic"
+              placeholder={available.length ? 'Filter or add topic…' : 'New topic…'}
+              aria-label="Filter or add topic"
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault()
+                  if (filteredAvailable.length === 1 && !canCreate) {
+                    commit(filteredAvailable[0])
+                    return
+                  }
                   if (draft.trim()) commit(draft)
                 }
                 if (e.key === 'Escape') {
@@ -218,6 +200,26 @@ function TopicEditor({ topics, vocabulary, onChange, onFlush }) {
               Done
             </button>
           </div>
+          {available.length ? (
+            <div className="anno-topic-pick-row" role="listbox" aria-label="Reuse a topic from this article">
+              {filteredAvailable.length ? (
+                filteredAvailable.map((label) => (
+                  <button
+                    key={label.toLowerCase()}
+                    type="button"
+                    className="anno-topic-chip pick"
+                    title={label}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => commit(label)}
+                  >
+                    {label}
+                  </button>
+                ))
+              ) : (
+                <span className="anno-topic-pick-empty mono">No match</span>
+              )}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -2665,18 +2665,25 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
 .anno-topic-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin: 0 0 10px;
+  gap: 4px;
+  margin: 0 0 8px;
+  max-height: 4.8em;
+  overflow: auto;
 }
 
 .anno-topic-filter {
   border: 1px solid var(--rule-soft);
   background: var(--paper);
   color: var(--ink-2);
-  font-size: 11.5px;
-  padding: 3px 8px;
+  font-size: 10px;
+  line-height: 1.2;
+  padding: 2px 6px;
   cursor: pointer;
   border-radius: 999px;
+  max-width: 11em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .anno-topic-filter.on {
@@ -2686,41 +2693,47 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
 }
 
 .anno-topic-filter .mono {
-  margin-left: 4px;
+  margin-left: 3px;
   opacity: 0.7;
+  font-size: 9px;
 }
 
 .anno-topic-filter-clear {
   border: 0;
   background: transparent;
   color: var(--ink-3);
-  font-size: 11px;
-  padding: 3px 4px;
+  font-size: 10px;
+  padding: 2px 4px;
   cursor: pointer;
   text-decoration: underline;
 }
 
 .anno-topics {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .anno-topic-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 4px;
   align-items: center;
 }
 
 .anno-topic-chip {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 7px;
+  gap: 2px;
+  padding: 1px 6px;
   border: 1px solid var(--rule-soft);
   background: var(--paper);
-  font-size: 11px;
+  font-size: 10px;
+  line-height: 1.25;
   color: var(--ink-2);
   border-radius: 999px;
+  max-width: 10em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .anno-topic-chip.on {
@@ -2733,6 +2746,8 @@ button.anno-topic-chip.pick {
   cursor: pointer;
   border-style: dashed;
   font: inherit;
+  font-size: 10px;
+  max-width: 9em;
 }
 
 button.anno-topic-chip.pick:hover,
@@ -2745,34 +2760,37 @@ button.anno-topic-chip.pick:focus-visible {
 .anno-topic-pick-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.anno-topic-pick-label {
-  font-size: 10px;
-  color: var(--ink-3);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  gap: 3px;
+  align-content: flex-start;
+  margin-top: 5px;
+  max-height: 4.6em;
+  overflow: auto;
+  padding: 2px 0;
 }
 
 .anno-topic-pick-empty {
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--ink-3);
-  margin: 0 0 6px;
+  margin: 0;
+  padding: 2px 0;
 }
 
 .anno-topic-input-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 4px;
   align-items: center;
 }
 
 .anno-topic-input-row .anno-topic-input {
-  flex: 1 1 120px;
+  flex: 1 1 auto;
   min-width: 0;
+}
+
+.anno-topic-input-row .btn-soft {
+  flex: 0 0 auto;
+  font-size: 10px;
+  padding: 3px 7px;
 }
 
 .anno-topic-create:disabled {
@@ -2791,24 +2809,25 @@ button.anno-topic-chip.pick:focus-visible {
   cursor: pointer;
   color: var(--ink-3);
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .anno-topic-add {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   border: 1px dashed var(--rule);
   background: transparent;
   color: var(--ink-3);
-  font-size: 11px;
-  padding: 2px 7px;
+  font-size: 10px;
+  padding: 1px 6px;
   cursor: pointer;
   border-radius: 999px;
 }
 
 .anno-topic-compose {
   position: relative;
-  margin-top: 6px;
+  margin-top: 5px;
 }
 
 .anno-topic-input {
@@ -2816,8 +2835,8 @@ button.anno-topic-chip.pick:focus-visible {
   border: 1px solid var(--rule);
   background: var(--paper);
   color: var(--ink);
-  font-size: 12px;
-  padding: 5px 8px;
+  font-size: 11px;
+  padding: 4px 7px;
 }
 
 .anno-topic-suggestions {
