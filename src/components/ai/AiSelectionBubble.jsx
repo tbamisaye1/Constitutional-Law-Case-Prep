@@ -16,6 +16,10 @@ import {
 
 const EXPAND_KEY = 'case-prep-ask-ai-expanded'
 const POS_KEY = 'case-prep-ask-ai-pos'
+const SIZE_KEY = 'case-prep-ask-ai-size'
+
+const MIN_BUBBLE_WIDTH = 280
+const MIN_BUBBLE_HEIGHT = 260
 
 function readExpanded() {
   try {
@@ -38,6 +42,26 @@ function readPos() {
   return null
 }
 
+/** @returns {{ width: number, height: number } | null} */
+function readSize() {
+  try {
+    const raw = localStorage.getItem(SIZE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (
+      typeof parsed?.width === 'number' &&
+      typeof parsed?.height === 'number' &&
+      parsed.width >= MIN_BUBBLE_WIDTH &&
+      parsed.height >= MIN_BUBBLE_HEIGHT
+    ) {
+      return { width: parsed.width, height: parsed.height }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
 function clampPos(left, top, width, height) {
   const margin = 8
   const maxLeft = Math.max(margin, window.innerWidth - width - margin)
@@ -45,6 +69,16 @@ function clampPos(left, top, width, height) {
   return {
     left: Math.min(maxLeft, Math.max(margin, left)),
     top: Math.min(maxTop, Math.max(margin, top)),
+  }
+}
+
+function clampSize(width, height) {
+  const margin = 16
+  const maxW = Math.max(MIN_BUBBLE_WIDTH, window.innerWidth - margin * 2)
+  const maxH = Math.max(MIN_BUBBLE_HEIGHT, window.innerHeight - 92)
+  return {
+    width: Math.min(maxW, Math.max(MIN_BUBBLE_WIDTH, Math.round(width))),
+    height: Math.min(maxH, Math.max(MIN_BUBBLE_HEIGHT, Math.round(height))),
   }
 }
 
@@ -90,11 +124,14 @@ export function AiSelectionBubble() {
   const [openError, setOpenError] = useState('')
   const [expanded, setExpanded] = useState(readExpanded)
   const [pos, setPos] = useState(readPos)
+  const [size, setSize] = useState(readSize)
   const [dragging, setDragging] = useState(false)
+  const [resizing, setResizing] = useState(false)
 
   const focusRef = useRef(null)
   const panelRef = useRef(null)
   const dragRef = useRef(null)
+  const resizeRef = useRef(null)
   const webPlus = groundingSource === 'web_plus'
 
   const hasSelection = Boolean(ctx.selection?.trim())
@@ -122,21 +159,32 @@ export function AiSelectionBubble() {
     }
   }, [pos])
 
-  // Keep a dragged panel inside the viewport after resize / expand.
   useEffect(() => {
-    if (!open || !pos || !panelRef.current) return undefined
+    try {
+      if (!size) localStorage.removeItem(SIZE_KEY)
+      else localStorage.setItem(SIZE_KEY, JSON.stringify(size))
+    } catch {
+      /* ignore */
+    }
+  }, [size])
+
+  // Keep a dragged / custom-sized panel inside the viewport after window resize.
+  useEffect(() => {
+    if (!open || !panelRef.current) return undefined
     function onResize() {
       const rect = panelRef.current?.getBoundingClientRect()
       if (!rect) return
+      setSize((prev) => (prev ? clampSize(prev.width, prev.height) : prev))
       setPos((prev) => {
         if (!prev) return prev
-        return clampPos(prev.left, prev.top, rect.width, rect.height)
+        const nextSize = size || { width: rect.width, height: rect.height }
+        return clampPos(prev.left, prev.top, nextSize.width, nextSize.height)
       })
     }
     window.addEventListener('resize', onResize)
     onResize()
     return () => window.removeEventListener('resize', onResize)
-  }, [open, pos, expanded])
+  }, [open, pos, size, expanded])
 
   useEffect(() => {
     if (!open) return undefined
@@ -172,6 +220,71 @@ export function AiSelectionBubble() {
     restoreFromMemory()
   }, [open, loading, reply, memory, restoreFromMemory])
 
+  function onResizePointerDown(event) {
+    if (event.button !== 0) return
+    const el = panelRef.current
+    if (!el || expanded) return
+    event.preventDefault()
+    event.stopPropagation()
+    const rect = el.getBoundingClientRect()
+    resizeRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      startW: size?.width || rect.width,
+      startH: size?.height || rect.height,
+      // Docked panels are anchored bottom-right; convert to placed coords so
+      // resizing from the SE corner still feels natural.
+      startLeft: pos?.left ?? rect.left,
+      startTop: pos?.top ?? rect.top,
+      placed: Boolean(pos),
+      pointerId: event.pointerId,
+    }
+    setResizing(true)
+    try {
+      el.setPointerCapture(event.pointerId)
+    } catch {
+      /* ignore */
+    }
+
+    function onMove(ev) {
+      const drag = resizeRef.current
+      if (!drag) return
+      const next = clampSize(
+        drag.startW + (ev.clientX - drag.startX),
+        drag.startH + (ev.clientY - drag.startY)
+      )
+      setSize(next)
+      if (!drag.placed) {
+        // Keep the bottom-right corner fixed while growing/shrinking.
+        setPos(
+          clampPos(
+            drag.startLeft + drag.startW - next.width,
+            drag.startTop + drag.startH - next.height,
+            next.width,
+            next.height
+          )
+        )
+      }
+    }
+
+    function onUp(ev) {
+      resizeRef.current = null
+      setResizing(false)
+      try {
+        el.releasePointerCapture(ev.pointerId)
+      } catch {
+        /* ignore */
+      }
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerup', onUp)
+      el.removeEventListener('pointercancel', onUp)
+    }
+
+    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointerup', onUp)
+    el.addEventListener('pointercancel', onUp)
+  }
+
   function onHeaderPointerDown(event) {
     if (event.button !== 0) return
     if (event.target.closest('button, a, input, textarea, select')) return
@@ -184,8 +297,8 @@ export function AiSelectionBubble() {
     dragRef.current = {
       offsetX: event.clientX - startLeft,
       offsetY: event.clientY - startTop,
-      width: rect.width,
-      height: rect.height,
+      width: size?.width || rect.width,
+      height: size?.height || rect.height,
       pointerId: event.pointerId,
     }
     setDragging(true)
@@ -260,19 +373,30 @@ export function AiSelectionBubble() {
     'ai-bubble',
     expanded ? 'is-expanded' : '',
     pos ? 'is-placed' : '',
+    size && !expanded ? 'is-sized' : '',
     dragging ? 'is-dragging' : '',
+    resizing ? 'is-resizing' : '',
   ]
     .filter(Boolean)
     .join(' ')
 
-  const style = pos
-    ? {
-        left: pos.left,
-        top: pos.top,
-        right: 'auto',
-        bottom: 'auto',
-      }
-    : undefined
+  const style = {
+    ...(pos
+      ? {
+          left: pos.left,
+          top: pos.top,
+          right: 'auto',
+          bottom: 'auto',
+        }
+      : null),
+    ...(size && !expanded
+      ? {
+          width: size.width,
+          height: size.height,
+          maxHeight: 'none',
+        }
+      : null),
+  }
 
   return (
     <div
@@ -285,7 +409,7 @@ export function AiSelectionBubble() {
       <div
         className="ai-bubble-header ai-bubble-drag-handle"
         onPointerDown={onHeaderPointerDown}
-        title="Drag to move — chat stays open"
+        title="Drag to move — chat stays open. Drag the corner to resize."
       >
         <span className="ai-bubble-title">
           <GripVertical size={14} className="ai-bubble-grip" aria-hidden />
@@ -301,6 +425,16 @@ export function AiSelectionBubble() {
               title="Dock back to bottom-right"
             >
               Dock
+            </button>
+          ) : null}
+          {size && !expanded ? (
+            <button
+              type="button"
+              className="btn-soft"
+              onClick={() => setSize(null)}
+              title="Reset to default size"
+            >
+              Reset size
             </button>
           ) : null}
           <button
@@ -661,6 +795,17 @@ export function AiSelectionBubble() {
           <span className="mono ai-kbd">⌘↵</span>
         </div>
       </div>
+
+      {!expanded ? (
+        <div
+          className="ai-bubble-resize"
+          onPointerDown={onResizePointerDown}
+          role="separator"
+          aria-orientation="both"
+          aria-label="Resize Ask AI"
+          title="Drag to resize"
+        />
+      ) : null}
     </div>
   )
 }

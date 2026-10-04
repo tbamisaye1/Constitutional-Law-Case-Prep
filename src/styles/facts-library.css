@@ -3317,6 +3317,44 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   cursor: grabbing;
 }
 
+.ai-bubble.is-resizing {
+  user-select: none;
+  box-shadow: 0 18px 48px rgba(20, 22, 26, 0.32);
+}
+
+.ai-bubble.is-sized {
+  max-height: none;
+}
+
+.ai-bubble-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  touch-action: none;
+  z-index: 2;
+}
+
+.ai-bubble-resize::before {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid var(--ink-3);
+  border-bottom: 2px solid var(--ink-3);
+  opacity: 0.65;
+}
+
+.ai-bubble-resize:hover::before,
+.ai-bubble.is-resizing .ai-bubble-resize::before {
+  opacity: 1;
+  border-color: var(--ink-2);
+}
+
 .ai-bubble.is-expanded {
   top: 16px;
   right: 16px;
