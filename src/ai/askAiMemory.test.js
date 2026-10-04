@@ -4,8 +4,10 @@ import {
   appendAskAiTurn,
   clearAskAiLastView,
   clearAskAiMemoryStore,
+  lastViewFromMemory,
   memoryIsNearFull,
   readAskAiLastView,
+  resolveAskAiLastView,
   writeAskAiLastView,
 } from './askAiMemory'
 
@@ -79,5 +81,22 @@ describe('askAiMemory', () => {
     writeAskAiLastView('Q', { text: 'A', grounding_status: 'grounded' })
     clearAskAiMemoryStore()
     expect(readAskAiLastView()).toBeNull()
+  })
+
+  it('rebuilds the last Q + full answer from memory turns', () => {
+    const turns = [
+      { role: 'user', content: 'What is Hamdi?' },
+      {
+        role: 'assistant',
+        content:
+          'Short rundown (direct answer first) - Facts: Yaser Hamdi, a U.S. citizen captured in Afghanistan in 2001, was designated an enemy combatant.',
+      },
+    ]
+    const view = lastViewFromMemory(turns)
+    expect(view.prompt).toBe('What is Hamdi?')
+    expect(view.reply.text).toContain('enemy combatant')
+    expect(view.reply.restored_from_memory).toBe(true)
+
+    expect(resolveAskAiLastView(turns).reply.text).toContain('enemy combatant')
   })
 })

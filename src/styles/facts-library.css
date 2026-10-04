@@ -3452,11 +3452,53 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   border-top: 1px solid var(--rule-soft);
 }
 
+.ai-memory-open-last {
+  margin: 0 0 8px;
+}
+
 .ai-memory-turn {
   margin: 0 0 6px;
   font-size: 12.5px;
   line-height: 1.4;
   color: var(--ink-2);
+}
+
+button.ai-memory-turn-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0;
+  padding: 6px 4px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+button.ai-memory-turn-btn:hover,
+button.ai-memory-turn-btn:focus-visible {
+  border-color: var(--rule);
+  background: var(--paper-2, rgba(0, 0, 0, 0.03));
+}
+
+.ai-memory-turn-static {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 6px 4px;
+  font: inherit;
+  color: inherit;
+  cursor: default;
+}
+
+.ai-memory-open-hint {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  color: var(--ink-3);
 }
 
 .ai-memory-turn .mono {

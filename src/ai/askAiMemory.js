@@ -104,6 +104,65 @@ export function clearAskAiLastView() {
 }
 
 /**
+ * Rebuild a viewable Q + reply from chat memory when the rich last-view was
+ * never saved (answers from before that feature, or a wiped reply state).
+ *
+ * Evidence / grounding badges are not in memory, so this restores the full
+ * answer text and the matching user question.
+ *
+ * @param {AskAiTurn[]} turns
+ * @param {number} [atIndex] Index of the assistant turn to restore. Defaults
+ *   to the latest assistant message.
+ * @returns {{ prompt: string, reply: object } | null}
+ */
+export function lastViewFromMemory(turns, atIndex = -1) {
+  const list = Array.isArray(turns) ? turns : []
+  if (!list.length) return null
+
+  let assistantIndex = atIndex
+  if (assistantIndex < 0 || assistantIndex >= list.length) {
+    assistantIndex = -1
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      if (list[i].role === 'assistant') {
+        assistantIndex = i
+        break
+      }
+    }
+  }
+  if (assistantIndex < 0) return null
+  const assistant = list[assistantIndex]
+  if (!assistant?.content?.trim()) return null
+
+  let prompt = ''
+  for (let i = assistantIndex - 1; i >= 0; i -= 1) {
+    if (list[i].role === 'user' && list[i].content?.trim()) {
+      prompt = list[i].content.trim()
+      break
+    }
+  }
+
+  const text = assistant.content.trim()
+  const statusMatch = text.match(/^STATUS:\s*(\w+)/im)
+
+  return {
+    prompt,
+    reply: {
+      // Memory stores answer text (often with a STATUS line). Evidence cards
+      // from the original call are not available after restore.
+      grounding_status: statusMatch ? statusMatch[1].toLowerCase() : 'grounded',
+      grounding_source: 'documents',
+      text,
+      restored_from_memory: true,
+    },
+  }
+}
+
+/** Prefer the rich last-view; fall back to rebuilding from memory turns. */
+export function resolveAskAiLastView(turns = readAskAiMemory()) {
+  return readAskAiLastView() || lastViewFromMemory(turns)
+}
+
+/**
  * Append a turn and trim to the soft cap (drop oldest first).
  * @param {AskAiTurn[]} prev
  * @param {AskAiTurn} turn

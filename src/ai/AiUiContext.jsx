@@ -6,10 +6,11 @@ import {
   appendAskAiTurn,
   clearAskAiLastView,
   clearAskAiMemoryStore,
+  lastViewFromMemory,
   memoryIsFull,
   memoryIsNearFull,
-  readAskAiLastView,
   readAskAiMemory,
+  resolveAskAiLastView,
   writeAskAiLastView,
   writeAskAiMemory,
 } from './askAiMemory'
@@ -59,10 +60,10 @@ export function AiUiProvider({ children }) {
   })
   const [groundingSource, setGroundingSource] = useState('documents')
   const [includeNotes, setIncludeNotesState] = useState(readIncludeNotes)
-  const [prompt, setPrompt] = useState(() => readAskAiLastView()?.prompt || '')
-  const [loading, setLoading] = useState(false)
-  const [reply, setReply] = useState(() => readAskAiLastView()?.reply || null)
   const [memory, setMemory] = useState(() => readAskAiMemory())
+  const [prompt, setPrompt] = useState(() => resolveAskAiLastView()?.prompt || '')
+  const [loading, setLoading] = useState(false)
+  const [reply, setReply] = useState(() => resolveAskAiLastView()?.reply || null)
 
   const persistMemory = useCallback((next) => {
     setMemory(next)
@@ -87,6 +88,21 @@ export function AiUiProvider({ children }) {
   const openRef = useRef(false)
   openRef.current = open
 
+  const restoreFromMemory = useCallback(
+    (assistantIndex = -1) => {
+      const saved =
+        assistantIndex < 0
+          ? resolveAskAiLastView(memory)
+          : lastViewFromMemory(memory, assistantIndex)
+      if (!saved?.reply) return false
+      setReply(saved.reply)
+      if (saved.prompt) setPrompt(saved.prompt)
+      writeAskAiLastView(saved.prompt, saved.reply)
+      return true
+    },
+    [memory]
+  )
+
   const openBubble = useCallback((partial, position) => {
     setCtx((prev) => ({
       ...prev,
@@ -96,17 +112,18 @@ export function AiUiProvider({ children }) {
       ...partial,
     }))
     if (position) setAnchor(position)
-    // Keep the last answer when reopening. Closing used to wipe reply/prompt
-    // even though chat memory was still in sessionStorage.
+    // Keep / rebuild the last answer when reopening. Closing used to wipe
+    // reply/prompt even though chat memory was still in sessionStorage.
     if (!openRef.current && !reply) {
-      const saved = readAskAiLastView()
+      const saved = resolveAskAiLastView(memory)
       if (saved?.reply) {
         setReply(saved.reply)
         if (saved.prompt) setPrompt(saved.prompt)
+        writeAskAiLastView(saved.prompt, saved.reply)
       }
     }
     setOpen(true)
-  }, [reply])
+  }, [reply, memory])
 
   const closeBubble = useCallback(() => {
     setOpen(false)
@@ -254,6 +271,7 @@ export function AiUiProvider({ children }) {
       runPrompt,
       clearReply,
       clearMemory,
+      restoreFromMemory,
     }),
     [
       open,
@@ -273,6 +291,7 @@ export function AiUiProvider({ children }) {
       runPrompt,
       clearReply,
       clearMemory,
+      restoreFromMemory,
     ]
   )
 

@@ -82,6 +82,7 @@ export function AiSelectionBubble() {
     runPrompt,
     clearReply,
     clearMemory,
+    restoreFromMemory,
   } = useAiUi()
   const navigate = useNavigate()
   const lib = useCaseLibrary()
@@ -163,6 +164,13 @@ export function AiSelectionBubble() {
     setOpenError('')
     setOpeningId('')
   }, [reply])
+
+  // Older answers only lived in the truncated "Recent thread" strip. Auto-open
+  // the newest full reply once when the panel is open with memory but no reply.
+  useEffect(() => {
+    if (!open || loading || reply || !memory.length) return
+    restoreFromMemory()
+  }, [open, loading, reply, memory, restoreFromMemory])
 
   function onHeaderPointerDown(event) {
     if (event.button !== 0) return
@@ -394,13 +402,36 @@ export function AiSelectionBubble() {
         {memory.length && !reply && !loading ? (
           <div className="ai-memory-transcript">
             <div className="ai-sample-label mono">Recent thread</div>
-            {memory.slice(-4).map((turn, i) => (
-              <p key={`${turn.at || i}-${turn.role}`} className="ai-memory-turn">
-                <span className="mono">{turn.role === 'user' ? 'You' : 'Ask AI'}</span>
-                {turn.content.slice(0, 140)}
-                {turn.content.length > 140 ? '…' : ''}
-              </p>
-            ))}
+            <p className="ai-memory-hint">
+              Tap a turn to open the full answer. Newest Ask AI reply loads the matching question.
+            </p>
+            <button
+              type="button"
+              className="btn-soft ai-memory-open-last"
+              onClick={() => restoreFromMemory()}
+            >
+              Open last full answer
+            </button>
+            {memory.slice(-4).map((turn, i) => {
+              const absoluteIndex = memory.length - Math.min(4, memory.length) + i
+              const canOpen = turn.role === 'assistant'
+              return (
+                <button
+                  key={`${turn.at || absoluteIndex}-${turn.role}`}
+                  type="button"
+                  className={canOpen ? 'ai-memory-turn ai-memory-turn-btn' : 'ai-memory-turn ai-memory-turn-static'}
+                  disabled={!canOpen}
+                  onClick={() => {
+                    if (canOpen) restoreFromMemory(absoluteIndex)
+                  }}
+                >
+                  <span className="mono">{turn.role === 'user' ? 'You' : 'Ask AI'}</span>
+                  {turn.content.slice(0, 140)}
+                  {turn.content.length > 140 ? '…' : ''}
+                  {canOpen ? <span className="mono ai-memory-open-hint">Open →</span> : null}
+                </button>
+              )
+            })}
           </div>
         ) : null}
         {hasSelection ? (
