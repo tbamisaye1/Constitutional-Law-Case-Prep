@@ -16,7 +16,7 @@ function readExpanded() {
 
 /**
  * Argument board: sections (issues / themes) with nested prongs, plus working notes.
- * Outline + notes persist in localStorage (survives refresh).
+ * Outline + notes persist and sync to your workspace (same on phone / laptop).
  *
  * Expand hides the outline so the notes canvas can use the full width.
  * Esc exits expand. Preference is remembered.

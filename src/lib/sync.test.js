@@ -129,6 +129,48 @@ describe('collectChanges', () => {
       'timeline',
     ])
   })
+
+  it('pushes the OneNote notebook as library_records kind notebook', () => {
+    const base = store({
+      notebook: [
+        {
+          id: 'main',
+          tree: [{ id: 'sec-1', name: 'Issue 2', kind: 'section' }],
+          pagesBySection: {
+            'sec-1': [{ id: 'pg-1', title: 'NDAA', html: '<p>detention</p>' }],
+          },
+        },
+      ],
+    })
+    const meta = markDirty(base.syncMeta, [metaKey('library_records', 'notebook', 'main')], 1_000)
+    const { changes } = collectChanges(base, meta)
+    expect(changes.library_records).toHaveLength(1)
+    expect(changes.library_records[0].kind).toBe('notebook')
+    expect(changes.library_records[0].id).toBe('main')
+    expect(changes.library_records[0].data.pagesBySection['sec-1'][0].title).toBe('NDAA')
+  })
+
+  it('pushes arguments / guide / facts / openings snapshot docs', () => {
+    const base = store({
+      argumentsBoard: [{ id: 'main', outlines: { petitioner: [] }, notes: { petitioner: '<p>x</p>' } }],
+      guideEdits: [{ id: 'main', edits: { intro: '<p>hi</p>' } }],
+      factsBoard: [{ id: 'main', facts: [{ id: 'f1', text: 'Ring cameras' }] }],
+      openings: [{ id: 'main', petitioner: '<p>P</p>', respondent: '<p>R</p>' }],
+    })
+    const meta = markDirty(
+      base.syncMeta,
+      [
+        metaKey('library_records', 'arguments', 'main'),
+        metaKey('library_records', 'guide_edits', 'main'),
+        metaKey('library_records', 'facts', 'main'),
+        metaKey('library_records', 'openings', 'main'),
+      ],
+      1_000
+    )
+    const { changes } = collectChanges(base, meta)
+    const kinds = changes.library_records.map((r) => r.kind).sort()
+    expect(kinds).toEqual(['arguments', 'facts', 'guide_edits', 'openings'])
+  })
 })
 
 describe('applyChanges', () => {

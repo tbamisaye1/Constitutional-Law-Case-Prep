@@ -31,6 +31,22 @@ import {
   pendingCount,
 } from '../lib/sync'
 import { getWorkspaceId } from '../lib/workspace'
+import {
+  hydrateNotebookFromRemote,
+  notebookRowsForLibraryLoad,
+  notebookRowsFromLocal,
+  notebookSnapshotsEqual,
+  NOTEBOOK_ROW_ID,
+  registerNotebookSyncPublisher,
+} from '../lib/notebookWorkspace'
+import {
+  allWorkspaceDocKinds,
+  DOC_ROW_ID,
+  hydrateWorkspaceDocFromRemote,
+  registerWorkspaceDocPublisher,
+  WORKSPACE_DOCS,
+  workspaceDocRowsFromLocal,
+} from '../lib/workspaceDocs'
 
 const KEY = 'case-prep-library-v5'
 
@@ -79,6 +95,12 @@ function emptyStore() {
     articleTitles: [],
     // Reading bookmarks: { id, fileId, page, label, savedAt }
     pdfBookmarks: [],
+    // OneNote notebook snapshot (synced as library_records kind=notebook).
+    notebook: notebookRowsFromLocal(),
+    argumentsBoard: workspaceDocRowsFromLocal('arguments'),
+    guideEdits: workspaceDocRowsFromLocal('guide_edits'),
+    factsBoard: workspaceDocRowsFromLocal('facts'),
+    openings: workspaceDocRowsFromLocal('openings'),
     activeFileId: null,
     pageByFile: {},
     // Which rows have changed since the backend last accepted them, and how
@@ -104,6 +126,26 @@ function load() {
     noteTabs: parsed.noteTabs || [],
     articleTitles: Array.isArray(parsed.articleTitles) ? parsed.articleTitles : [],
     pdfBookmarks: Array.isArray(parsed.pdfBookmarks) ? parsed.pdfBookmarks : [],
+    // Editors write case-prep-notebook-v3 first. Prefer that over the library
+    // mirror, which can lag (debounce / quota) and used to clobber new sections
+    // on the next sync hydrate.
+    notebook: notebookRowsForLibraryLoad(parsed.notebook),
+    argumentsBoard:
+      Array.isArray(parsed.argumentsBoard) && parsed.argumentsBoard[0]
+        ? parsed.argumentsBoard
+        : workspaceDocRowsFromLocal('arguments'),
+    guideEdits:
+      Array.isArray(parsed.guideEdits) && parsed.guideEdits[0]
+        ? parsed.guideEdits
+        : workspaceDocRowsFromLocal('guide_edits'),
+    factsBoard:
+      Array.isArray(parsed.factsBoard) && parsed.factsBoard[0]
+        ? parsed.factsBoard
+        : workspaceDocRowsFromLocal('facts'),
+    openings:
+      Array.isArray(parsed.openings) && parsed.openings[0]
+        ? parsed.openings
+        : workspaceDocRowsFromLocal('openings'),
     activeFileId: parsed.activeFileId || null,
     pageByFile: parsed.pageByFile || {},
     // Absent for anyone who used the app before sync existed. Starting from a
@@ -113,10 +155,33 @@ function load() {
   }
 }
 
+/**
+ * If the dedicated notebook key is ahead of the library mirror from the last
+ * persist, mark the sync row dirty so the good snapshot is pushed.
+ */
+function markStaleNotebookMirrorDirty(parsed) {
+  if (!WORKSPACE_ID) return
+  if (!parsed || typeof parsed !== 'object') return
+  const mirrored = Array.isArray(parsed.notebook) ? parsed.notebook[0] : null
+  const dedicated = notebookRowsFromLocal()[0]
+  if (!dedicated?.tree) return
+  if (notebookSnapshotsEqual(mirrored, dedicated)) return
+  const key = metaKey('library_records', 'notebook', NOTEBOOK_ROW_ID)
+  memory = {
+    ...memory,
+    store: {
+      ...memory.store,
+      syncMeta: markDirty(memory.store.syncMeta, [key], Date.now()),
+    },
+  }
+}
+
 const listeners = new Set()
 let persistTimer = 0
 let syncTimer = 0
 let syncInFlight = false
+
+const parsedLibraryForBoot = readJson(KEY, null)
 
 let memory = {
   store: load(),
@@ -128,6 +193,72 @@ let memory = {
   syncError: '',
   lastSyncedAt: 0,
 }
+
+// Dedicated notes key can be ahead of the library mirror after a crashed tab
+// or quota failure. Push that snapshot instead of letting sync hydrate wipe it.
+markStaleNotebookMirrorDirty(parsedLibraryForBoot)
+
+/**
+ * Editors call this (via notebookWorkspace) whenever the OneNote notebook changes.
+ * Mirrors the snapshot into the sync store and schedules a Postgres push.
+ */
+function publishNotebookToSync(tree, pagesBySection) {
+  const nextRow = { id: NOTEBOOK_ROW_ID, tree, pagesBySection }
+  const prev = memory.store.notebook?.[0]
+  if (
+    prev &&
+    JSON.stringify(prev.tree) === JSON.stringify(tree) &&
+    JSON.stringify(prev.pagesBySection) === JSON.stringify(pagesBySection)
+  ) {
+    return
+  }
+  updateStore(
+    (s) => ({ ...s, notebook: [nextRow] }),
+    [metaKey('library_records', 'notebook', NOTEBOOK_ROW_ID)]
+  )
+}
+
+registerNotebookSyncPublisher(publishNotebookToSync)
+
+function publishWorkspaceDocToSync(kind, data) {
+  const spec = WORKSPACE_DOCS[kind]
+  if (!spec) return
+  const nextRow = spec.toRow(data)
+  const prev = memory.store[spec.collection]?.[0]
+  if (prev && JSON.stringify(prev) === JSON.stringify(nextRow)) return
+  updateStore(
+    (s) => ({ ...s, [spec.collection]: [nextRow] }),
+    [metaKey('library_records', spec.kind, DOC_ROW_ID)]
+  )
+}
+
+for (const kind of allWorkspaceDocKinds()) {
+  registerWorkspaceDocPublisher(kind, (data) => publishWorkspaceDocToSync(kind, data))
+}
+
+function markUnsyncedDocDirty(kind, collection, rowId) {
+  if (!WORKSPACE_ID) return
+  if (!memory.store[collection]?.[0]) return
+  const key = metaKey('library_records', kind, rowId)
+  if (memory.store.syncMeta?.rows?.[key]) return
+  memory = {
+    ...memory,
+    store: {
+      ...memory.store,
+      syncMeta: markDirty(memory.store.syncMeta, [key], Date.now()),
+    },
+  }
+}
+
+// First visit / upgrade: local docs exist but were never offered to sync.
+markUnsyncedDocDirty('notebook', 'notebook', NOTEBOOK_ROW_ID)
+for (const kind of allWorkspaceDocKinds()) {
+  const spec = WORKSPACE_DOCS[kind]
+  markUnsyncedDocDirty(spec.kind, spec.collection, DOC_ROW_ID)
+}
+queueMicrotask(() => {
+  if (WORKSPACE_ID && pendingCount(memory.store.syncMeta) > 0) scheduleSync(0)
+})
 
 function emit() {
   for (const fn of listeners) fn()
@@ -197,10 +328,10 @@ function setSyncMeta(syncMeta) {
   persistSoon()
 }
 
-function scheduleSync(delay = SYNC_DEBOUNCE_MS) {
+function scheduleSync(delay = SYNC_DEBOUNCE_MS, options = {}) {
   if (memory.syncStatus === 'off') return
   window.clearTimeout(syncTimer)
-  syncTimer = window.setTimeout(runSync, delay)
+  syncTimer = window.setTimeout(() => runSync(options), delay)
 }
 
 /**
@@ -214,13 +345,21 @@ function scheduleSync(delay = SYNC_DEBOUNCE_MS) {
  * @param {object} sent Snapshot of what those rows looked like, from
  *   collectChanges(), used to decide which keys may stop being dirty.
  */
-async function exchange(changes, sent) {
+async function exchange(changes, sent, { keepalive = false } = {}) {
   syncInFlight = true
   memory = { ...memory, syncStatus: 'syncing', syncError: '' }
   emit()
 
   try {
-    const response = await syncChanges(memory.store.syncMeta.cursor, changes)
+    const response = await syncChanges(memory.store.syncMeta.cursor, changes, { keepalive })
+
+    const notebookBefore = memory.store.notebook?.[0]
+    const docsBefore = Object.fromEntries(
+      allWorkspaceDocKinds().map((kind) => {
+        const spec = WORKSPACE_DOCS[kind]
+        return [kind, memory.store[spec.collection]?.[0]]
+      })
+    )
 
     const applied = applyChanges(memory.store, memory.store.syncMeta, response.changes)
     const syncMeta = clearAccepted(applied.syncMeta, sent, response.serverTime)
@@ -234,6 +373,21 @@ async function exchange(changes, sent) {
     }
     emit()
     persistSoon()
+
+    // Only rewrite dedicated editor keys when applyChanges accepted a newer
+    // remote row. Hydrating after every sync was wiping local Notes sections
+    // whenever the library mirror lagged behind case-prep-notebook-v3.
+    const notebookAfter = memory.store.notebook?.[0]
+    if (notebookAfter && !notebookSnapshotsEqual(notebookBefore, notebookAfter)) {
+      hydrateNotebookFromRemote(notebookAfter)
+    }
+    for (const kind of allWorkspaceDocKinds()) {
+      const spec = WORKSPACE_DOCS[kind]
+      const row = memory.store[spec.collection]?.[0]
+      if (row && JSON.stringify(docsBefore[kind]) !== JSON.stringify(row)) {
+        hydrateWorkspaceDocFromRemote(kind, row)
+      }
+    }
 
     await hydrateBlobs()
     return true
@@ -253,7 +407,7 @@ async function exchange(changes, sent) {
 }
 
 /** Push dirty rows and pull whatever else changed. */
-async function runSync() {
+async function runSync({ keepalive = false } = {}) {
   if (memory.syncStatus === 'off') return
 
   // An edit that lands mid-request must not be dropped. Come back once the
@@ -267,7 +421,7 @@ async function runSync() {
   const { changes, sent } = collectChanges(memory.store, memory.store.syncMeta)
   if (!Object.keys(sent).length && memory.syncStatus !== 'error') return
 
-  const ok = await exchange(changes, sent)
+  const ok = await exchange(changes, sent, { keepalive })
 
   // A row re-edited while the request was in flight stays dirty, so give it
   // its own push instead of waiting for the next edit to trigger one.
@@ -528,6 +682,13 @@ if (typeof window !== 'undefined') {
   onPageHide(() => {
     window.clearTimeout(persistTimer)
     persistNow()
+    // Local persist alone is not enough for phone / friend's laptop. Do not
+    // wait on the debounce timer (setTimeout can die with the tab). Fire the
+    // push now with keepalive so the browser can finish after unload.
+    if (WORKSPACE_ID && pendingCount(memory.store.syncMeta) > 0) {
+      window.clearTimeout(syncTimer)
+      void runSync({ keepalive: true })
+    }
   })
   // Coming back online is the common case for a laptop that was shut, so retry
   // straight away rather than waiting out the retry timer.
@@ -1180,6 +1341,8 @@ export function useCaseLibrary() {
     caseFacts: snap.store.caseFacts,
     cites: snap.store.cites,
     timeline: snap.store.timeline,
+    // Full notes map for ⌘K / workspace search (not only getLayerNotes).
+    notesByCase: snap.store.notesByCase,
     noteTabs: snap.store.noteTabs,
     articleTitles: snap.store.articleTitles || [],
     pdfBookmarks: snap.store.pdfBookmarks || [],

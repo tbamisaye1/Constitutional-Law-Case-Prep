@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { guideSections } from '../data/guideCopy'
-import { onPageHide, readJson, writeJson } from '../lib/persist'
+import { onPageHide, readJson } from '../lib/persist'
+import { saveWorkspaceDoc, WORKSPACE_DOCS } from '../lib/workspaceDocs'
 
 /** Bumped after TipTap stripped tables/callouts into merged text. */
 const KEY = 'case-prep-guide-edits-v2'
@@ -51,16 +52,32 @@ export function useGuide() {
   const [edits, setEdits] = useState(loadEdits)
   const sections = useMemo(() => guideSections, [])
   const skipFirstWrite = useRef(true)
+  const applyingRemote = useRef(false)
 
   useEffect(() => {
     if (skipFirstWrite.current) {
       skipFirstWrite.current = false
       return
     }
-    writeJson(KEY, edits)
+    if (applyingRemote.current) {
+      applyingRemote.current = false
+      return
+    }
+    saveWorkspaceDoc('guide_edits', { edits })
   }, [edits])
 
-  useEffect(() => onPageHide(() => writeJson(KEY, edits)), [edits])
+  useEffect(() => onPageHide(() => saveWorkspaceDoc('guide_edits', { edits })), [edits])
+
+  useEffect(() => {
+    function onHydrate(event) {
+      const next = event?.detail
+      if (!next || typeof next.edits !== 'object') return
+      applyingRemote.current = true
+      setEdits(next.edits || {})
+    }
+    window.addEventListener(WORKSPACE_DOCS.guide_edits.event, onHydrate)
+    return () => window.removeEventListener(WORKSPACE_DOCS.guide_edits.event, onHydrate)
+  }, [])
 
   const getHtml = useCallback(
     (id) => {

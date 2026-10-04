@@ -35,6 +35,13 @@ const LIBRARY_KINDS = {
   noteTabs: 'note_tabs',
   articleTitles: 'article_titles',
   pdfBookmarks: 'pdf_bookmarks',
+  // OneNote-shaped notebook (tree + pagesBySection). Single row id "main".
+  notebook: 'notebook',
+  // Prep rooms that used to be localStorage-only (phone / laptop parity).
+  argumentsBoard: 'arguments',
+  guideEdits: 'guide_edits',
+  factsBoard: 'facts',
+  openings: 'openings',
 }
 
 export function metaKey(entity, ...parts) {

@@ -4,9 +4,10 @@
  */
 
 import { SEED_PAGES, SEED_TREE, SECTION_COLORS } from '../data/notebookSeed'
-import { readJson, writeJson } from './persist'
+import { readJson } from './persist'
 import { compareAnnotations, isGeneralAnnotation } from '../components/library/AnnotationPanel'
 import { findPage, mapPages } from './pageTree'
+import { saveNotebookSnapshot } from './notebookWorkspace'
 
 export const NOTEBOOK_STORAGE_KEY = 'case-prep-notebook-v3'
 export const ARTICLES_SECTION_ID = 'sec-articles'
@@ -172,7 +173,7 @@ export function exportArticleTakeawaysToNotes({
     [ARTICLES_SECTION_ID]: pages,
   }
 
-  writeJson(NOTEBOOK_STORAGE_KEY, { tree, pagesBySection })
+  saveNotebookSnapshot(tree, pagesBySection)
 
   return {
     sectionId: ARTICLES_SECTION_ID,

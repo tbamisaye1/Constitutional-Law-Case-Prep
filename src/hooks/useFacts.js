@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { formatSourceLabel, SEED_FACTS } from '../data/factsSeed'
-import { onPageHide, readJson, writeJson } from '../lib/persist'
+import { onPageHide, readJson } from '../lib/persist'
+import { saveWorkspaceDoc, WORKSPACE_DOCS } from '../lib/workspaceDocs'
 
 const KEY = 'case-prep-facts-v3'
 
@@ -19,16 +20,32 @@ export function useFacts() {
   const [argumentTag, setArgumentTag] = useState('all')
   const [view, setView] = useState('record') // record | browse | timeline | memorise
   const skipFirstWrite = useRef(true)
+  const applyingRemote = useRef(false)
 
   useEffect(() => {
     if (skipFirstWrite.current) {
       skipFirstWrite.current = false
       return
     }
-    writeJson(KEY, facts)
+    if (applyingRemote.current) {
+      applyingRemote.current = false
+      return
+    }
+    saveWorkspaceDoc('facts', { facts })
   }, [facts])
 
-  useEffect(() => onPageHide(() => writeJson(KEY, facts)), [facts])
+  useEffect(() => onPageHide(() => saveWorkspaceDoc('facts', { facts })), [facts])
+
+  useEffect(() => {
+    function onHydrate(event) {
+      const next = event?.detail
+      if (!Array.isArray(next?.facts)) return
+      applyingRemote.current = true
+      setFacts(next.facts)
+    }
+    window.addEventListener(WORKSPACE_DOCS.facts.event, onHydrate)
+    return () => window.removeEventListener(WORKSPACE_DOCS.facts.event, onHydrate)
+  }, [])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()

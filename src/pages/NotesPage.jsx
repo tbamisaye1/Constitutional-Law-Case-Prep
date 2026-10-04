@@ -75,7 +75,7 @@ export function NotesPage() {
             <p className="lede">
               {NOTEBOOK_META.title}: section groups → sections → pages. Use Add subpage (or the
               corner icon on a page) to nest under the current page; drag to reorder. Nested bullets
-              use Tab / Shift+Tab. Saves in this browser until the API exists.
+              use Tab / Shift+Tab. Saves in this browser and syncs to your workspace on the server.
             </p>
           </div>
         </header>

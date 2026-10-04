@@ -55,7 +55,36 @@ export function NoteEditor({ html, onChange, editable = true }) {
     if (!editor) return undefined
     skipping.current = false
     return () => {
+      // Flush the open doc before TipTap tears down so a quick section/page
+      // switch cannot drop the last keystrokes before React state updates.
+      if (!skipping.current && !editor.isDestroyed) {
+        try {
+          onChangeRef.current?.(editor.getHTML())
+        } catch {
+          /* ignore */
+        }
+      }
       skipping.current = true
+    }
+  }, [editor])
+
+  useEffect(() => {
+    if (!editor) return undefined
+    const flush = () => {
+      if (skipping.current || editor.isDestroyed) return
+      onChangeRef.current?.(editor.getHTML())
+    }
+    const dom = editor.view.dom
+    dom.addEventListener('blur', flush)
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    document.addEventListener('visibilitychange', onHide)
+    window.addEventListener('pagehide', flush)
+    return () => {
+      dom.removeEventListener('blur', flush)
+      document.removeEventListener('visibilitychange', onHide)
+      window.removeEventListener('pagehide', flush)
     }
   }, [editor])
 

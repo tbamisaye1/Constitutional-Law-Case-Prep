@@ -18,7 +18,7 @@ import * as ScrollArea from '@radix-ui/react-scroll-area'
 
 /**
  * Case library: browse list OR deep-dive one case with full-width notes.
- * Deep-link: /library?case=&file=&page=&q= (Ask AI cite jump).
+ * Deep-link: /library?case=&tab=&file=&page=&q= (⌘K / Ask AI jump).
  */
 export function LibraryPage() {
   const [params, setParams] = useSearchParams()
@@ -29,10 +29,12 @@ export function LibraryPage() {
   const [usefulFilter, setUsefulFilter] = useState('all')
   const [query, setQuery] = useState('')
   const [pane, setPane] = useState(
-    params.get('file') || params.get('page') || params.get('q') ? 'read' : 'notes'
+    params.get('file') || params.get('page') || params.get('q')
+      ? 'read'
+      : 'notes'
   )
   const [editing, setEditing] = useState(false)
-  const [notesTab, setNotesTab] = useState('understand')
+  const [notesTab, setNotesTab] = useState(() => params.get('tab') || 'understand')
   const [openCite, setOpenCite] = useState(null)
   const [deepDive, setDeepDive] = useState(true)
   const [pullError, setPullError] = useState('')
@@ -94,6 +96,15 @@ export function LibraryPage() {
       setDeepDive(true)
     }
   }, [paramFile, paramPage, focusQuote, missing, selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ⌘K deep-links: /library?case=hamdi&tab=tab-… opens that case notes tab.
+  useEffect(() => {
+    const tab = params.get('tab')
+    if (!tab) return
+    setNotesTab(tab)
+    setPane('notes')
+    setDeepDive(true)
+  }, [params, selected?.id])
 
   useEffect(() => {
     if (!missing || !selected?.id) return

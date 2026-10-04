@@ -3,7 +3,8 @@ import { NoteEditor } from '../components/NoteEditor'
 import { ingestPdf, listIngestSources, removeIngestSource } from '../api/client'
 import { Columns2, Maximize2, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { onPageHide, readJson, writeJson } from '../lib/persist'
+import { onPageHide, readJson } from '../lib/persist'
+import { saveWorkspaceDoc, WORKSPACE_DOCS } from '../lib/workspaceDocs'
 
 const OPENINGS_KEY = 'case-prep-openings-v1'
 
@@ -40,16 +41,32 @@ export function OpeningsPage() {
   const [drafts, setDrafts] = useState(loadOpenings)
   const [focus, setFocus] = useState(null)
   const skipFirstWrite = useRef(true)
+  const applyingRemote = useRef(false)
 
   useEffect(() => {
     if (skipFirstWrite.current) {
       skipFirstWrite.current = false
       return
     }
-    writeJson(OPENINGS_KEY, drafts)
+    if (applyingRemote.current) {
+      applyingRemote.current = false
+      return
+    }
+    saveWorkspaceDoc('openings', drafts)
   }, [drafts])
 
-  useEffect(() => onPageHide(() => writeJson(OPENINGS_KEY, drafts)), [drafts])
+  useEffect(() => onPageHide(() => saveWorkspaceDoc('openings', drafts)), [drafts])
+
+  useEffect(() => {
+    function onHydrate(event) {
+      const next = event?.detail
+      if (typeof next?.petitioner !== 'string' || typeof next?.respondent !== 'string') return
+      applyingRemote.current = true
+      setDrafts({ petitioner: next.petitioner, respondent: next.respondent })
+    }
+    window.addEventListener(WORKSPACE_DOCS.openings.event, onHydrate)
+    return () => window.removeEventListener(WORKSPACE_DOCS.openings.event, onHydrate)
+  }, [])
 
   function setSide(side, html) {
     setDrafts((prev) => ({ ...prev, [side]: html }))

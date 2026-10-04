@@ -44,7 +44,10 @@ function describe(sync) {
   }
 
   const when = sync.lastSyncedAt ? ` Last sync ${clock(sync.lastSyncedAt)}.` : ''
-  return { tone: 'ok', text: `Saved in this browser and on the backend.${when}` }
+  return {
+    tone: 'ok',
+    text: `Saved in this browser and on the backend (notes, arguments, guide, facts, PDFs).${when}`,
+  }
 }
 
 export function SyncBanner({
@@ -111,8 +114,8 @@ export function SyncBanner({
         <div className="workspace-link-panel">
           <p>
             {pinned
-              ? 'This build uses one shared workspace for every browser. Upload the Instant Case once and it should reappear after a refresh on any device that opens this site.'
-              : 'Each browser keeps its own workspace key unless you link them. Copy this key into the other device, then reload.'}
+              ? 'This build uses one shared workspace for every browser. Notes, arguments, guide edits, facts, openings, and Instant Case PDFs should match after a refresh on any device that opens this site.'
+              : 'Each browser keeps its own workspace key unless you link them. Copy this key into the other device (phone / laptop), then reload — that is how the same notes and PDFs appear everywhere.'}
           </p>
           <p className="mono workspace-key">{sync.workspaceId}</p>
           <div className="workspace-link-actions">

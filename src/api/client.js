@@ -89,6 +89,19 @@ export async function chatPrep(
       )
       .map((t) => ({ role: t.role, content: t.content.trim() }));
   }
+  if (Array.isArray(options?.notes) && options.notes.length) {
+    body.notes = options.notes
+      .filter((n) => n && typeof n.text === "string" && n.text.trim())
+      .slice(0, 8)
+      .map((n, i) => ({
+        id: String(n.id || `note-${i}`),
+        title: String(n.title || "Untitled note").trim() || "Untitled note",
+        text: n.text.trim(),
+        section_name: n.section_name ? String(n.section_name) : undefined,
+        page_id: n.page_id ? String(n.page_id) : undefined,
+        notes_path: n.notes_path ? String(n.notes_path) : undefined,
+      }));
+  }
 
   const res = await fetch(`${BASE}/chat`, {
     method: "POST",
@@ -261,13 +274,16 @@ export async function downloadIngestFile(filename) {
  *
  * @param {number} since serverTime from the previous sync. 0 downloads everything.
  * @param {object} changes Collection name to rows, from collectChanges().
+ * @param {{ keepalive?: boolean }} [options] Pass keepalive on pagehide so the
+ *   browser is more likely to finish the request after the tab closes.
  * @returns {Promise<{serverTime: number, changes: object, written: object}>}
  */
-export async function syncChanges(since, changes) {
+export async function syncChanges(since, changes, options = {}) {
   const res = await fetch(`${BASE}/sync`, {
     method: "POST",
     headers: workspaceHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ since, changes }),
+    keepalive: Boolean(options.keepalive),
   });
   if (!res.ok) throw new Error(await errorDetail(res, `sync failed: ${res.status}`));
   return res.json();

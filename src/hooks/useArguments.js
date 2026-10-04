@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { onPageHide, readJson, writeJson } from '../lib/persist'
+import { onPageHide, readJson } from '../lib/persist'
+import { saveWorkspaceDoc, WORKSPACE_DOCS } from '../lib/workspaceDocs'
 
 const STORAGE_KEY = 'case-prep-arguments-v1'
+const HYDRATE_EVENT = WORKSPACE_DOCS.arguments.event
 
 const DEFAULT_NOTES = {
   petitioner: '<h2>Petitioner working notes</h2><p>Quips, corrections, language.</p>',
@@ -96,8 +98,8 @@ function loadState() {
 }
 
 /**
- * Local-first argument board: sections (issues / themes) with nested prongs.
- * Persists to localStorage so refresh and tab close keep the outline + notes.
+ * Argument board: sections with nested prongs.
+ * Saves locally and syncs to the workspace so phone / laptop stay aligned.
  */
 export function useArguments() {
   const initial = useMemo(() => loadState(), [])
@@ -106,6 +108,7 @@ export function useArguments() {
   const [notes, setNotes] = useState(initial.notes)
   const [activeSectionBySide, setActiveSectionBySide] = useState(initial.activeSectionBySide)
   const skipFirstWrite = useRef(true)
+  const applyingRemote = useRef(false)
 
   const sections = outlines[side] || []
   const activeSectionId =
@@ -113,18 +116,41 @@ export function useArguments() {
       ? activeSectionBySide[side]
       : sections[0]?.id || null
 
+  function persist(next = { outlines, notes, activeSectionBySide }) {
+    saveWorkspaceDoc('arguments', next)
+  }
+
   useEffect(() => {
     if (skipFirstWrite.current) {
       skipFirstWrite.current = false
       return
     }
-    writeJson(STORAGE_KEY, { outlines, notes, activeSectionBySide })
+    if (applyingRemote.current) {
+      applyingRemote.current = false
+      return
+    }
+    persist()
   }, [outlines, notes, activeSectionBySide])
 
   useEffect(
-    () => onPageHide(() => writeJson(STORAGE_KEY, { outlines, notes, activeSectionBySide })),
+    () => onPageHide(() => persist()),
     [outlines, notes, activeSectionBySide]
   )
+
+  useEffect(() => {
+    function onHydrate(event) {
+      const next = event?.detail
+      if (!next?.outlines || !next?.notes) return
+      applyingRemote.current = true
+      setOutlines(next.outlines)
+      setNotes(next.notes)
+      setActiveSectionBySide(
+        next.activeSectionBySide || { petitioner: null, respondent: null }
+      )
+    }
+    window.addEventListener(HYDRATE_EVENT, onHydrate)
+    return () => window.removeEventListener(HYDRATE_EVENT, onHydrate)
+  }, [])
 
   const selectSection = useCallback((sectionId) => {
     setActiveSectionBySide((prev) => ({ ...prev, [side]: sectionId }))

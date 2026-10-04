@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { SEED_PAGES, SEED_TREE, SECTION_COLORS } from '../data/notebookSeed'
-import { onPageHide, readJson, writeJson } from '../lib/persist'
+import { SECTION_COLORS } from '../data/notebookSeed'
+import { onPageHide } from '../lib/persist'
+import {
+  NOTEBOOK_HYDRATE_EVENT,
+  readNotebookLocal,
+  saveNotebookSnapshot,
+} from '../lib/notebookWorkspace'
 import {
   findPage,
   firstPageId,
@@ -13,12 +18,8 @@ import {
   removePage,
 } from '../lib/pageTree'
 
-const STORAGE_KEY = 'case-prep-notebook-v3'
-
 function loadState() {
-  const saved = readJson(STORAGE_KEY, null)
-  if (saved?.tree && saved?.pagesBySection) return saved
-  return { tree: SEED_TREE, pagesBySection: SEED_PAGES }
+  return readNotebookLocal()
 }
 
 function stripHtml(html) {
@@ -36,8 +37,9 @@ function withPreviews(nodes) {
 }
 
 /**
- * Local-first notebook store: section-group tree + pages per section.
- * Pages are a nestable tree (reorder + subpages). Mirrors OneNote until a notes API exists.
+ * OneNote-shaped notebook: section-group tree + nestable pages.
+ * Saves in this browser immediately and mirrors into workspace sync so the
+ * same notes survive on Postgres (and other devices with the workspace key).
  */
 export function useNotebook() {
   const initial = useMemo(() => loadState(), [])
@@ -50,19 +52,43 @@ export function useNotebook() {
   })
 
   const skipFirstWrite = useRef(true)
+  const applyingRemote = useRef(false)
 
   useEffect(() => {
     if (skipFirstWrite.current) {
       skipFirstWrite.current = false
       return
     }
-    writeJson(STORAGE_KEY, { tree, pagesBySection })
+    if (applyingRemote.current) {
+      applyingRemote.current = false
+      return
+    }
+    saveNotebookSnapshot(tree, pagesBySection)
   }, [tree, pagesBySection])
 
   useEffect(
-    () => onPageHide(() => writeJson(STORAGE_KEY, { tree, pagesBySection })),
+    () => onPageHide(() => saveNotebookSnapshot(tree, pagesBySection)),
     [tree, pagesBySection]
   )
+
+  useEffect(() => {
+    function onHydrate(event) {
+      const next = event?.detail
+      if (!next?.tree || !next?.pagesBySection) return
+      applyingRemote.current = true
+      setTree(next.tree)
+      setPagesBySection(next.pagesBySection)
+      const nextSection =
+        (sectionId && sectionExistsInTree(next.tree, sectionId) && sectionId) ||
+        findFirstSectionId(next.tree)
+      setSectionId(nextSection)
+      const list = next.pagesBySection[nextSection] || []
+      const keepPage = pageId && findPage(list, pageId)
+      setPageId(keepPage ? pageId : firstPageId(list))
+    }
+    window.addEventListener(NOTEBOOK_HYDRATE_EVENT, onHydrate)
+    return () => window.removeEventListener(NOTEBOOK_HYDRATE_EVENT, onHydrate)
+  }, [sectionId, pageId])
 
   const pages = pagesBySection[sectionId] || []
   const activePage = findPage(pages, pageId) || findPage(pages, firstPageId(pages)) || null
@@ -272,7 +298,16 @@ export function useNotebook() {
   }
 }
 
+function sectionExistsInTree(nodes, id) {
+  for (const n of nodes || []) {
+    if (n.id === id) return true
+    if (n.children?.length && sectionExistsInTree(n.children, id)) return true
+  }
+  return false
+}
+
 function countDescendants(node) {
+
   let n = 0
   for (const c of node.children || []) {
     n += 1 + countDescendants(c)
