@@ -4,6 +4,7 @@ import App from './App'
 import './styles/global.css'
 import './styles/facts-library.css'
 import './styles/layout.css'
+import './styles/authorities.css'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

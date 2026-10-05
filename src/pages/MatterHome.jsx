@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Callout, Tag } from '../components/CaseCard'
 import { getHealth } from '../api/client'
-import { ArrowRight, NotebookPen, Library, Scale, ListChecks, BookOpen } from 'lucide-react'
+import { ArrowRight, NotebookPen, Library, Scale, ListChecks, BookOpen, Gavel } from 'lucide-react'
 import { GUIDE_ORIENT, GUIDE_META } from '../data/bronnerGuideSeed'
 import { GUIDE_HOME_BASELINE } from '../data/guideCopy'
 
@@ -79,6 +79,12 @@ export function MatterHome() {
           icon={Library}
           title="Case library"
           body="All Q1/Q2 cases from the guide (holding, rule, role for both sides)."
+        />
+        <QuickLink
+          to="/authorities"
+          icon={Gavel}
+          title="Table of authorities"
+          body="Every case on the matter, grouped by question and usefulness."
         />
         <QuickLink
           to="/notes"

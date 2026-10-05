@@ -10,11 +10,24 @@ import {
   Upload,
   Bot,
   BookOpen,
+  Gavel,
 } from 'lucide-react'
 import { NAV } from '../data/seed'
 import * as ScrollArea from '@radix-ui/react-scroll-area'
 
-const ICONS = { Home, ListChecks, Library, FileText, NotebookPen, Scale, Mic, Upload, Bot, BookOpen }
+const ICONS = {
+  Home,
+  ListChecks,
+  Library,
+  FileText,
+  NotebookPen,
+  Scale,
+  Mic,
+  Upload,
+  Bot,
+  BookOpen,
+  Gavel,
+}
 
 /**
  * Left rail: OneNote-style rooms with Lucide icons.

@@ -1,0 +1,323 @@
+/* Table of authorities — brief-style scan layout on existing matter tokens. */
+
+.toa-room {
+  max-width: var(--maxw);
+}
+
+.toa-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px 28px;
+  margin-bottom: 8px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.toa-kicker {
+  margin: 0 0 8px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.toa-hero h1 {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 42px);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.toa-lede {
+  margin: 0;
+  max-width: 48ch;
+  color: var(--ink-2);
+}
+
+.toa-stats {
+  display: flex;
+  gap: 10px;
+}
+
+.toa-stat {
+  min-width: 72px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  background: var(--paper-3);
+  text-align: center;
+}
+
+.toa-stat strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.toa-stat span {
+  display: block;
+  margin-top: 6px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.toa-stat-q1 {
+  border-top: 3px solid var(--four);
+}
+
+.toa-stat-q1 strong {
+  color: var(--four);
+}
+
+.toa-stat-q2 {
+  border-top: 3px solid var(--two);
+}
+
+.toa-stat-q2 strong {
+  color: var(--two);
+}
+
+.toa-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  margin: 16px 0 22px;
+  padding: 12px 0 10px;
+  background: linear-gradient(180deg, var(--paper) 70%, transparent);
+}
+
+.toa-match {
+  margin: 0;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ink-3);
+  align-self: center;
+}
+
+.toa-columns {
+  display: grid;
+  gap: 22px;
+}
+
+.toa-columns-split {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1100px) {
+  .toa-columns-split {
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+}
+
+.toa-issue {
+  background: var(--paper-3);
+  border: 1px solid var(--rule-soft);
+  padding: 0 0 8px;
+  min-width: 0;
+}
+
+.toa-issue-head {
+  display: grid;
+  grid-template-columns: 4px 1fr auto;
+  gap: 14px;
+  align-items: start;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.toa-issue-rule {
+  width: 4px;
+  min-height: 100%;
+  align-self: stretch;
+  background: var(--rule);
+}
+
+.toa-issue-q1 .toa-issue-rule {
+  background: var(--four);
+}
+
+.toa-issue-q2 .toa-issue-rule {
+  background: var(--two);
+}
+
+.toa-issue-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.toa-issue-q1 .toa-issue-label {
+  color: var(--four);
+}
+
+.toa-issue-q2 .toa-issue-label {
+  color: var(--two);
+}
+
+.toa-issue-q {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.toa-issue-count {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+  padding-top: 2px;
+}
+
+.toa-band {
+  padding: 12px 14px 4px;
+}
+
+.toa-band-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 4px 4px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.toa-band-label span {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.toa-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.toa-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 12px 12px 13px;
+  margin-bottom: 6px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.toa-row:hover {
+  background: var(--paper-2);
+  border-color: var(--rule-soft);
+}
+
+.toa-row:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.toa-issue-q1 .toa-row:hover {
+  border-color: color-mix(in srgb, var(--four) 35%, var(--rule-soft));
+}
+
+.toa-issue-q2 .toa-row:hover {
+  border-color: color-mix(in srgb, var(--two) 35%, var(--rule-soft));
+}
+
+.toa-row-names {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  margin-bottom: 4px;
+}
+
+.toa-short {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.toa-full {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.toa-cite {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.toa-blurb {
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+
+.toa-row-flags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.toa-row-arrow {
+  margin-top: 4px;
+  color: var(--ink-3);
+  opacity: 0.55;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    color 140ms ease;
+}
+
+.toa-row:hover .toa-row-arrow {
+  opacity: 1;
+  color: var(--ink);
+  transform: translate(1px, -1px);
+}
+
+@media (max-width: 720px) {
+  .toa-stats {
+    width: 100%;
+  }
+
+  .toa-stat {
+    flex: 1;
+  }
+
+  .toa-match {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .toa-short {
+    font-size: 16.5px;
+  }
+}
