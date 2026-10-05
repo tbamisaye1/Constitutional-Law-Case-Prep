@@ -541,8 +541,8 @@ export function AiSelectionBubble() {
           <span>
             Advanced responses
             <span className="ai-notes-toggle-hint">
-              Uses GPT-5 Mini instead of GPT-4o Mini. Flip on when a hard question is failing;
-              costs a bit more per ask.
+              Uses GPT-5 Mini (via OpenAI) instead of GPT-4o Mini. Flip on when a hard
+              question is failing; costs a bit more per ask.
             </span>
           </span>
         </label>
