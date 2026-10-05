@@ -567,6 +567,12 @@ export function LibraryPage() {
                   onUpdateHighlight={(id, patch) => lib.updateAnnotation(id, patch)}
                   onDeleteHighlight={(id) => lib.removeAnnotation(id)}
                   focusHighlightId={focusHighlightId}
+                  bookmarks={(lib.pdfBookmarks || []).filter((b) => b.fileId === activeId)}
+                  onAddBookmark={(p, label) => {
+                    if (!activeId) return
+                    lib.addPdfBookmark(activeId, p, label)
+                  }}
+                  onRemoveBookmark={(id) => lib.removePdfBookmark(id)}
                 />
                 <AnnotationPanel
                   caseId={selected.id}

@@ -710,9 +710,9 @@ export function ArticlesPage() {
             onDeleteHighlight={(id) => lib.removeAnnotation(id)}
             focusHighlightId={focusHighlightId}
             bookmarks={(lib.pdfBookmarks || []).filter((b) => b.fileId === activeId)}
-            onAddBookmark={(p) => {
+            onAddBookmark={(p, label) => {
               if (!activeId) return
-              lib.addPdfBookmark(activeId, p)
+              lib.addPdfBookmark(activeId, p, label)
             }}
             onRemoveBookmark={(id) => lib.removePdfBookmark(id)}
           />

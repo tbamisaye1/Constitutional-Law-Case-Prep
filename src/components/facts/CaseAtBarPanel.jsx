@@ -61,9 +61,9 @@ export function CaseAtBarPanel({ lib, onSaveAsFact = null }) {
       <div className="case-at-bar-intro">
         <p>
           Upload the record (or opinion excerpt) you are arguing from. Select text to highlight,
-          name a passage as a Fact card, add page notes, and keep a free-form working page beside
-          it. The same PDF is indexed for Ask AI, so the agent can cite this Instant Case alongside
-          other corpus sources.
+          name a passage as a Fact card, bookmark pages with a short label so you can jump back,
+          add page notes, and keep a free-form working page beside it. The same PDF is indexed for
+          Ask AI, so the agent can cite this Instant Case alongside other corpus sources.
         </p>
         {factSavedMsg ? (
           <p className="case-at-bar-fact-toast mono" role="status">
@@ -173,6 +173,12 @@ export function CaseAtBarPanel({ lib, onSaveAsFact = null }) {
                   : null
               }
               focusHighlightId={focusHighlightId}
+              bookmarks={(lib.pdfBookmarks || []).filter((b) => b.fileId === activeId)}
+              onAddBookmark={(p, label) => {
+                if (!activeId) return
+                lib.addPdfBookmark(activeId, p, label)
+              }}
+              onRemoveBookmark={(id) => lib.removePdfBookmark(id)}
             />
             <AnnotationPanel
               caseId={CASE_AT_BAR_ID}

@@ -16,6 +16,7 @@ import {
   Maximize2,
   Minimize2,
   MoreHorizontal,
+  Pencil,
   Search,
   Sparkles,
   Trash2,
@@ -29,6 +30,7 @@ import { useAiUi } from '../../ai/AiUiContext'
 import { findQuoteOnPage } from '../../lib/pdfQuoteFocus'
 import { findAllOnPage, searchPdfDocument } from '../../lib/pdfTextSearch'
 import { mergeHighlightRects } from '../../lib/mergeHighlightRects'
+import { bookmarkChipLabel } from '../../lib/bookmarkChipLabel'
 import {
   DEFAULT_HIGHLIGHT_COLOR,
   HIGHLIGHT_COLORS,
@@ -103,6 +105,9 @@ export function PdfViewer({
   const [expanded, setExpanded] = useState(false)
   const [bookmarksOpen, setBookmarksOpen] = useState(false)
   const [bookmarkFlash, setBookmarkFlash] = useState(false)
+  // Inline name form: { page, label, existingId } or null.
+  const [bookmarkNameOpen, setBookmarkNameOpen] = useState(null)
+  const bookmarkNameRef = useRef(null)
   const stageRef = useRef(null)
   const pdfDocRef = useRef(null)
   const searchInputRef = useRef(null)
@@ -247,13 +252,38 @@ export function PdfViewer({
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
-  function saveBookmark() {
-    if (!onAddBookmark || !page) return
-    onAddBookmark(page)
+  function openBookmarkNamer(targetPage = page, existing = null) {
+    if (!onAddBookmark || !targetPage) return
+    const current =
+      existing ||
+      bookmarks.find((b) => Number(b.page) === Number(targetPage)) ||
+      null
+    const raw = String(current?.label || '').trim()
+    const label = raw && !/^page\s+\d+$/i.test(raw) ? raw : ''
+    setBookmarkNameOpen({
+      page: Number(targetPage) || 1,
+      label,
+      existingId: current?.id || null,
+    })
+    setBookmarksOpen(true)
+  }
+
+  function commitBookmarkName() {
+    if (!onAddBookmark || !bookmarkNameOpen) return
+    const target = Number(bookmarkNameOpen.page) || 1
+    const label = String(bookmarkNameOpen.label || '').trim()
+    onAddBookmark(target, label)
+    setBookmarkNameOpen(null)
     setBookmarksOpen(true)
     setBookmarkFlash(true)
     window.setTimeout(() => setBookmarkFlash(false), 900)
   }
+
+  useEffect(() => {
+    if (!bookmarkNameOpen) return undefined
+    const t = window.setTimeout(() => bookmarkNameRef.current?.focus?.(), 30)
+    return () => window.clearTimeout(t)
+  }, [bookmarkNameOpen])
 
   function jumpToPage(raw) {
     const parsed = Number.parseInt(String(raw).trim(), 10)
@@ -669,18 +699,26 @@ export function PdfViewer({
               <button
                 type="button"
                 className={
-                  bookmarkFlash || pageBookmarked ? 'btn-soft on' : 'btn-soft'
+                  bookmarkFlash || pageBookmarked || bookmarkNameOpen
+                    ? 'btn-soft on'
+                    : 'btn-soft'
                 }
-                onClick={saveBookmark}
-                aria-label="Bookmark this page"
-                title="Bookmark this page (come back later)"
+                onClick={() => openBookmarkNamer(page)}
+                aria-label={
+                  pageBookmarked ? 'Rename bookmark for this page' : 'Bookmark this page'
+                }
+                title={
+                  pageBookmarked
+                    ? 'Rename this page bookmark'
+                    : 'Bookmark this page and give it a name'
+                }
               >
                 {pageBookmarked ? <BookmarkCheck size={15} /> : <Bookmark size={15} />}
               </button>
               <button
                 type="button"
                 className={bookmarksOpen ? 'btn-soft on' : 'btn-soft'}
-                disabled={!sortedBookmarks.length}
+                disabled={!sortedBookmarks.length && !bookmarkNameOpen}
                 onClick={() => setBookmarksOpen((v) => !v)}
                 aria-label="Show bookmarks"
                 title={
@@ -801,34 +839,86 @@ export function PdfViewer({
         </div>
       </div>
 
-      {onAddBookmark && bookmarksOpen && sortedBookmarks.length ? (
-        <div className="pdf-bookmarks-bar" role="list" aria-label="Reading bookmarks">
+      {onAddBookmark && bookmarksOpen && (sortedBookmarks.length || bookmarkNameOpen) ? (
+        <div className="pdf-bookmarks-bar" aria-label="Reading bookmarks">
           <span className="mono pdf-bookmarks-label">Bookmarks</span>
-          {sortedBookmarks.map((bm) => (
-            <div key={bm.id} className="pdf-bookmark-chip" role="listitem">
+          {bookmarkNameOpen ? (
+            <form
+              className="pdf-bookmark-name-form"
+              onSubmit={(e) => {
+                e.preventDefault()
+                commitBookmarkName()
+              }}
+            >
+              <span className="mono pdf-bm-page-tag">p. {bookmarkNameOpen.page}</span>
+              <input
+                ref={bookmarkNameRef}
+                className="pdf-bookmark-name-input"
+                type="text"
+                value={bookmarkNameOpen.label}
+                maxLength={80}
+                placeholder="Name it — e.g. NDAA §1021 affirmation"
+                aria-label={`Name for bookmark on page ${bookmarkNameOpen.page}`}
+                onChange={(e) =>
+                  setBookmarkNameOpen((prev) =>
+                    prev ? { ...prev, label: e.target.value } : prev
+                  )
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault()
+                    setBookmarkNameOpen(null)
+                  }
+                }}
+              />
+              <button type="submit" className="btn-ink pdf-bm-save">
+                {bookmarkNameOpen.existingId ? 'Save name' : 'Save'}
+              </button>
               <button
                 type="button"
-                className={Number(bm.page) === Number(page) ? 'pdf-bm-jump on' : 'pdf-bm-jump'}
-                onClick={() => {
-                  const target = Number(bm.page) || 1
-                  if (target !== page) onPageChange(target)
-                }}
-                title={bm.label || `Page ${bm.page}`}
+                className="btn-soft"
+                onClick={() => setBookmarkNameOpen(null)}
               >
-                p. {bm.page}
+                Cancel
               </button>
-              {onRemoveBookmark ? (
+            </form>
+          ) : null}
+          <div className="pdf-bookmarks-list" role="list">
+            {sortedBookmarks.map((bm) => (
+              <div key={bm.id} className="pdf-bookmark-chip" role="listitem">
+                <button
+                  type="button"
+                  className={Number(bm.page) === Number(page) ? 'pdf-bm-jump on' : 'pdf-bm-jump'}
+                  onClick={() => {
+                    const target = Number(bm.page) || 1
+                    if (target !== page) onPageChange(target)
+                  }}
+                  title={bookmarkChipLabel(bm)}
+                >
+                  {bookmarkChipLabel(bm)}
+                </button>
                 <button
                   type="button"
                   className="icon-btn soft"
-                  aria-label={`Remove bookmark on page ${bm.page}`}
-                  onClick={() => onRemoveBookmark(bm.id)}
+                  aria-label={`Rename bookmark on page ${bm.page}`}
+                  title="Rename"
+                  onClick={() => openBookmarkNamer(bm.page, bm)}
                 >
-                  <Trash2 size={12} />
+                  <Pencil size={12} />
                 </button>
-              ) : null}
-            </div>
-          ))}
+                {onRemoveBookmark ? (
+                  <button
+                    type="button"
+                    className="icon-btn soft"
+                    aria-label={`Remove bookmark on page ${bm.page}`}
+                    onClick={() => onRemoveBookmark(bm.id)}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
 
