@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   argumentChunksForAskAi,
   flattenArgumentNotes,
+  joinArgumentOutlineBlocks,
   queryWantsArgumentNotes,
   searchArgumentNotes,
 } from './argumentNotes'
@@ -64,5 +65,15 @@ describe('argumentNotes', () => {
     expect(queryWantsArgumentNotes('look at my argument notes on Youngstown')).toBe(true)
     expect(queryWantsArgumentNotes('first arg section notes')).toBe(true)
     expect(queryWantsArgumentNotes('define AUMF from the article')).toBe(false)
+  })
+
+  it('joins sections and prongs in outline order for the read-through', () => {
+    const blocks = joinArgumentOutlineBlocks(BOARD.outlines.respondent)
+    expect(blocks.map((b) => b.label)).toEqual(['1.', '1.1', '1.2'])
+    expect(blocks[0].kind).toBe('section')
+    expect(blocks[0].title).toBe('Youngstown 2nd Ebb')
+    expect(blocks[0].empty).toBe(false)
+    expect(blocks[1].kind).toBe('prong')
+    expect(blocks[2].empty).toBe(true)
   })
 })

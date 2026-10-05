@@ -1139,7 +1139,7 @@
   display: block;
   width: 100%;
   text-align: left;
-  margin: 0 0 10px;
+  margin: 0;
   padding: 8px 10px;
   border: 1px solid var(--rule-soft);
   background: var(--paper);
@@ -1147,6 +1147,12 @@
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
   cursor: pointer;
+}
+
+.args-view-chips {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 10px;
 }
 
 .args-whole-chip.on {
@@ -1161,6 +1167,92 @@
   font-size: 10px;
   color: var(--ink-3);
   line-height: 1.35;
+}
+
+.args-joined {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  gap: 14px;
+  padding: 4px 2px 18px;
+}
+
+.args-joined-empty {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.args-joined-block {
+  border: 1px solid var(--rule-soft);
+  background: var(--paper);
+  padding: 12px 14px 14px;
+}
+
+.args-joined-block.is-section {
+  border-color: var(--rule);
+}
+
+.args-joined-block.is-prong {
+  margin-left: 12px;
+  background: var(--paper-2);
+}
+
+.args-joined-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.args-joined-label {
+  display: block;
+  font-size: 10px;
+  color: var(--ink-3);
+  margin-bottom: 2px;
+}
+
+.args-joined-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.args-joined-empty-block {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.args-joined-body {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.args-joined-body :is(h1, h2, h3) {
+  margin: 0.6em 0 0.35em;
+  font-family: var(--font-display);
+}
+
+.args-joined-body p {
+  margin: 0 0 0.65em;
+}
+
+.args-joined-body p:last-child {
+  margin-bottom: 0;
+}
+
+.args-joined-body ul,
+.args-joined-body ol {
+  margin: 0 0 0.65em;
+  padding-left: 1.25em;
 }
 
 .args-prong-row.on {

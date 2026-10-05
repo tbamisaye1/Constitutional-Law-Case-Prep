@@ -16,7 +16,7 @@ function readExpanded() {
 
 /**
  * Argument board: sections + prongs, each with its own notes, plus whole-argument
- * working notes. Click a section or prong to edit that layer; Ask AI can search all.
+ * working notes and a joined read-through of every section/prong in order.
  */
 export function ArgumentsPage() {
   const args = useArguments()
@@ -50,8 +50,8 @@ export function ArgumentsPage() {
             <h1>Arguments</h1>
             <p className="lede">
               Structure the side you are arguing. Add a section for each issue or theme, then add
-              prongs under it. Click a section or prong to write notes for that piece, or use whole
-              argument notes for the full flowing draft. Edits save in this browser.
+              prongs under it. Focus one piece to edit it, or open Full argument to read every
+              section joined in order. Edits save in this browser.
             </p>
           </div>
           <div className="args-head-actions">
@@ -101,6 +101,7 @@ export function ArgumentsPage() {
 function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
   if (!visible) return null
 
+  const isJoined = args.focus?.type === 'joined'
   const editorKey = [
     args.side,
     args.focus?.type || 'side',
@@ -112,15 +113,22 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
     <div className={expanded ? 'args-split is-expanded' : 'args-split'}>
       {!expanded ? (
         <div className="args-outline">
-          <button
-            type="button"
-            className={
-              args.focus?.type === 'side' ? 'args-whole-chip on' : 'args-whole-chip'
-            }
-            onClick={args.focusWholeArgument}
-          >
-            Whole argument notes
-          </button>
+          <div className="args-view-chips">
+            <button
+              type="button"
+              className={args.focus?.type === 'side' ? 'args-whole-chip on' : 'args-whole-chip'}
+              onClick={args.focusWholeArgument}
+            >
+              Whole argument notes
+            </button>
+            <button
+              type="button"
+              className={isJoined ? 'args-whole-chip on' : 'args-whole-chip'}
+              onClick={args.focusJoinedArgument}
+            >
+              Full argument (joined)
+            </button>
+          </div>
 
           {args.sections.length === 0 && (
             <p className="args-empty">
@@ -136,7 +144,8 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
               <div
                 key={section.id}
                 className={
-                  sectionOn || (sectionActive && args.focus?.type !== 'side')
+                  sectionOn ||
+                  (sectionActive && args.focus?.type !== 'side' && args.focus?.type !== 'joined')
                     ? 'args-section on'
                     : 'args-section'
                 }
@@ -254,13 +263,74 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
         </div>
         <p className="args-notes-hint mono">
           {args.focus?.type === 'side'
-            ? 'Full flowing notes for this side. Ask AI can read this as the whole argument.'
-            : args.focus?.type === 'section'
-              ? 'Notes for this argument section only. Click Whole argument notes for the full draft.'
-              : 'Notes for this prong only. Click the section or Whole argument notes to zoom out.'}
+            ? 'Freeform flowing notes for this side. Separate from the section/prong outline.'
+            : args.focus?.type === 'joined'
+              ? 'Every section and prong joined in outline order. Click Edit on a block to focus that piece.'
+              : args.focus?.type === 'section'
+                ? 'Notes for this argument section only. Open Full argument (joined) to read everything together.'
+                : 'Notes for this prong only. Open Full argument (joined) to read everything together.'}
         </p>
-        <NoteEditor key={editorKey} html={args.notesHtml} onChange={args.setNotesForSide} />
+        {isJoined ? (
+          <ArgsJoinedReadthrough
+            blocks={args.joinedBlocks}
+            onEditSection={args.selectSection}
+            onEditProng={args.selectProng}
+          />
+        ) : (
+          <NoteEditor key={editorKey} html={args.notesHtml} onChange={args.setNotesForSide} />
+        )}
       </div>
+    </div>
+  )
+}
+
+function ArgsJoinedReadthrough({ blocks, onEditSection, onEditProng }) {
+  if (!blocks?.length) {
+    return (
+      <div className="args-joined">
+        <p className="args-joined-empty">
+          No sections yet. Add sections and prongs on the left, write notes on each, then come back
+          here to read the full argument in order.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="args-joined">
+      {blocks.map((block) => (
+        <article
+          key={block.key}
+          className={
+            block.kind === 'section' ? 'args-joined-block is-section' : 'args-joined-block is-prong'
+          }
+        >
+          <header className="args-joined-head">
+            <div>
+              <span className="mono args-joined-label">{block.label}</span>
+              <h3 className="args-joined-title">{block.title}</h3>
+            </div>
+            <button
+              type="button"
+              className="btn-soft"
+              onClick={() => {
+                if (block.kind === 'prong') onEditProng(block.sectionId, block.prongId)
+                else onEditSection(block.sectionId)
+              }}
+            >
+              Edit
+            </button>
+          </header>
+          {block.empty ? (
+            <p className="args-joined-empty-block mono">No notes on this piece yet.</p>
+          ) : (
+            <div
+              className="args-joined-body note-prose"
+              dangerouslySetInnerHTML={{ __html: block.html }}
+            />
+          )}
+        </article>
+      ))}
     </div>
   )
 }

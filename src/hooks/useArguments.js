@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { onPageHide, readJson } from '../lib/persist'
+import { joinArgumentOutlineBlocks } from '../lib/argumentNotes'
 import { saveWorkspaceDoc, WORKSPACE_DOCS } from '../lib/workspaceDocs'
 
 const STORAGE_KEY = 'case-prep-arguments-v1'
@@ -35,6 +36,7 @@ function newId(prefix) {
 
 function normalizeFocus(raw) {
   if (!raw || typeof raw !== 'object') return { type: 'side' }
+  if (raw.type === 'joined') return { type: 'joined' }
   if (raw.type === 'section' && raw.sectionId) {
     return { type: 'section', sectionId: String(raw.sectionId) }
   }
@@ -160,6 +162,7 @@ export function useArguments() {
 
   const focus = useMemo(() => {
     const raw = normalizeFocus(activeFocusBySide[side])
+    if (raw.type === 'joined') return { type: 'joined' }
     if (raw.type === 'section') {
       const section = sections.find((s) => s.id === raw.sectionId)
       if (!section) return { type: 'side' }
@@ -175,6 +178,7 @@ export function useArguments() {
   }, [activeFocusBySide, side, sections])
 
   const focusedNotesHtml = useMemo(() => {
+    if (focus.type === 'joined') return ''
     if (focus.type === 'section') {
       return sections.find((s) => s.id === focus.sectionId)?.notes || ''
     }
@@ -185,8 +189,13 @@ export function useArguments() {
     return notes[side] || ''
   }, [focus, sections, notes, side])
 
+  const joinedBlocks = useMemo(() => joinArgumentOutlineBlocks(sections), [sections])
+
   const focusLabel = useMemo(() => {
     const sideLabel = side === 'petitioner' ? 'Petitioner' : 'Respondent'
+    if (focus.type === 'joined') {
+      return `${sideLabel} · full argument (joined)`
+    }
     if (focus.type === 'section') {
       const idx = sections.findIndex((s) => s.id === focus.sectionId)
       const section = sections[idx]
@@ -249,6 +258,10 @@ export function useArguments() {
 
   const focusWholeArgument = useCallback(() => {
     setActiveFocusBySide((prev) => ({ ...prev, [side]: { type: 'side' } }))
+  }, [side])
+
+  const focusJoinedArgument = useCallback(() => {
+    setActiveFocusBySide((prev) => ({ ...prev, [side]: { type: 'joined' } }))
   }, [side])
 
   const selectSection = useCallback(
@@ -397,6 +410,7 @@ export function useArguments() {
 
   const setFocusedNotes = useCallback(
     (html) => {
+      if (focus.type === 'joined') return
       if (focus.type === 'section') {
         setOutlines((prev) => ({
           ...prev,
@@ -443,7 +457,9 @@ export function useArguments() {
     activeSectionId,
     focus,
     focusLabel,
+    joinedBlocks,
     focusWholeArgument,
+    focusJoinedArgument,
     selectSection,
     selectProng,
     addSection,

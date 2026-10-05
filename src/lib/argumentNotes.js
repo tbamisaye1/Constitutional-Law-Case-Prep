@@ -92,6 +92,66 @@ export function flattenArgumentNotes(board) {
 }
 
 /**
+ * Ordered blocks for the "Full argument (joined)" read-through: every section
+ * and its prongs in outline order, with HTML notes kept as written.
+ *
+ * @param {Array} sections
+ * @returns {Array<{
+ *   key: string,
+ *   kind: 'section' | 'prong',
+ *   sectionId: string,
+ *   prongId?: string,
+ *   label: string,
+ *   title: string,
+ *   html: string,
+ *   empty: boolean
+ * }>}
+ */
+export function joinArgumentOutlineBlocks(sections) {
+  const list = Array.isArray(sections) ? sections : []
+  const blocks = []
+
+  list.forEach((section, sectionIdx) => {
+    if (!section || typeof section !== 'object') return
+    const sectionId = String(section.id || '')
+    if (!sectionId) return
+    const sectionTitle = String(section.title || `Section ${sectionIdx + 1}`).trim()
+    const sectionNum = sectionIdx + 1
+    const sectionHtml = typeof section.notes === 'string' ? section.notes.trim() : ''
+    blocks.push({
+      key: `sec-${sectionId}`,
+      kind: 'section',
+      sectionId,
+      label: `${sectionNum}.`,
+      title: sectionTitle,
+      html: sectionHtml,
+      empty: !stripHtml(sectionHtml),
+    })
+
+    const prongs = Array.isArray(section.prongs) ? section.prongs : []
+    prongs.forEach((prong, prongIdx) => {
+      if (!prong || typeof prong !== 'object') return
+      const prongId = String(prong.id || '')
+      if (!prongId) return
+      const prongTitle = String(prong.title || `Prong ${prongIdx + 1}`).trim()
+      const prongHtml = typeof prong.notes === 'string' ? prong.notes.trim() : ''
+      blocks.push({
+        key: `pr-${prongId}`,
+        kind: 'prong',
+        sectionId,
+        prongId,
+        label: `${sectionNum}.${prongIdx + 1}`,
+        title: prongTitle,
+        html: prongHtml,
+        empty: !stripHtml(prongHtml),
+      })
+    })
+  })
+
+  return blocks
+}
+
+/**
  * Rank argument notes for a prompt. Boosts whole-argument vs prong when asked.
  */
 export function searchArgumentNotes(query, board, { limit = 6 } = {}) {
