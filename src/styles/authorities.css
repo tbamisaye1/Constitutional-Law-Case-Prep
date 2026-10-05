@@ -33,8 +33,15 @@
 
 .toa-lede {
   margin: 0;
-  max-width: 48ch;
+  max-width: 52ch;
   color: var(--ink-2);
+}
+
+.toa-source {
+  margin: 10px 0 0;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
 }
 
 .toa-stats {
@@ -206,6 +213,35 @@
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.toa-list-official {
+  padding: 10px 10px 12px;
+  counter-reset: none;
+}
+
+.toa-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+}
+
+.toa-missing {
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.toa-row-static {
+  cursor: default;
+}
+
+.toa-row-static:hover {
+  background: transparent;
+  border-color: transparent;
 }
 
 .toa-row {

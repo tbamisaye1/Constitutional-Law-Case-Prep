@@ -84,7 +84,7 @@ export function MatterHome() {
           to="/authorities"
           icon={Gavel}
           title="Table of authorities"
-          body="Every case on the matter, grouped by question and usefulness."
+          body="Official AMCA 2026–27 closed universe for Q1 and Q2, linked into Case library."
         />
         <QuickLink
           to="/notes"
