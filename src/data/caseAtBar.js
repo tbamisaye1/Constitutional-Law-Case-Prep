@@ -20,10 +20,12 @@ export function queryMentionsInstantCase(prompt) {
   const q = String(prompt || '').toLowerCase()
   if (!q.trim()) return false
   return (
-    /\binstant\s+cases?\b/.test(q) ||
+    // Allow typos like "instatnt case" / "instnat case".
+    /\binsta\w{0,6}\s+cases?\b/.test(q) ||
     /\bcase\s+at\s+bar\b/.test(q) ||
     /\bbronner\s+v\.?\s*(usa|united\s+states)\b/.test(q) ||
-    /\bbobby\s+bronner\b/.test(q)
+    /\bbobby\s+bronner\b/.test(q) ||
+    /\bbronner\b/.test(q)
   )
 }
 
