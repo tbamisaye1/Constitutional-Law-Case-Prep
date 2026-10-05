@@ -58,8 +58,9 @@ export function AgentPage() {
 
       <Callout label="Verify before OA" tone="note">
         <p style={{ margin: 0 }}>
-          Uploaded articles mode stays corpus-only. Web mode prefers your PDFs and can also search the
-          web. Check quotes and cites yourself before relying on them in oral argument.
+          Uploaded docs mode searches every PDF in Ask AI’s index: Instant Case, Case library, and
+          Articles. Web mode prefers those PDFs and can also search the web. Check quotes and cites
+          yourself before relying on them in oral argument.
         </p>
       </Callout>
 
@@ -75,7 +76,7 @@ export function AgentPage() {
               setResult(null)
             }}
           >
-            Uploaded articles
+            Uploaded docs
           </button>
           <button
             type="button"
@@ -101,12 +102,12 @@ export function AgentPage() {
           onChange={(e) => setQuestion(e.target.value)}
           placeholder={
             webPlus
-              ? 'Ask from your articles and the web…'
-              : 'Ask in plain English — or use the floating Ask AI button for sample prompts.'
+              ? 'Ask from your uploads and the web…'
+              : 'Ask from Instant Case, Case library, and Articles uploads…'
           }
         />
         <button type="submit" className="agent-ask" disabled={loading}>
-          {loading ? 'Running…' : webPlus ? 'Ask (articles + web)' : 'Ask (grounded)'}
+          {loading ? 'Running…' : webPlus ? 'Ask (uploads + web)' : 'Ask (grounded)'}
         </button>
       </form>
 

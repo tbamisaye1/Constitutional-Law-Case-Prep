@@ -454,7 +454,7 @@ export function formatAskAiFailure(err, groundingSource = 'documents') {
     return (
       'Ask AI timed out on the server.\n\n' +
       (web
-        ? 'Web mode (corpus + live search) often needs more than a minute. Switch to Uploaded articles, or ask a shorter question, then try again.'
+        ? 'Web mode (corpus + live search) often needs more than a minute. Switch to Uploaded docs, or ask a shorter question, then try again.'
         : 'The agent took too long. Try a shorter question, or retry in a moment.') +
       `\n\nDetail: ${raw.slice(0, 280)}`
     )

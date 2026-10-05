@@ -93,7 +93,7 @@ function isNotebookEvidence(ev) {
 /**
  * Floating AI bubble.
  * Drag the header to park it beside Highlights & Notes without closing the thread.
- * Mode switch: Uploaded articles | Web. Optional Include my notes.
+ * Mode switch: Uploaded docs | Web. Optional Include my notes.
  */
 export function AiSelectionBubble() {
   const {
@@ -436,7 +436,7 @@ export function AiSelectionBubble() {
       className={className}
       style={style}
       role="dialog"
-      aria-label={webPlus ? 'Ask AI with uploaded articles and web search' : 'Ask AI about uploaded articles'}
+      aria-label={webPlus ? 'Ask AI with uploaded PDFs and web search' : 'Ask AI about uploaded PDFs'}
     >
       <div
         className="ai-bubble-header ai-bubble-drag-handle"
@@ -501,7 +501,7 @@ export function AiSelectionBubble() {
             className={!webPlus ? 'on' : ''}
             onClick={() => switchGroundingSource('documents')}
           >
-            Uploaded articles
+            Uploaded docs
           </button>
           <button
             type="button"
@@ -550,16 +550,18 @@ export function AiSelectionBubble() {
         <p className="ai-bubble-policy">
           {webPlus ? (
             <>
-              <strong>Uploaded articles + web.</strong> Prefers your PDFs
-              {includeNotes ? ' and matching notes/annotations' : ''}; searches the web when the
+              <strong>All uploaded PDFs + web.</strong> Prefers Instant Case, Case library, and
+              Articles uploads
+              {includeNotes ? ' plus matching notes/annotations' : ''}; searches the web when the
               corpus is thin or you ask for outside definitions and background.
               {advancedResponses ? ' Advanced model is on for this ask.' : ''}
             </>
           ) : (
             <>
-              <strong>Uploaded articles only.</strong> Answers cite retrieved passages
-              {includeNotes ? ' and your notes/annotations when they match' : ''}; refuses if the
-              corpus is not enough. Say “in my notes” or “my highlights” anytime to pull local
+              <strong>All uploaded PDFs.</strong> Searches Instant Case (Bronner record), Case
+              library opinions, and Articles shelf files
+              {includeNotes ? ', plus your notes/annotations when they match' : ''}. Refuses if
+              nothing indexed is enough. Say “in my notes” or “my highlights” anytime to pull local
               notes for one question.
               {advancedResponses ? ' Advanced model is on for this ask.' : ''}
             </>
@@ -695,10 +697,10 @@ export function AiSelectionBubble() {
               {advancedResponses ? 'Advanced model · ' : ''}
               {includeNotes ||
               /my notes|my ntoes|notebook|where (did|do) i write|in my notes/i.test(prompt)
-                ? 'Searching your notes/annotations and uploaded articles…'
+                ? 'Searching your notes/annotations and uploaded PDFs…'
                 : webPlus
-                  ? 'Checking uploaded articles, then web search if needed…'
-                  : 'Retrieving passages from uploaded articles and generating a grounded answer…'}
+                  ? 'Checking Instant Case, Case library, and Articles, then web search if needed…'
+                  : 'Retrieving passages from Instant Case, Case library, and Articles…'}
             </p>
           </div>
         ) : null}
@@ -824,10 +826,10 @@ export function AiSelectionBubble() {
             includeNotes
               ? webPlus
                 ? 'Ask from notes, articles, and the web…'
-                : 'Ask from your notes and uploaded articles…'
+                : 'Ask from your notes and uploaded PDFs…'
               : webPlus
-                ? 'Ask from your articles and the web…'
-                : 'Ask from your uploaded articles…'
+                ? 'Ask from Instant Case, Case library, Articles, or the web…'
+                : 'Ask from Instant Case, Case library, and Articles…'
           }
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { emptyLayerNotes, LIBRARY_CASES } from '../data/casesSeed'
+import { CASE_AT_BAR_ID, CASE_AT_BAR_LABEL } from '../data/caseAtBar'
 import {
   SEED_CASE_FACTS,
   SEED_CITES,
@@ -629,6 +630,17 @@ const askAiIndexCooldownUntil = new Map()
 const askAiIndexingIds = new Set()
 
 /**
+ * FAISS source label for Ask AI. Instant Case gets a clear Bronner prefix so
+ * Uploaded docs mode can find the record instead of only Hamdi-style neighbors.
+ */
+function askAiSourceName(meta) {
+  const raw = String(meta?.name || 'document.pdf').trim() || 'document.pdf'
+  if (meta?.caseId !== CASE_AT_BAR_ID) return raw
+  if (/^instant case/i.test(raw)) return raw
+  return `${CASE_AT_BAR_LABEL} — ${raw}`
+}
+
+/**
  * Chunk a library / Case-at-bar PDF into the FAISS index Ask AI searches.
  *
  * Storage (Blob / IndexedDB) and retrieval (FAISS) are different paths. Without
@@ -645,18 +657,19 @@ async function indexFileForAskAi(meta, blob, options = {}) {
   if (!options.force && Date.now() < cooldownUntil) return
 
   askAiIndexingIds.add(meta.id)
+  const sourceName = askAiSourceName(meta)
   try {
     // Stale local failures are common after a proxy "Failed to fetch" even when
     // the PDF already landed in FAISS (or was indexed on another path).
     if (!options.force) {
-      const already = await sourceNameIsIndexed(meta.name)
+      const already = await sourceNameIsIndexed(meta.name, sourceName)
       if (already) {
         markFileAskAiIndexed(meta.id, meta.name)
         return
       }
     }
 
-    const file = new File([blob], meta.name, {
+    const file = new File([blob], sourceName, {
       type: 'application/pdf',
     })
     await ingestPdf(file)
@@ -664,7 +677,7 @@ async function indexFileForAskAi(meta, blob, options = {}) {
   } catch (error) {
     console.warn(`Could not index ${meta.name} for Ask AI`, error)
     // Upload may have succeeded server-side while the browser lost the response.
-    const already = await sourceNameIsIndexed(meta.name)
+    const already = await sourceNameIsIndexed(meta.name, sourceName)
     if (already) {
       markFileAskAiIndexed(meta.id, meta.name)
       return
@@ -691,13 +704,22 @@ async function indexFileForAskAi(meta, blob, options = {}) {
   }
 }
 
-async function sourceNameIsIndexed(name) {
-  if (!name) return false
+async function sourceNameIsIndexed(...names) {
+  const wanted = names
+    .map((n) => String(n || '').trim())
+    .filter(Boolean)
+  if (!wanted.length) return false
   try {
     const data = await listIngestSources()
     return (data.sources || []).some((row) => {
       const source = typeof row === 'string' ? row : row?.source
-      return source === name
+      if (!source) return false
+      return wanted.some((name) => {
+        if (source === name) return true
+        if (source.endsWith(name) || source.includes(` — ${name}`)) return true
+        const base = name.replace(/^Instant Case[^—]*—\s*/i, '').trim()
+        return Boolean(base && (source === base || source.endsWith(base)))
+      })
     })
   } catch {
     return false
