@@ -1,6 +1,7 @@
 /**
- * Ask AI conversation memory (browser session).
+ * Ask AI conversation memory (persists in this browser).
  * Prior turns are sent with each /chat call so follow-ups stay in context.
+ * Prefers localStorage so close/reopen and a new tab can still load the last answer.
  */
 
 export const ASK_AI_MEMORY_KEY = 'case-prep-ask-ai-memory'
@@ -15,9 +16,59 @@ export const ASK_AI_MEMORY_WARN_TURNS = 8
  * @typedef {{ role: 'user' | 'assistant', content: string, at?: number }} AskAiTurn
  */
 
+function readStorageItem(key) {
+  try {
+    const fromLocal = localStorage.getItem(key)
+    if (fromLocal != null) return fromLocal
+  } catch {
+    /* ignore */
+  }
+  try {
+    // Older builds used sessionStorage only. Migrate so tab close does not
+    // wipe the Recent thread / Open last answer UI.
+    const fromSession = sessionStorage.getItem(key)
+    if (fromSession == null) return null
+    try {
+      localStorage.setItem(key, fromSession)
+      sessionStorage.removeItem(key)
+    } catch {
+      /* keep reading from session if local write fails */
+    }
+    return fromSession
+  } catch {
+    return null
+  }
+}
+
+function writeStorageItem(key, value) {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    /* ignore quota / private mode */
+  }
+  try {
+    sessionStorage.removeItem(key)
+  } catch {
+    /* ignore */
+  }
+}
+
+function removeStorageItem(key) {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    /* ignore */
+  }
+  try {
+    sessionStorage.removeItem(key)
+  } catch {
+    /* ignore */
+  }
+}
+
 export function readAskAiMemory() {
   try {
-    const raw = sessionStorage.getItem(ASK_AI_MEMORY_KEY)
+    const raw = readStorageItem(ASK_AI_MEMORY_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
@@ -41,19 +92,15 @@ export function readAskAiMemory() {
 
 export function writeAskAiMemory(turns) {
   try {
-    sessionStorage.setItem(ASK_AI_MEMORY_KEY, JSON.stringify(turns || []))
+    writeStorageItem(ASK_AI_MEMORY_KEY, JSON.stringify(turns || []))
   } catch {
     /* ignore quota / private mode */
   }
 }
 
 export function clearAskAiMemoryStore() {
-  try {
-    sessionStorage.removeItem(ASK_AI_MEMORY_KEY)
-    sessionStorage.removeItem(ASK_AI_LAST_VIEW_KEY)
-  } catch {
-    /* ignore */
-  }
+  removeStorageItem(ASK_AI_MEMORY_KEY)
+  removeStorageItem(ASK_AI_LAST_VIEW_KEY)
 }
 
 /**
@@ -64,7 +111,7 @@ export function clearAskAiMemoryStore() {
  */
 export function readAskAiLastView() {
   try {
-    const raw = sessionStorage.getItem(ASK_AI_LAST_VIEW_KEY)
+    const raw = readStorageItem(ASK_AI_LAST_VIEW_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return null
@@ -80,10 +127,10 @@ export function readAskAiLastView() {
 export function writeAskAiLastView(prompt, reply) {
   try {
     if (!reply || typeof reply.text !== 'string' || !reply.text.trim()) {
-      sessionStorage.removeItem(ASK_AI_LAST_VIEW_KEY)
+      removeStorageItem(ASK_AI_LAST_VIEW_KEY)
       return
     }
-    sessionStorage.setItem(
+    writeStorageItem(
       ASK_AI_LAST_VIEW_KEY,
       JSON.stringify({
         prompt: typeof prompt === 'string' ? prompt : '',
@@ -96,11 +143,7 @@ export function writeAskAiLastView(prompt, reply) {
 }
 
 export function clearAskAiLastView() {
-  try {
-    sessionStorage.removeItem(ASK_AI_LAST_VIEW_KEY)
-  } catch {
-    /* ignore */
-  }
+  removeStorageItem(ASK_AI_LAST_VIEW_KEY)
 }
 
 /**

@@ -7,13 +7,14 @@ import {
   lastViewFromMemory,
   memoryIsNearFull,
   readAskAiLastView,
+  readAskAiMemory,
   resolveAskAiLastView,
   writeAskAiLastView,
 } from './askAiMemory'
 
-function installMemoryStorage() {
+function makeStorage() {
   const map = new Map()
-  const storage = {
+  return {
     getItem: (key) => (map.has(key) ? map.get(key) : null),
     setItem: (key, value) => {
       map.set(String(key), String(value))
@@ -25,12 +26,22 @@ function installMemoryStorage() {
       map.clear()
     },
   }
-  Object.defineProperty(globalThis, 'sessionStorage', {
-    value: storage,
+}
+
+function installMemoryStorage() {
+  const local = makeStorage()
+  const session = makeStorage()
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: local,
     configurable: true,
     writable: true,
   })
-  return storage
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    value: session,
+    configurable: true,
+    writable: true,
+  })
+  return { local, session }
 }
 
 describe('askAiMemory', () => {
@@ -39,6 +50,7 @@ describe('askAiMemory', () => {
   })
 
   afterEach(() => {
+    Reflect.deleteProperty(globalThis, 'localStorage')
     Reflect.deleteProperty(globalThis, 'sessionStorage')
   })
 
@@ -98,5 +110,18 @@ describe('askAiMemory', () => {
     expect(view.reply.restored_from_memory).toBe(true)
 
     expect(resolveAskAiLastView(turns).reply.text).toContain('enemy combatant')
+  })
+
+  it('migrates sessionStorage memory into localStorage', () => {
+    const { local, session } = installMemoryStorage()
+    session.setItem(
+      'case-prep-ask-ai-memory',
+      JSON.stringify([{ role: 'user', content: 'old tab Q' }, { role: 'assistant', content: 'old tab A' }])
+    )
+    const turns = readAskAiMemory()
+    expect(turns).toHaveLength(2)
+    expect(turns[1].content).toBe('old tab A')
+    expect(local.getItem('case-prep-ask-ai-memory')).toContain('old tab A')
+    expect(session.getItem('case-prep-ask-ai-memory')).toBeNull()
   })
 })

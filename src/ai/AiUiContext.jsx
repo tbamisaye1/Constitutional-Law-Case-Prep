@@ -93,7 +93,7 @@ function mergeEvidence(clientNotes, serverEvidence) {
  * advancedResponses: when on, /chat uses the stronger GPT mini (gpt-5-mini)
  * instead of the cheap default. Flip this for hard questions.
  *
- * memory: prior user/assistant turns for this browser tab (sessionStorage).
+ * memory: prior user/assistant turns for this browser (localStorage).
  */
 
 const AiUiContext = createContext(null)
@@ -140,6 +140,8 @@ export function AiUiProvider({ children }) {
   const [prompt, setPrompt] = useState(() => resolveAskAiLastView()?.prompt || '')
   const [loading, setLoading] = useState(false)
   const [reply, setReply] = useState(() => resolveAskAiLastView()?.reply || null)
+  /** When true, skip one auto-restore (New question / mode switch). */
+  const skipAutoRestoreRef = useRef(false)
 
   const persistMemory = useCallback((next) => {
     setMemory(next)
@@ -219,12 +221,12 @@ export function AiUiProvider({ children }) {
   const switchGroundingSource = useCallback((next) => {
     const mode = next === 'web_plus' ? 'web_plus' : 'documents'
     setGroundingSource(mode)
-    setReply(null)
-    clearAskAiLastView()
+    // Keep the on-screen answer; only change where the next ask searches.
     setLoading(false)
   }, [])
 
   const clearMemory = useCallback(() => {
+    skipAutoRestoreRef.current = true
     clearAskAiMemoryStore()
     setMemory([])
     setReply(null)
@@ -383,10 +385,19 @@ export function AiUiProvider({ children }) {
   const askAi = useCallback(() => runPrompt(prompt), [prompt, runPrompt])
 
   const clearReply = useCallback(() => {
+    // Let the empty composer stay empty; Recent thread can reopen any turn.
+    skipAutoRestoreRef.current = true
     setReply(null)
     clearAskAiLastView()
     setLoading(false)
     setPrompt('')
+  }, [])
+
+  /** One-shot: New question / clear memory should not instantly reopen the last answer. */
+  const consumeSkipAutoRestore = useCallback(() => {
+    if (!skipAutoRestoreRef.current) return false
+    skipAutoRestoreRef.current = false
+    return true
   }, [])
 
   const value = useMemo(
@@ -415,6 +426,7 @@ export function AiUiProvider({ children }) {
       clearReply,
       clearMemory,
       restoreFromMemory,
+      consumeSkipAutoRestore,
     }),
     [
       open,
@@ -437,6 +449,7 @@ export function AiUiProvider({ children }) {
       clearReply,
       clearMemory,
       restoreFromMemory,
+      consumeSkipAutoRestore,
     ]
   )
 

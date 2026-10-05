@@ -119,6 +119,7 @@ export function AiSelectionBubble() {
     clearReply,
     clearMemory,
     restoreFromMemory,
+    consumeSkipAutoRestore,
   } = useAiUi()
   const navigate = useNavigate()
   const lib = useCaseLibrary()
@@ -215,12 +216,13 @@ export function AiSelectionBubble() {
     setOpeningId('')
   }, [reply])
 
-  // Older answers only lived in the truncated "Recent thread" strip. Auto-open
-  // the newest full reply once when the panel is open with memory but no reply.
+  // Auto-open the newest full reply when reopening Ask AI with memory but no
+  // on-screen answer. Skip once after New question / Clear memory.
   useEffect(() => {
     if (!open || loading || reply || !memory.length) return
+    if (consumeSkipAutoRestore()) return
     restoreFromMemory()
-  }, [open, loading, reply, memory, restoreFromMemory])
+  }, [open, loading, reply, memory, restoreFromMemory, consumeSkipAutoRestore])
 
   function onResizePointerDown(event) {
     if (event.button !== 0) return
@@ -588,11 +590,11 @@ export function AiSelectionBubble() {
           </p>
         ) : null}
 
-        {memory.length && !reply && !loading ? (
+        {memory.length && !loading ? (
           <div className="ai-memory-transcript">
             <div className="ai-sample-label mono">Recent thread</div>
             <p className="ai-memory-hint">
-              Tap a turn to open the full answer. Newest Ask AI reply loads the matching question.
+              Tap a turn to open the full answer, or use Open last full answer.
             </p>
             <button
               type="button"
