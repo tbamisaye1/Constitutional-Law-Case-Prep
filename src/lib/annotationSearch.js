@@ -16,6 +16,7 @@ import {
   snippetAround,
   tokenize,
 } from './notebookSearch'
+import { argumentChunksForAskAi } from './argumentNotes'
 import { flattenCaseLibraryNotes } from './workspaceSearch'
 
 /**
@@ -235,12 +236,14 @@ export function prepNotesForAskAi(
     notebookLimit = 4,
     annotationLimit = 4,
     caseNoteLimit = 3,
-    totalLimit = 8,
+    argumentLimit = 4,
+    totalLimit = 10,
     annotations = [],
     cases = [],
     filesMeta = [],
     notesByCase = {},
     noteTabs = [],
+    argumentsBoard = null,
   } = {}
 ) {
   const notebook = notebookChunksForAskAi(query, { limit: notebookLimit })
@@ -256,9 +259,12 @@ export function prepNotesForAskAi(
     cases,
     limit: caseNoteLimit,
   })
+  const argNotes = argumentChunksForAskAi(query, argumentsBoard, {
+    limit: argumentLimit,
+  })
 
-  // Interleave so PDF annotations and case tabs are not drowned by notebook hits.
-  const queues = [annos.slice(), caseNotes.slice(), notebook.slice()]
+  // Interleave so PDF annotations, case tabs, and argument notes are visible.
+  const queues = [argNotes.slice(), annos.slice(), caseNotes.slice(), notebook.slice()]
   const merged = []
   while (merged.length < totalLimit) {
     let added = false

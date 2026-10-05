@@ -16,8 +16,10 @@ import {
 } from './askAiMemory'
 import { prepNotesForAskAi } from '../lib/annotationSearch'
 import { queryWantsNotes } from '../lib/notebookSearch'
+import { queryWantsArgumentNotes } from '../lib/argumentNotes'
 import { expandInstantCaseQuery, queryMentionsInstantCase } from '../data/caseAtBar'
 import { getCaseLibraryStore, useCaseLibrary } from '../hooks/useCaseLibrary'
+import { WORKSPACE_DOCS } from '../lib/workspaceDocs'
 
 /** Turn locally matched note chunks into evidence cards Ask AI can show/open. */
 function evidenceFromClientNotes(notes) {
@@ -246,8 +248,12 @@ export function AiUiProvider({ children }) {
       }))
 
       const wantsInstantCase = queryMentionsInstantCase(user_prompt)
+      const wantsArgumentNotes = queryWantsArgumentNotes(user_prompt)
       const wantsNotes =
-        includeNotes || queryWantsNotes(user_prompt) || wantsInstantCase
+        includeNotes ||
+        queryWantsNotes(user_prompt) ||
+        wantsInstantCase ||
+        wantsArgumentNotes
       if (wantsNotes && !includeNotes) setIncludeNotes(true)
 
       // "Instant case" → Bronner record aliases for local note/annotation search.
@@ -257,13 +263,20 @@ export function AiUiProvider({ children }) {
         if (!wantsNotes) return []
         // Prefer the live store so a just-finished recover is visible immediately.
         const store = getCaseLibraryStore() || {}
+        let argumentsBoard = null
+        try {
+          argumentsBoard = WORKSPACE_DOCS.arguments.loadLocal()
+        } catch {
+          argumentsBoard = null
+        }
         return prepNotesForAskAi(notesQuery, {
           annotations: store.annotations || lib.annotations || [],
           cases: store.cases || lib.cases || [],
           filesMeta: store.filesMeta || lib.filesMeta || [],
           notesByCase: store.notesByCase || lib.notesByCase || {},
           noteTabs: store.noteTabs || lib.noteTabs || [],
-          totalLimit: 8,
+          argumentsBoard,
+          totalLimit: 10,
         })
       }
 

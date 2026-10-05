@@ -523,7 +523,8 @@ export function AiSelectionBubble() {
           <span>
             Include my notes
             <span className="ai-notes-toggle-hint">
-              Searches notebook pages, PDF highlights/page notes, and case-library tabs.
+              Searches notebook pages, PDF highlights, case-library tabs, and Arguments
+              (whole argument / section / prong notes).
             </span>
           </span>
         </label>

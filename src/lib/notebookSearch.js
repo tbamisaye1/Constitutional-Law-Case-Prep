@@ -351,6 +351,10 @@ export function queryWantsNotes(prompt) {
       q
     ) ||
     /\b(search|find|look)\b.{0,40}\b(notes?|highlights?|annotations?)\b/.test(q) ||
-    /\b(in|from)\s+my\s+notes?\b/.test(q)
+    /\b(in|from)\s+my\s+notes?\b/.test(q) ||
+    /\b(my|the|this)\s+arguments?\b/.test(q) ||
+    /\bprongs?\b/.test(q) ||
+    /\b(first|1st|second|2nd)\s+arg(ument)?\b/.test(q) ||
+    /\bwhole\s+argument\b/.test(q)
   )
 }

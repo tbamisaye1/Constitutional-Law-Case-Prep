@@ -1135,6 +1135,38 @@
   background: var(--paper-2);
 }
 
+.args-whole-chip {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule-soft);
+  background: var(--paper);
+  color: var(--ink-2);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.args-whole-chip.on {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: var(--paper-2);
+  font-weight: 600;
+}
+
+.args-notes-hint {
+  margin: 0 0 8px;
+  font-size: 10px;
+  color: var(--ink-3);
+  line-height: 1.35;
+}
+
+.args-prong-row.on {
+  background: color-mix(in srgb, var(--gold, #b8860b) 12%, var(--paper));
+}
+
 .args-section-head {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) 34px;

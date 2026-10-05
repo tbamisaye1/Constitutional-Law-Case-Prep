@@ -88,6 +88,10 @@ export const WORKSPACE_DOCS = {
             petitioner: saved.activeSectionBySide?.petitioner || null,
             respondent: saved.activeSectionBySide?.respondent || null,
           },
+          activeFocusBySide: {
+            petitioner: saved.activeFocusBySide?.petitioner || { type: 'side' },
+            respondent: saved.activeFocusBySide?.respondent || { type: 'side' },
+          },
         }
       }
       return {
@@ -97,6 +101,10 @@ export const WORKSPACE_DOCS = {
         },
         notes: { ...DEFAULT_ARG_NOTES },
         activeSectionBySide: { petitioner: null, respondent: null },
+        activeFocusBySide: {
+          petitioner: { type: 'side' },
+          respondent: { type: 'side' },
+        },
       }
     },
     toRow(data) {
@@ -105,6 +113,7 @@ export const WORKSPACE_DOCS = {
         outlines: data.outlines,
         notes: data.notes,
         activeSectionBySide: data.activeSectionBySide,
+        activeFocusBySide: data.activeFocusBySide,
       }
     },
     fromRow(row) {
@@ -115,6 +124,10 @@ export const WORKSPACE_DOCS = {
         activeSectionBySide: row.activeSectionBySide || {
           petitioner: null,
           respondent: null,
+        },
+        activeFocusBySide: row.activeFocusBySide || {
+          petitioner: { type: 'side' },
+          respondent: { type: 'side' },
         },
       }
     },

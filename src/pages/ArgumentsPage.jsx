@@ -15,11 +15,8 @@ function readExpanded() {
 }
 
 /**
- * Argument board: sections (issues / themes) with nested prongs, plus working notes.
- * Outline + notes persist and sync to your workspace (same on phone / laptop).
- *
- * Expand hides the outline so the notes canvas can use the full width.
- * Esc exits expand. Preference is remembered.
+ * Argument board: sections + prongs, each with its own notes, plus whole-argument
+ * working notes. Click a section or prong to edit that layer; Ask AI can search all.
  */
 export function ArgumentsPage() {
   const args = useArguments()
@@ -53,7 +50,8 @@ export function ArgumentsPage() {
             <h1>Arguments</h1>
             <p className="lede">
               Structure the side you are arguing. Add a section for each issue or theme, then add
-              prongs under it. Edits save in this browser.
+              prongs under it. Click a section or prong to write notes for that piece, or use whole
+              argument notes for the full flowing draft. Edits save in this browser.
             </p>
           </div>
           <div className="args-head-actions">
@@ -103,12 +101,27 @@ export function ArgumentsPage() {
 function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
   if (!visible) return null
 
-  const sideLabel = args.side === 'petitioner' ? 'Petitioner' : 'Respondent'
+  const editorKey = [
+    args.side,
+    args.focus?.type || 'side',
+    args.focus?.sectionId || '',
+    args.focus?.prongId || '',
+  ].join(':')
 
   return (
     <div className={expanded ? 'args-split is-expanded' : 'args-split'}>
       {!expanded ? (
         <div className="args-outline">
+          <button
+            type="button"
+            className={
+              args.focus?.type === 'side' ? 'args-whole-chip on' : 'args-whole-chip'
+            }
+            onClick={args.focusWholeArgument}
+          >
+            Whole argument notes
+          </button>
+
           {args.sections.length === 0 && (
             <p className="args-empty">
               No sections yet. Use <strong>Add section</strong>, then <strong>Add prong</strong> for
@@ -116,14 +129,22 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
             </p>
           )}
           {args.sections.map((section, sectionIdx) => {
-            const active = section.id === args.activeSectionId
+            const sectionOn =
+              args.focus?.type === 'section' && args.focus.sectionId === section.id
+            const sectionActive = section.id === args.activeSectionId
             return (
               <div
                 key={section.id}
-                className={active ? 'args-section on' : 'args-section'}
-                onClick={() => args.selectSection(section.id)}
+                className={
+                  sectionOn || (sectionActive && args.focus?.type !== 'side')
+                    ? 'args-section on'
+                    : 'args-section'
+                }
               >
-                <div className="args-section-head">
+                <div
+                  className="args-section-head"
+                  onClick={() => args.selectSection(section.id)}
+                >
                   <span className="mono args-num">{sectionIdx + 1}</span>
                   <input
                     className="args-input args-section-input"
@@ -146,30 +167,43 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
                 </div>
 
                 <ul className="args-prongs">
-                  {(section.prongs || []).map((prong, prongIdx) => (
-                    <li key={prong.id} className="args-row args-prong-row">
-                      <span className="mono args-num">
-                        {sectionIdx + 1}.{prongIdx + 1}
-                      </span>
-                      <input
-                        className="args-input"
-                        value={prong.title}
-                        aria-label={`Prong ${sectionIdx + 1}.${prongIdx + 1} title`}
-                        onChange={(e) =>
-                          args.updateProngTitle(section.id, prong.id, e.target.value)
+                  {(section.prongs || []).map((prong, prongIdx) => {
+                    const prongOn =
+                      args.focus?.type === 'prong' && args.focus.prongId === prong.id
+                    return (
+                      <li
+                        key={prong.id}
+                        className={
+                          prongOn ? 'args-row args-prong-row on' : 'args-row args-prong-row'
                         }
-                        onFocus={() => args.selectSection(section.id)}
-                      />
-                      <button
-                        type="button"
-                        className="icon-btn danger"
-                        aria-label="Remove prong"
-                        onClick={() => args.removeProng(section.id, prong.id)}
+                        onClick={() => args.selectProng(section.id, prong.id)}
                       >
-                        <Trash2 size={15} />
-                      </button>
-                    </li>
-                  ))}
+                        <span className="mono args-num">
+                          {sectionIdx + 1}.{prongIdx + 1}
+                        </span>
+                        <input
+                          className="args-input"
+                          value={prong.title}
+                          aria-label={`Prong ${sectionIdx + 1}.${prongIdx + 1} title`}
+                          onChange={(e) =>
+                            args.updateProngTitle(section.id, prong.id, e.target.value)
+                          }
+                          onFocus={() => args.selectProng(section.id, prong.id)}
+                        />
+                        <button
+                          type="button"
+                          className="icon-btn danger"
+                          aria-label="Remove prong"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            args.removeProng(section.id, prong.id)
+                          }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </li>
+                    )
+                  })}
                 </ul>
 
                 <button
@@ -192,9 +226,9 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
       <div className="args-notes">
         <div className="args-notes-head">
           {expanded ? (
-            <span className="mono notes-expand-hint">{sideLabel} notes</span>
+            <span className="mono notes-expand-hint">{args.focusLabel}</span>
           ) : (
-            <span className="mono args-notes-label">Working notes</span>
+            <span className="mono args-notes-label">{args.focusLabel}</span>
           )}
           <button
             type="button"
@@ -218,7 +252,14 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
             )}
           </button>
         </div>
-        <NoteEditor key={args.side} html={args.notesHtml} onChange={args.setNotesForSide} />
+        <p className="args-notes-hint mono">
+          {args.focus?.type === 'side'
+            ? 'Full flowing notes for this side. Ask AI can read this as the whole argument.'
+            : args.focus?.type === 'section'
+              ? 'Notes for this argument section only. Click Whole argument notes for the full draft.'
+              : 'Notes for this prong only. Click the section or Whole argument notes to zoom out.'}
+        </p>
+        <NoteEditor key={editorKey} html={args.notesHtml} onChange={args.setNotesForSide} />
       </div>
     </div>
   )
