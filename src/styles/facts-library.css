@@ -221,6 +221,15 @@
   border: 1px solid var(--rule-soft);
 }
 
+.case-at-bar-fact-toast {
+  margin: 0.35rem 0 0;
+  padding: 0.4rem 0.65rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+  font-size: 12px;
+}
+
 .case-at-bar-intro p {
   margin: 0;
   max-width: 52rem;
@@ -2091,6 +2100,25 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   gap: 10px;
 }
 
+.library-dup-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--paper-2) 92%, #8c3226 8%);
+}
+
+.library-dup-banner p {
+  margin: 0;
+  flex: 1 1 240px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
 .library-add-case {
   align-self: flex-start;
 }
@@ -2518,12 +2546,10 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
 .pdf-highlight-layer {
   position: absolute;
   inset: 0;
+  /* Marks stay under the text layer so drag-select / copy still works on
+     already-highlighted spans. Only the ⋯ chip captures clicks. */
   pointer-events: none;
   z-index: 3;
-}
-
-.pdf-highlight-layer.allow-select-through .pdf-hl-hit {
-  pointer-events: none !important;
 }
 
 .pdf-hl {
@@ -2535,30 +2561,42 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   box-shadow: none;
 }
 
-.pdf-hl-hit {
+.pdf-hl-mark {
+  pointer-events: none;
+}
+
+.pdf-hl-actions {
   pointer-events: auto;
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink-2);
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(20, 22, 26, 0.18);
   appearance: none;
   -webkit-appearance: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  cursor: pointer;
-  mix-blend-mode: multiply;
-  /* Global :focus-visible outlines read as thick black boxes on every line
-     fragment and stick after click. Keep hits quiet. */
   outline: none !important;
-  box-shadow: none;
 }
 
-.pdf-hl-hit:hover {
-  filter: brightness(0.92);
+.pdf-hl-actions:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--gold) 18%, var(--paper));
 }
 
-.pdf-hl-hit:focus,
-.pdf-hl-hit:focus-visible {
+.pdf-hl-actions:focus,
+.pdf-hl-actions:focus-visible {
   outline: none !important;
-  box-shadow: none;
-  filter: brightness(0.9);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 55%, transparent);
 }
 
 .pdf-hl-active {
@@ -2616,11 +2654,54 @@ body:has(.pdf-viewer.is-expanded) .ai-fab {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 280px;
+  max-width: 300px;
   padding: 10px;
   background: var(--paper);
   border: 1px solid var(--rule);
   box-shadow: 0 8px 24px rgba(20, 22, 26, 0.16);
+}
+
+.pdf-hl-fn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.pdf-hl-fn-chip {
+  flex: 0 0 auto;
+  min-width: 32px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.pdf-hl-fn-chip.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.pdf-hl-fn-label {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.pdf-hl-fn-input {
+  width: 4.5rem;
+  box-sizing: border-box;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
 }
 
 .pdf-hl-quote {

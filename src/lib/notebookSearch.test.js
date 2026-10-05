@@ -93,6 +93,12 @@ describe('notebookSearch', () => {
   it('detects note-grounding intent', () => {
     expect(queryWantsNotes('what did I write about NDAA in my notes')).toBe(true)
     expect(queryWantsNotes('define AUMF from the article')).toBe(false)
+    expect(
+      queryWantsNotes(
+        'whre in my ntoes do i write about the intention of Congress'
+      )
+    ).toBe(true)
+    expect(queryWantsNotes('where did i write about consistent construction')).toBe(true)
   })
 
   it('snippetAround marks the match', () => {

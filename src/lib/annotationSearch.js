@@ -5,7 +5,10 @@
  */
 
 import { isGeneralAnnotation } from '../components/library/AnnotationPanel'
+import { CASE_AT_BAR_ID } from '../data/caseAtBar'
+import { CORPUS_ARTICLES_ID } from '../data/corpusArticles'
 import { normalizeTopicsList } from './annotationTopics'
+import { scoreAnnotationRow } from './annotationScore'
 import {
   notebookChunksForAskAi,
   notesSearchQuery,
@@ -89,11 +92,21 @@ export function flattenAnnotations({
     const text = bodyParts.join('\n')
 
     const params = new URLSearchParams()
-    if (caseId) params.set('case', caseId)
     if (fileId) params.set('file', fileId)
     if (pageNum) params.set('page', String(pageNum))
-    // Articles shelf uses the same annotation store; library deep-link is enough.
-    const path = `/library?${params.toString()}`
+    if (quote) params.set('q', quote.slice(0, 180))
+    params.set('anno', a.id)
+
+    let path
+    if (caseId === CASE_AT_BAR_ID) {
+      params.set('view', 'record')
+      path = `/facts?${params.toString()}`
+    } else if (caseId === CORPUS_ARTICLES_ID) {
+      path = `/articles?${params.toString()}`
+    } else {
+      if (caseId) params.set('case', caseId)
+      path = `/library?${params.toString()}`
+    }
 
     rows.push({
       id: `anno:${a.id}`,
@@ -115,15 +128,17 @@ export function searchAnnotations(
   const q = String(query || '').trim()
   if (q.length < 2) return []
 
-  const tokens = tokenize(q)
+  const searchQ = notesSearchQuery(q)
   return rows
     .map((row) => {
-      const score = scorePage(row, q, tokens)
+      // Concept-aware score so "Congress intention / consistent exclusion"
+      // prefers Costanzo over any "Congress failed / declined" highlight.
+      const score = scoreAnnotationRow(row, searchQ)
       if (score <= 0) return null
       return {
         ...row,
         score,
-        snippet: snippetAround(row.text || row.title, q),
+        snippet: snippetAround(row.text || row.title, searchQ),
       }
     })
     .filter(Boolean)

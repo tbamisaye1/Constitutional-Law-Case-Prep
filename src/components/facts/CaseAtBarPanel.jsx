@@ -11,12 +11,15 @@ import { CASE_AT_BAR_ID, CASE_AT_BAR_LABEL } from '../../data/caseAtBar'
  * Upload / read the record PDF, highlight, annotate, and keep working notes.
  * Reuses library PDF storage under a reserved case id.
  * Deep-link: /facts?view=record&file=&page=&q=
+ *
+ * Optional `onSaveAsFact`: turn a PDF selection into a Fact card.
  */
-export function CaseAtBarPanel({ lib }) {
+export function CaseAtBarPanel({ lib, onSaveAsFact = null }) {
   const [params, setParams] = useSearchParams()
   const [mode, setMode] = useState('read') // read | notes
   const [focusAnnotationId, setFocusAnnotationId] = useState(null)
   const [focusHighlightId, setFocusHighlightId] = useState(null)
+  const [factSavedMsg, setFactSavedMsg] = useState('')
   const paramFile = params.get('file')
   const paramPage = Number(params.get('page') || 0)
   const focusQuote = params.get('q') || ''
@@ -58,9 +61,15 @@ export function CaseAtBarPanel({ lib }) {
       <div className="case-at-bar-intro">
         <p>
           Upload the record (or opinion excerpt) you are arguing from. Select text to highlight,
-          add page notes, and keep a free-form working page beside it. The same PDF is indexed for
-          Ask AI, so the agent can cite this Instant Case alongside other corpus sources.
+          name a passage as a Fact card, add page notes, and keep a free-form working page beside
+          it. The same PDF is indexed for Ask AI, so the agent can cite this Instant Case alongside
+          other corpus sources.
         </p>
+        {factSavedMsg ? (
+          <p className="case-at-bar-fact-toast mono" role="status">
+            {factSavedMsg}
+          </p>
+        ) : null}
         <div className="view-toggle case-at-bar-modes" role="tablist" aria-label="Case at bar mode">
           <button
             type="button"
@@ -107,7 +116,18 @@ export function CaseAtBarPanel({ lib }) {
               caseId={CASE_AT_BAR_ID}
               fileId={activeId}
               focusQuote={focusQuote}
-              onPageChange={(p) => activeId && lib.setPage(activeId, p)}
+              onPageChange={(p) => {
+                if (!activeId) return
+                lib.setPage(activeId, p)
+                // Keep ?page= in sync. Otherwise a deep-link page stuck in the URL
+                // wins forever and the toolbar arrows look dead.
+                const next = new URLSearchParams(params)
+                next.set('file', activeId)
+                next.set('page', String(p))
+                next.delete('q')
+                next.delete('anno')
+                setParams(next, { replace: true })
+              }}
               suggestedFile="Upload the case at bar PDF above"
               highlights={lib.annotations.filter(
                 (a) =>
@@ -130,6 +150,28 @@ export function CaseAtBarPanel({ lib }) {
               onSelectHighlight={(id) => setFocusAnnotationId(id)}
               onUpdateHighlight={(id, patch) => lib.updateAnnotation(id, patch)}
               onDeleteHighlight={(id) => lib.removeAnnotation(id)}
+              onSaveAsFact={
+                onSaveAsFact
+                  ? ({ quote, page: p, footnote, annotationId, fileId: hlFileId }) => {
+                      const id = onSaveAsFact({
+                        quote,
+                        page: p,
+                        footnote,
+                        annotationId,
+                        fileId: hlFileId || activeId,
+                      })
+                      if (id) {
+                        const fn = String(footnote || '').trim()
+                        setFactSavedMsg(
+                          fn
+                            ? `Saved to Fact cards · pg ${p} · fn ${fn}`
+                            : `Saved to Fact cards · pg ${p}`
+                        )
+                        window.setTimeout(() => setFactSavedMsg(''), 3200)
+                      }
+                    }
+                  : null
+              }
               focusHighlightId={focusHighlightId}
             />
             <AnnotationPanel

@@ -12,8 +12,10 @@ import {
   ExternalLink,
   FileUp,
   Highlighter,
+  ListChecks,
   Maximize2,
   Minimize2,
+  MoreHorizontal,
   Search,
   Sparkles,
   Trash2,
@@ -51,8 +53,12 @@ pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.vers
  * save a page so you can step away and jump back. Expand fills the viewport;
  * Download / Open in browser use the loaded PDF blob.
  *
- * Click an existing highlight to reopen Ask AI / color / remove. Hold Shift
- * while selecting to drag through saved highlights.
+ * Saved highlights are painted under the text layer for selection: drag through
+ * them to copy or Ask AI about a sub-span. Use the ⋯ chip on a highlight to
+ * reopen color / Ask AI / remove for that whole annotation.
+ *
+ * Optional `onSaveAsFact`: Instant Case (and similar) can turn a selection or
+ * saved highlight into a Fact card without leaving the PDF.
  */
 export function PdfViewer({
   file,
@@ -65,6 +71,7 @@ export function PdfViewer({
   onSelectHighlight,
   onUpdateHighlight = null,
   onDeleteHighlight = null,
+  onSaveAsFact = null,
   caseId = null,
   fileId = null,
   focusQuote = '',
@@ -79,8 +86,9 @@ export function PdfViewer({
   const [error, setError] = useState('')
   const [pending, setPending] = useState(null)
   const [pendingColor, setPendingColor] = useState(DEFAULT_HIGHLIGHT_COLOR)
+  const [factFootnote, setFactFootnote] = useState('')
+  const [tagFootnote, setTagFootnote] = useState(false)
   const [activeHl, setActiveHl] = useState(null)
-  const [selectThrough, setSelectThrough] = useState(false)
   const [focusRects, setFocusRects] = useState([])
   const [pageDraft, setPageDraft] = useState(String(page || 1))
   const [searchOpen, setSearchOpen] = useState(false)
@@ -141,23 +149,6 @@ export function PdfViewer({
       requestAnimationFrame(() => searchInputRef.current?.focus())
     }
   }, [searchOpen])
-
-  useEffect(() => {
-    function onShift(event) {
-      if (event.key === 'Shift') setSelectThrough(event.type === 'keydown')
-    }
-    function onBlur() {
-      setSelectThrough(false)
-    }
-    window.addEventListener('keydown', onShift)
-    window.addEventListener('keyup', onShift)
-    window.addEventListener('blur', onBlur)
-    return () => {
-      window.removeEventListener('keydown', onShift)
-      window.removeEventListener('keyup', onShift)
-      window.removeEventListener('blur', onBlur)
-    }
-  }, [])
 
   useEffect(() => {
     if (!activeHl?.id) return
@@ -551,8 +542,20 @@ export function PdfViewer({
     )
   }
 
+  function clearSelectionUi() {
+    setPending(null)
+    setActiveHl(null)
+    setFactFootnote('')
+    setTagFootnote(false)
+    window.getSelection()?.removeAllRanges()
+    // Drop focus outlines on highlight hit-targets so black boxes do not stick.
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+  }
+
   function confirmHighlight() {
-    if (!pending) return
+    if (!pending || !onHighlight) return
     onHighlight({
       page: pending.page,
       quote: pending.quote,
@@ -560,13 +563,68 @@ export function PdfViewer({
       text: '',
       color: normalizeHighlightColor(pendingColor),
     })
-    setPending(null)
-    window.getSelection()?.removeAllRanges()
-    // Drop focus outlines on highlight hit-targets so black boxes do not stick.
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur()
-    }
+    clearSelectionUi()
   }
+
+  function confirmSaveAsFact(fromActive = false) {
+    if (!onSaveAsFact) return
+    const source = fromActive ? activeHl : pending
+    if (!source?.quote) return
+    // Keep the PDF mark when naming a new selection as a fact.
+    if (!fromActive && pending && onHighlight) {
+      onHighlight({
+        page: pending.page,
+        quote: pending.quote,
+        rects: pending.rects,
+        text: '',
+        color: normalizeHighlightColor(pendingColor),
+      })
+    }
+    onSaveAsFact({
+      quote: source.quote,
+      page: source.page,
+      footnote: tagFootnote ? factFootnote.trim() : '',
+      rects: source.rects || null,
+      annotationId: fromActive ? source.id || null : null,
+      fileId,
+      color: fromActive
+        ? normalizeHighlightColor(source.color)
+        : normalizeHighlightColor(pendingColor),
+    })
+    clearSelectionUi()
+  }
+
+  // Compact footnote tag: off by default; number field only when tagged.
+  const factFootnoteTag = onSaveAsFact ? (
+    <div className="pdf-hl-fn-row">
+      <button
+        type="button"
+        className={tagFootnote ? 'pdf-hl-fn-chip on' : 'pdf-hl-fn-chip'}
+        aria-pressed={tagFootnote}
+        title="Tag this fact with a record footnote (R. cite)"
+        onClick={() => {
+          setTagFootnote((on) => {
+            if (on) setFactFootnote('')
+            return !on
+          })
+        }}
+      >
+        fn
+      </button>
+      {tagFootnote ? (
+        <input
+          className="pdf-hl-fn-input mono"
+          value={factFootnote}
+          onChange={(e) => setFactFootnote(e.target.value)}
+          placeholder="n."
+          aria-label="Footnote number for R. cite"
+          autoFocus
+        />
+      ) : (
+        <span className="pdf-hl-fn-label mono">Tag footnote</span>
+      )}
+    </div>
+  ) : null
 
   const activeOnPage =
     searchMatches[activeMatch] && searchMatches[activeMatch].page === page
@@ -602,8 +660,8 @@ export function PdfViewer({
         </span>
         <span className="pdf-hint mono">
           {expanded
-            ? 'Esc exits · ← → change page · click a highlight · Shift-drag to select through'
-            : 'Select text → highlight or Ask AI · click a highlight to reopen'}
+            ? 'Esc exits · ← → page · drag through highlights to select · ⋯ opens highlight actions'
+            : 'Select text → highlight or Ask AI · ⋯ on a highlight for Ask AI / remove'}
         </span>
         <div className="pdf-toolbar-right">
           {onAddBookmark ? (
@@ -875,31 +933,24 @@ export function PdfViewer({
               loading={<p className="pdf-loading mono">Rendering page…</p>}
               onRenderTextLayerSuccess={onTextLayerRendered}
             >
-              <div
-                className={
-                  selectThrough ? 'pdf-highlight-layer allow-select-through' : 'pdf-highlight-layer'
-                }
-                aria-hidden={false}
-              >
+              <div className="pdf-highlight-layer" aria-hidden={false}>
                 {pageHighlights.map((h) => {
                   const color = highlightColorMeta(h.color)
                   const pulsing = pulseHighlightId === h.id
                   const isActive = activeHl?.id === h.id
                   const bands = mergeHighlightRects(h.rects || [])
                   return bands.map((r, i) => (
-                    <button
+                    <span
                       key={`${h.id}-${i}`}
-                      type="button"
                       data-hl-id={i === 0 ? h.id : undefined}
                       className={[
                         'pdf-hl',
-                        'pdf-hl-hit',
+                        'pdf-hl-mark',
                         pulsing ? 'pdf-hl-pulse' : '',
                         isActive ? 'pdf-hl-active' : '',
                       ]
                         .filter(Boolean)
                         .join(' ')}
-                      aria-label={`Open highlight actions: ${(h.quote || '').slice(0, 80)}`}
                       style={{
                         top: `${r.top * 100}%`,
                         left: `${r.left * 100}%`,
@@ -907,14 +958,30 @@ export function PdfViewer({
                         height: `${r.height * 100}%`,
                         background: color.fill,
                       }}
-                      onClick={(event) => {
-                        event.preventDefault()
-                        event.stopPropagation()
-                        if (selectThrough) return
-                        openSavedHighlight(h, event)
-                        event.currentTarget.blur()
-                      }}
-                    />
+                    >
+                      {i === 0 ? (
+                        <button
+                          type="button"
+                          className="pdf-hl-actions"
+                          aria-label={`Highlight actions: ${(h.quote || '').slice(0, 80)}`}
+                          title="Highlight actions (Ask AI, color, remove)"
+                          onMouseDown={(event) => {
+                            // Keep the text layer from starting a selection when
+                            // the user only meant to open the highlight menu.
+                            event.preventDefault()
+                            event.stopPropagation()
+                          }}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            openSavedHighlight(h, event)
+                            event.currentTarget.blur()
+                          }}
+                        >
+                          <MoreHorizontal size={12} strokeWidth={2.25} />
+                        </button>
+                      ) : null}
+                    </span>
                   ))
                 })}
                 {searchHits.map((hit, hitIndex) =>
@@ -976,12 +1043,23 @@ export function PdfViewer({
               <button type="button" className="btn-ink" onClick={confirmHighlight}>
                 <Highlighter size={14} /> Save highlight
               </button>
+              {onSaveAsFact ? (
+                <>
+                  {factFootnoteTag}
+                  <button type="button" className="btn-ink" onClick={() => confirmSaveAsFact(false)}>
+                    <ListChecks size={14} />
+                    {tagFootnote && factFootnote.trim()
+                      ? `Save as fact · fn ${factFootnote.trim()}`
+                      : 'Save as fact'}
+                  </button>
+                </>
+              ) : null}
               <button
                 type="button"
                 className="btn-soft"
                 onClick={() => {
                   askAboutPassage(pending.quote, pending.page, pending.anchor)
-                  setPending(null)
+                  clearSelectionUi()
                 }}
               >
                 <Sparkles size={14} /> Ask AI
@@ -1017,12 +1095,23 @@ export function PdfViewer({
                   />
                 ))}
               </div>
+              {onSaveAsFact ? (
+                <>
+                  {factFootnoteTag}
+                  <button type="button" className="btn-ink" onClick={() => confirmSaveAsFact(true)}>
+                    <ListChecks size={14} />
+                    {tagFootnote && factFootnote.trim()
+                      ? `Save as fact · fn ${factFootnote.trim()}`
+                      : 'Save as fact'}
+                  </button>
+                </>
+              ) : null}
               <button
                 type="button"
                 className="btn-ink"
                 onClick={() => {
                   askAboutPassage(activeHl.quote, activeHl.page, activeHl.anchor)
-                  setActiveHl(null)
+                  clearSelectionUi()
                 }}
               >
                 <Sparkles size={14} /> Ask AI
@@ -1053,7 +1142,8 @@ export function PdfViewer({
                 Close
               </button>
               <p className="pdf-hl-popover-hint mono">
-                Hold Shift and drag to select text through this highlight.
+                Drag across the yellow mark to select a sub-span (copy or Ask AI). Use ⋯ for this
+                whole highlight.
               </p>
             </div>
           ) : null}

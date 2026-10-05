@@ -407,25 +407,83 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
 }
 
 /** Push dirty rows and pull whatever else changed. */
-async function runSync({ keepalive = false } = {}) {
+async function runSync({ keepalive = false, forcePull = false } = {}) {
   if (memory.syncStatus === 'off') return
 
   // An edit that lands mid-request must not be dropped. Come back once the
   // current exchange is done rather than returning and waiting for either
   // another edit or the retry timer.
   if (syncInFlight) {
-    scheduleSync()
+    scheduleSync(SYNC_DEBOUNCE_MS, { forcePull })
     return
   }
 
   const { changes, sent } = collectChanges(memory.store, memory.store.syncMeta)
-  if (!Object.keys(sent).length && memory.syncStatus !== 'error') return
+  // Normal idle browsers with nothing dirty skip the network. forcePull is for
+  // recovery (merge mistakes, another device wrote first) where we still need
+  // a round-trip even though this tab has no pending rows.
+  if (!forcePull && !Object.keys(sent).length && memory.syncStatus !== 'error') return
 
   const ok = await exchange(changes, sent, { keepalive })
 
   // A row re-edited while the request was in flight stays dirty, so give it
   // its own push instead of waiting for the next edit to trigger one.
   if (ok && pendingCount(memory.store.syncMeta) > 0) scheduleSync()
+}
+
+const MERGE_BACKUP_KEY = 'case-prep-merge-backup-v1'
+// Bump the suffix when a one-shot server restore must run again after deploy.
+const RECOVER_NOTES_FLAG = 'case-prep-recover-notes-2026-10-05-askai'
+
+function pickMergedText(keepVal, dropVal) {
+  const keep = String(keepVal || '').trim()
+  const drop = String(dropVal || '').trim()
+  if (keep) return keepVal || ''
+  if (drop) return dropVal || ''
+  return keepVal || dropVal || ''
+}
+
+/**
+ * One-shot after the Costanzo merge scare: drop stale local tombstones that
+ * would re-delete server notes, reset the sync cursor, and pull everything.
+ */
+async function recoverNotesFromServerOnce() {
+  if (typeof localStorage === 'undefined') return
+  if (localStorage.getItem(RECOVER_NOTES_FLAG) === '1') return
+
+  const syncMeta = memory.store.syncMeta || emptySyncMeta()
+  const dirty = { ...(syncMeta.dirty || {}) }
+  const rows = { ...(syncMeta.rows || {}) }
+  for (const key of Object.keys(dirty)) {
+    if (
+      key.startsWith('annotations::') ||
+      key.startsWith('documents::') ||
+      key.startsWith('cases::') ||
+      key === 'cases::case-1791153201425'
+    ) {
+      delete dirty[key]
+      // Forget local "deleted" so a full pull can restore the server row.
+      if (rows[key]?.deleted) delete rows[key]
+    }
+  }
+  // Also clear deleted flags on annotation/document/case row meta even if not
+  // dirty, so applyChanges accepts the restored server copies (headline note).
+  for (const key of Object.keys(rows)) {
+    if (
+      (key.startsWith('annotations::') ||
+        key.startsWith('documents::') ||
+        key === 'cases::costanzo') &&
+      rows[key]
+    ) {
+      // Drop local timestamps for costanzo so the restored headline wins.
+      if (key === 'cases::costanzo') delete rows[key]
+      else if (rows[key]?.deleted) delete rows[key]
+    }
+  }
+  setSyncMeta({ ...syncMeta, dirty, rows, cursor: 0 })
+  const ok = await exchange({}, {})
+  if (ok) localStorage.setItem(RECOVER_NOTES_FLAG, '1')
+  return ok
 }
 
 /**
@@ -439,6 +497,8 @@ async function runSync({ keepalive = false } = {}) {
  */
 async function bootstrapSync() {
   if (memory.syncStatus === 'off') return
+
+  await recoverNotesFromServerOnce()
 
   if (memory.store.syncMeta.cursor === 0) {
     const ok = await exchange({}, {})
@@ -711,6 +771,11 @@ if (typeof window !== 'undefined') {
  * One in-memory copy for the whole app so Facts and Library cannot overwrite each other.
  * PDFs live in IndexedDB; everything else in localStorage.
  */
+/** Live store snapshot (not React state). Use after sync/recover inside async work. */
+export function getCaseLibraryStore() {
+  return memory.store
+}
+
 export function useCaseLibrary() {
   const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
@@ -1037,6 +1102,212 @@ export function useCaseLibrary() {
     },
     [removeFile]
   )
+
+  /**
+   * Fold a duplicate case into another: PDFs, highlights, and notes move over,
+   * then the empty duplicate card is removed (files are not deleted).
+   */
+  const mergeCases = useCallback((keepId, dropId) => {
+    if (!keepId || !dropId || keepId === dropId) return false
+    const keep = memory.store.cases.find((c) => c.id === keepId)
+    const drop = memory.store.cases.find((c) => c.id === dropId)
+    if (!keep || !drop) return false
+
+    // Snapshot so a bad merge can be reversed from this browser.
+    try {
+      sessionStorage.setItem(
+        MERGE_BACKUP_KEY,
+        JSON.stringify({
+          at: Date.now(),
+          keepId,
+          dropId,
+          store: {
+            cases: memory.store.cases,
+            filesMeta: memory.store.filesMeta,
+            annotations: memory.store.annotations,
+            notesByCase: memory.store.notesByCase,
+            noteTabs: memory.store.noteTabs,
+            cites: memory.store.cites,
+            caseFacts: memory.store.caseFacts,
+            opinions: memory.store.opinions,
+            timeline: memory.store.timeline,
+          },
+        })
+      )
+    } catch {
+      /* ignore quota */
+    }
+
+    const movedFiles = memory.store.filesMeta.filter((f) => f.caseId === dropId)
+    const movedAnnos = memory.store.annotations.filter((a) => a.caseId === dropId)
+    // Annotations already on keep stay put; never filter them out.
+    const keepAnnos = memory.store.annotations.filter((a) => a.caseId === keepId)
+    const dropNotes = memory.store.notesByCase[dropId] || {}
+    const dropTabs = (memory.store.noteTabs || []).filter((t) => t.caseId === dropId)
+    const dropCites = (memory.store.cites || []).filter(
+      (c) => c.fromCaseId === dropId || c.toCaseId === dropId
+    )
+    const dropFacts = (memory.store.caseFacts || []).filter((f) => f.caseId === dropId)
+    const dropOpinions = (memory.store.opinions || []).filter((o) => o.caseId === dropId)
+    const dropTimeline = (memory.store.timeline || []).filter((t) => t.caseId === dropId)
+
+    const dirtyKeys = [
+      metaKey('cases', keepId),
+      ...movedFiles.map((f) => metaKey('documents', f.id)),
+      ...movedAnnos.map((a) => metaKey('annotations', a.id)),
+      ...keepAnnos.map((a) => metaKey('annotations', a.id)),
+      ...Object.keys(dropNotes).map((layerId) => metaKey('notes', keepId, layerId)),
+      ...Object.keys(dropNotes).map((layerId) => metaKey('notes', dropId, layerId)),
+      ...Object.keys(memory.store.notesByCase[keepId] || {}).map((layerId) =>
+        metaKey('notes', keepId, layerId)
+      ),
+      ...dropTabs.map((t) => metaKey('library_records', 'note_tabs', t.id)),
+      ...dropCites.map((c) => metaKey('library_records', 'cites', c.id)),
+      ...dropFacts.map((f) => metaKey('library_records', 'case_facts', f.id)),
+      ...dropOpinions.map((o) => metaKey('library_records', 'opinions', o.id)),
+      ...dropTimeline.map((t) => metaKey('library_records', 'timeline', t.id)),
+    ]
+
+    updateStore(
+      (prev) => {
+        const keepNotes = { ...(prev.notesByCase[keepId] || emptyLayerNotes()) }
+        for (const [layerId, html] of Object.entries(dropNotes)) {
+          const existing = String(keepNotes[layerId] || '').trim()
+          const incoming = String(html || '').trim()
+          if (!incoming) continue
+          // Skip empty / template-only incoming so merge does not clobber keep.
+          const plain = incoming
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+          if (plain.length < 8) continue
+          keepNotes[layerId] = existing
+            ? `${existing}\n\n<!-- merged from duplicate -->\n${incoming}`
+            : incoming
+        }
+        const notesByCase = { ...prev.notesByCase, [keepId]: keepNotes }
+        delete notesByCase[dropId]
+
+        // Card fields (headline, holding, rule, …) lived only on the duplicate
+        // before; fold any non-empty drop values into keep when keep is blank.
+        const keepCase = prev.cases.find((c) => c.id === keepId)
+        const dropCase = prev.cases.find((c) => c.id === dropId)
+        const mergedCase = keepCase
+          ? {
+              ...keepCase,
+              name: pickMergedText(keepCase.name, dropCase?.name) || keepCase.name,
+              cite: pickMergedText(keepCase.cite, dropCase?.cite),
+              year: keepCase.year || dropCase?.year || '',
+              issue: keepCase.issue || dropCase?.issue || 1,
+              tag: keepCase.tag || dropCase?.tag || null,
+              usefulness: keepCase.usefulness || dropCase?.usefulness || 'background',
+              headlineNote: pickMergedText(keepCase.headlineNote, dropCase?.headlineNote),
+              holding: pickMergedText(keepCase.holding, dropCase?.holding),
+              rule: pickMergedText(keepCase.rule, dropCase?.rule),
+              usePetitioner: pickMergedText(keepCase.usePetitioner, dropCase?.usePetitioner),
+              useRespondent: pickMergedText(keepCase.useRespondent, dropCase?.useRespondent),
+              suggestedFile: pickMergedText(keepCase.suggestedFile, dropCase?.suggestedFile),
+            }
+          : keepCase
+
+        return {
+          ...prev,
+          cases: prev.cases
+            .filter((c) => c.id !== dropId)
+            .map((c) => (c.id === keepId && mergedCase ? mergedCase : c)),
+          filesMeta: prev.filesMeta.map((f) =>
+            f.caseId === dropId ? { ...f, caseId: keepId } : f
+          ),
+          annotations: prev.annotations.map((a) =>
+            a.caseId === dropId ? { ...a, caseId: keepId } : a
+          ),
+          notesByCase,
+          noteTabs: (prev.noteTabs || []).map((t) =>
+            t.caseId === dropId ? { ...t, caseId: keepId } : t
+          ),
+          cites: (prev.cites || []).map((c) => ({
+            ...c,
+            fromCaseId: c.fromCaseId === dropId ? keepId : c.fromCaseId,
+            toCaseId: c.toCaseId === dropId ? keepId : c.toCaseId,
+          })),
+          caseFacts: (prev.caseFacts || []).map((f) =>
+            f.caseId === dropId ? { ...f, caseId: keepId } : f
+          ),
+          opinions: (prev.opinions || []).map((o) =>
+            o.caseId === dropId ? { ...o, caseId: keepId } : o
+          ),
+          timeline: (prev.timeline || []).map((t) =>
+            t.caseId === dropId ? { ...t, caseId: keepId } : t
+          ),
+        }
+      },
+      dirtyKeys
+    )
+
+    // Tombstone the dropped case so other devices drop the empty card too.
+    // Never tombstone annotations / documents — they already moved to keepId.
+    updateStore((prev) => prev, [metaKey('cases', dropId)], true)
+    return true
+  }, [])
+
+  /** Restore the pre-merge library snapshot from this browser (if still in session). */
+  const undoLastMerge = useCallback(() => {
+    let raw
+    try {
+      raw = sessionStorage.getItem(MERGE_BACKUP_KEY)
+    } catch {
+      return false
+    }
+    if (!raw) return false
+    let backup
+    try {
+      backup = JSON.parse(raw)
+    } catch {
+      return false
+    }
+    if (!backup?.store?.cases) return false
+
+    const dirtyKeys = [
+      ...(backup.store.cases || []).map((c) => metaKey('cases', c.id)),
+      ...(backup.store.filesMeta || []).map((f) => metaKey('documents', f.id)),
+      ...(backup.store.annotations || []).map((a) => metaKey('annotations', a.id)),
+    ]
+    for (const [caseId, layers] of Object.entries(backup.store.notesByCase || {})) {
+      for (const layerId of Object.keys(layers || {})) {
+        dirtyKeys.push(metaKey('notes', caseId, layerId))
+      }
+    }
+
+    updateStore(
+      (prev) => ({
+        ...prev,
+        cases: backup.store.cases,
+        filesMeta: backup.store.filesMeta,
+        annotations: backup.store.annotations,
+        notesByCase: backup.store.notesByCase,
+        noteTabs: backup.store.noteTabs || [],
+        cites: backup.store.cites || [],
+        caseFacts: backup.store.caseFacts || [],
+        opinions: backup.store.opinions || [],
+        timeline: backup.store.timeline || [],
+      }),
+      dirtyKeys
+    )
+    // Clear the tombstone on the restored drop card if present.
+    if (backup.dropId) {
+      const rows = { ...(memory.store.syncMeta.rows || {}) }
+      const key = metaKey('cases', backup.dropId)
+      if (rows[key]) rows[key] = { ...rows[key], deleted: false, updatedAt: Date.now() }
+      setSyncMeta({ ...memory.store.syncMeta, rows })
+    }
+    try {
+      sessionStorage.removeItem(MERGE_BACKUP_KEY)
+    } catch {
+      /* ignore */
+    }
+    scheduleSync(0, { forcePull: true })
+    return true
+  }, [])
 
   // Active file and current page are this browser's view state, not shared
   // data, so they are deliberately left out of sync. Syncing them would make
@@ -1386,10 +1657,20 @@ export function useCaseLibrary() {
       pending: pendingCount(snap.store.syncMeta),
       workspaceId: WORKSPACE_ID,
     },
-    syncNow: () => scheduleSync(0),
+    syncNow: () => scheduleSync(0, { forcePull: true }),
+    recoverFromServer: () => {
+      try {
+        localStorage.removeItem(RECOVER_NOTES_FLAG)
+      } catch {
+        /* ignore */
+      }
+      return recoverNotesFromServerOnce()
+    },
+    undoLastMerge,
     updateCase,
     addCase,
     removeCase,
+    mergeCases,
     setLayerNote,
     getLayerNotes,
     attachFiles,

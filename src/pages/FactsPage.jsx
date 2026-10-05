@@ -37,10 +37,11 @@ export function FactsPage() {
     <section className="workspace facts-room">
       <header className="workspace-head">
         <div>
-          <h1>Case facts</h1>
+          <h1>Instant Case [Bronner v. USA]</h1>
           <p className="lede">
-            Start with the Case at bar PDF: highlight, annotate, and write working notes. Fact cards
-            and the record timeline sit beside that when you need them.
+            Start with the Instant Case PDF: highlight a passage and save it as a Fact card, or keep
+            working notes beside the record. Fact cards and the timeline sit next to that when you
+            need them.
           </p>
         </div>
         <div className="head-actions">
@@ -70,7 +71,19 @@ export function FactsPage() {
       </header>
 
       <div hidden={f.view !== 'record'}>
-        <CaseAtBarPanel lib={lib} />
+        <CaseAtBarPanel
+          lib={lib}
+          onSaveAsFact={({ quote, page, footnote, annotationId, fileId }) =>
+            f.addFactFromHighlight({
+              text: quote,
+              page,
+              footnote,
+              note: 'Instant Case record',
+              fileId,
+              annotationId,
+            })
+          }
+        />
       </div>
 
       {f.view === 'timeline' ? (

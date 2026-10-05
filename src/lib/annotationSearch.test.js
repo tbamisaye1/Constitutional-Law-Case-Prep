@@ -97,4 +97,40 @@ describe('annotationSearch', () => {
     expect(chunks.some((c) => c.source_type === 'annotation')).toBe(true)
     expect(chunks.some((c) => String(c.id).includes('case-note'))).toBe(true)
   })
+
+  it('finds Costanzo Congress-intention note from a messy Ask AI query', () => {
+    const annotations = [
+      {
+        id: 'a-noise',
+        caseId: 'case-at-bar',
+        page: 3,
+        kind: 'highlight',
+        text: '',
+        quote:
+          'Efforts to pass laws expressly forbidding the president to detain Americans indefinitely failed in both houses of Congress',
+      },
+      {
+        id: 'a-costanzo',
+        caseId: 'costanzo',
+        fileId: 'pdf-c',
+        page: 2,
+        kind: 'highlight',
+        text: 'Here teh court says that if COngress odesnt include/chagne a statue, then you must assume that the way it is written is presumably the particular intention',
+        quote:
+          'The failure of Congress to alter or amend a statute, notwithstanding a consistent construction by the department charged with its enforcement',
+      },
+    ]
+    const cases = [
+      { id: 'costanzo', name: 'Costanzo v. Tillinghast' },
+      { id: 'case-at-bar', name: 'Instant Case' },
+    ]
+    const filesMeta = [{ id: 'pdf-c', name: 'costanzo.pdf', caseId: 'costanzo' }]
+    const q =
+      'whre in my ntoes do i write about the intention of Congress and how the court sohuld look to that when something is excluded repreately /consittently from law'
+    const hits = searchAnnotations(q, { annotations, cases, filesMeta })
+    expect(hits[0].id).toBe('anno:a-costanzo')
+    expect(hits[0].path).toContain('/library?')
+    expect(hits[0].path).toContain('anno=a-costanzo')
+    expect(hits[0].path).toContain('case=costanzo')
+  })
 })

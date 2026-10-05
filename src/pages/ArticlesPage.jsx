@@ -681,6 +681,8 @@ export function ArticlesPage() {
               const next = new URLSearchParams(params)
               next.set('file', activeId)
               next.set('page', String(p))
+              next.delete('q')
+              next.delete('anno')
               setParams(next, { replace: true })
             }}
             suggestedFile={missing || 'Select an article above'}

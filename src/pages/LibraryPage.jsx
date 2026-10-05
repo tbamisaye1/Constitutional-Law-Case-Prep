@@ -13,6 +13,7 @@ import { AnnotationPanel } from '../components/library/AnnotationPanel'
 import { useCaseLibrary } from '../hooks/useCaseLibrary'
 import { downloadIngestFile } from '../api/client'
 import { isBootstrapOyezSource } from '../lib/openEvidencePdf'
+import { findCaseNameDuplicates } from '../lib/caseDuplicates'
 import { USEFULNESS } from '../data/caseResearchSeed'
 import * as ScrollArea from '@radix-ui/react-scroll-area'
 
@@ -46,6 +47,7 @@ export function LibraryPage() {
   const paramPage = Number(params.get('page') || 0)
   const focusQuote = params.get('q') || ''
   const missing = params.get('missing') || ''
+  const paramAnno = params.get('anno') || ''
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -90,12 +92,18 @@ export function LibraryPage() {
     if (paramPage > 0 && (paramFile || activeId)) {
       lib.setPage(paramFile || activeId, paramPage)
       setPane('read')
+      setDeepDive(true)
     }
-    if (focusQuote || missing) {
+    if (focusQuote || missing || paramAnno) {
       setPane('read')
       setDeepDive(true)
     }
-  }, [paramFile, paramPage, focusQuote, missing, selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (paramAnno) {
+      setFocusAnnotationId(paramAnno)
+      setFocusHighlightId(null)
+      window.setTimeout(() => setFocusHighlightId(paramAnno), 0)
+    }
+  }, [paramFile, paramPage, focusQuote, missing, paramAnno, selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ⌘K deep-links: /library?case=hamdi&tab=tab-… opens that case notes tab.
   useEffect(() => {
@@ -175,6 +183,42 @@ export function LibraryPage() {
       setEditing(false)
     }
   }
+
+  function mergeDuplicate(keepId, dropId, name) {
+    const keepAnnos = (lib.annotations || []).filter((a) => a.caseId === keepId).length
+    const dropAnnos = (lib.annotations || []).filter((a) => a.caseId === dropId).length
+    const ok = window.confirm(
+      `Merge the duplicate “${name}” into one card?\n\nKeeping ${keepId} (${keepAnnos} notes) and folding in ${dropId} (${dropAnnos} notes).\nPDFs, highlights, and notes move onto the kept card. You can undo once from the banner if this looks wrong.`
+    )
+    if (!ok) return
+    const merged = lib.mergeCases(keepId, dropId)
+    if (!merged) return
+    setParams({ case: keepId })
+    setEditing(false)
+    setDeepDive(true)
+    setPane('notes')
+  }
+
+  function undoMerge() {
+    const restored = lib.undoLastMerge?.()
+    if (!restored) {
+      window.alert('No merge backup in this tab. Hard-refresh to pull notes from the server instead.')
+      return
+    }
+    setEditing(false)
+  }
+
+  const duplicatesForSelected = useMemo(
+    () =>
+      selected
+        ? findCaseNameDuplicates(lib.cases, selected.id, {
+            filesMeta: lib.filesMeta,
+            annotations: lib.annotations,
+            notesByCase: lib.notesByCase,
+          })
+        : [],
+    [lib.cases, lib.filesMeta, lib.annotations, lib.notesByCase, selected?.id]
+  )
 
   function jumpToAnnotation(a) {
     if (a.fileId) lib.setActiveFileId(a.fileId)
@@ -317,7 +361,7 @@ export function LibraryPage() {
                         {c.tag ? <Tag tone={c.issue === 2 ? 'q2' : 'q1'}>{c.tag}</Tag> : null}
                       </div>
                       <span className="mono cite">{c.cite}</span>
-                      <p className="case-row-blurb">{c.holding}</p>
+                      <p className="case-row-blurb">{c.headlineNote || c.holding}</p>
                       <div className="case-row-flags">
                         <span className={`useful-pill useful-${c.usefulness || 'background'}`}>
                           {c.usefulness || 'background'}
@@ -382,6 +426,42 @@ export function LibraryPage() {
               </button>
             </div>
           </div>
+
+          {duplicatesForSelected.length ? (
+            <div className="library-dup-banner" role="status">
+              <p>
+                Duplicate card detected for <strong>{selected.name}</strong>. One is usually from the
+                Bronner guide seed; the other from Add case. They are separate rows, not linked.
+                Merge keeps the card with more PDFs/highlights, moves everything onto it, and removes
+                the empty duplicate.
+              </p>
+              {duplicatesForSelected.map((dup) => (
+                <button
+                  key={`${dup.keepId}-${dup.dropId}`}
+                  type="button"
+                  className="btn-ink"
+                  onClick={() => mergeDuplicate(dup.keepId, dup.dropId, dup.name)}
+                >
+                  Merge into one card
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {(() => {
+            try {
+              return Boolean(sessionStorage.getItem('case-prep-merge-backup-v1'))
+            } catch {
+              return false
+            }
+          })() ? (
+            <div className="library-dup-banner" role="status">
+              <p>Last merge can still be undone in this tab.</p>
+              <button type="button" className="btn-ink" onClick={undoMerge}>
+                Undo last merge
+              </button>
+            </div>
+          ) : null}
 
           <div className="view-toggle editorial-toggle" role="tablist">
             {[
@@ -450,7 +530,20 @@ export function LibraryPage() {
                   fileId={activeId}
                   focusQuote={focusQuote}
                   emptyHint={emptyHint}
-                  onPageChange={(p) => activeId && lib.setPage(activeId, p)}
+                  onPageChange={(p) => {
+                    if (!activeId) return
+                    lib.setPage(activeId, p)
+                    // Keep ?page= in sync. A deep-link page left in the URL would
+                    // otherwise win forever and freeze the toolbar on that page.
+                    const next = new URLSearchParams(params)
+                    next.set('case', selected.id)
+                    next.set('file', activeId)
+                    next.set('page', String(p))
+                    next.delete('q')
+                    next.delete('anno')
+                    next.delete('missing')
+                    setParams(next, { replace: true })
+                  }}
                   suggestedFile={missing || selected.suggestedFile}
                   highlights={lib.annotations.filter(
                     (a) =>

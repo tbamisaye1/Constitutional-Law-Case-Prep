@@ -97,12 +97,75 @@ export function tokenize(query) {
  * Score a title/body/section row for ⌘K / Ask AI.
  * Shared by notebook pages and case-library notes.
  */
+/** Soft synonyms so "excluded … consistently" still hits Costanzo-style notes. */
+const SCORE_SYNONYMS = {
+  intention: ['intent', 'intends', 'intended'],
+  intent: ['intention', 'intends', 'intended'],
+  intends: ['intention', 'intent', 'intended'],
+  congress: ['congressional'],
+  consistent: ['consistently', 'consistency'],
+  consistently: ['consistent', 'consistency'],
+  // Do NOT map excluded → failure: that matched unrelated "Congress failed…" notes.
+  excluded: ['exclude', 'omit', 'omitted'],
+  exclude: ['excluded', 'omit', 'omitted'],
+}
+
+function tokenInHay(token, hay) {
+  if (!token || token.length < 2) return false
+  if (hay.includes(token)) return true
+  const alts = SCORE_SYNONYMS[token]
+  if (alts) {
+    for (const alt of alts) {
+      if (hay.includes(alt)) return true
+    }
+  }
+  // One-edit typos for longer tokens ("consittently" → "consistent").
+  if (token.length >= 6) {
+    const words = hay.split(/[^a-z0-9]+/)
+    for (const w of words) {
+      if (w.length < 5) continue
+      if (Math.abs(w.length - token.length) > 2) continue
+      if (editDistanceAtMost1(token, w) || editDistanceAtMost1(token, w.slice(0, token.length + 1))) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function editDistanceAtMost1(a, b) {
+  if (a === b) return true
+  const la = a.length
+  const lb = b.length
+  if (Math.abs(la - lb) > 1) return false
+  let i = 0
+  let j = 0
+  let edits = 0
+  while (i < la && j < lb) {
+    if (a[i] === b[j]) {
+      i += 1
+      j += 1
+      continue
+    }
+    edits += 1
+    if (edits > 1) return false
+    if (la > lb) i += 1
+    else if (lb > la) j += 1
+    else {
+      i += 1
+      j += 1
+    }
+  }
+  if (i < la || j < lb) edits += 1
+  return edits <= 1
+}
+
 export function scorePage(row, query, tokens) {
   const q = String(query || '').trim().toLowerCase()
   if (!q) return 0
   const title = row.title.toLowerCase()
   const body = row.text.toLowerCase()
-  const section = row.sectionName.toLowerCase()
+  const section = (row.sectionName || '').toLowerCase()
   const hay = `${title} ${body} ${section}`
 
   let score = 0
@@ -114,9 +177,10 @@ export function scorePage(row, query, tokens) {
   // Whole-query miss: only keep pages that share a real token (len ≥ 3).
   let tokenHits = 0
   for (const t of tokens) {
+    if (t.length < 3) continue
     // Prefer word-ish matches over substring noise ("no" inside "note").
-    const titleHit = title === t || title.split(/\s+/).includes(t) || title.includes(t)
-    const bodyHit = body.includes(t)
+    const titleHit = title === t || title.split(/\s+/).includes(t) || tokenInHay(t, title)
+    const bodyHit = tokenInHay(t, body)
     if (titleHit) {
       score += title === t || title.split(/\s+/).includes(t) ? 22 : 14
       tokenHits += 1
@@ -195,11 +259,20 @@ export function searchNotebook(query, { limit = 12, notebook = null } = {}) {
 /** Strip note-intent filler so "NDAA in my notes" still ranks NDAA pages. */
 export function notesSearchQuery(prompt) {
   const cleaned = String(prompt || '')
+    .replace(/\bntoes\b/gi, 'notes')
     .replace(/\b(in|from|according to)\s+my\s+notes?\b/gi, ' ')
-    .replace(/\b(my notes?|notebook|onenote|what did i (write|note|say)|search|find|look)\b/gi, ' ')
+    .replace(
+      /\b(my notes?|notebook|onenote|what did i (write|note|say)|where (did|do) i write|search|find|look)\b/gi,
+      ' '
+    )
     .replace(/\s+/g, ' ')
     .trim()
-  return cleaned.length >= 2 ? cleaned : String(prompt || '').trim()
+  const base = cleaned.length >= 2 ? cleaned : String(prompt || '').trim()
+  // Keep "instant case" visible for annotation ranking, and add Bronner aliases.
+  if (/\binstant\s+cases?\b|\bcase\s+at\s+bar\b/i.test(String(prompt || ''))) {
+    return `${base} Bronner record Instant Case case-at-bar`.trim()
+  }
+  return base
 }
 
 /**
@@ -264,11 +337,20 @@ export function notebookChunksForAskAi(query, { limit = 5, chunkSize = 900, note
 
 /** Heuristic: user is asking Ask AI to use their notebook / annotations. */
 export function queryWantsNotes(prompt) {
-  const q = String(prompt || '').toLowerCase()
+  const q = String(prompt || '')
+    .toLowerCase()
+    // Common typos so "in my ntoes" still triggers note grounding.
+    .replace(/\bntoes\b/g, 'notes')
+    .replace(/\bnote\b/g, 'note')
+    .replace(/\banotations?\b/g, 'annotations')
+    .replace(/\bannotaitons?\b/g, 'annotations')
+    .replace(/\bhighlihgts?\b/g, 'highlights')
   if (!q.trim()) return false
   return (
-    /\b(my notes?|notebook|onenote|what did i (write|note|say)|from my notes?|in my notes?|according to my notes?|my (highlights?|annotations?)|from my (highlights?|annotations?))\b/.test(
+    /\b(my notes?|notebook|onenote|what did i (write|note|say)|where (did|do) i write|from my notes?|in my notes?|according to my notes?|my (highlights?|annotations?)|from my (highlights?|annotations?))\b/.test(
       q
-    ) || /\b(search|find|look)\b.{0,24}\b(notes?|highlights?|annotations?)\b/.test(q)
+    ) ||
+    /\b(search|find|look)\b.{0,40}\b(notes?|highlights?|annotations?)\b/.test(q) ||
+    /\b(in|from)\s+my\s+notes?\b/.test(q)
   )
 }

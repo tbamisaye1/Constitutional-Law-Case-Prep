@@ -8,6 +8,7 @@ import {
   OFFICIAL_AUTHORITIES,
   OFFICIAL_TOA_SOURCE,
 } from '../data/officialAuthorities'
+import { blurbFor } from '../lib/caseBlurb'
 
 const USEFUL_LABEL = Object.fromEntries(USEFULNESS.map((u) => [u.id, u.label]))
 
@@ -55,14 +56,6 @@ function shortCaseName(name) {
     return partyLead(right) || right
   }
   return partyLead(left) || left
-}
-
-function blurbFor(caseItem) {
-  if (!caseItem) return ''
-  const raw = (caseItem.headlineNote || caseItem.holding || '').trim()
-  if (!raw) return ''
-  const first = raw.split(/(?<=[.!?])\s+/)[0] || raw
-  return first.length > 160 ? `${first.slice(0, 157).trim()}…` : first
 }
 
 /**

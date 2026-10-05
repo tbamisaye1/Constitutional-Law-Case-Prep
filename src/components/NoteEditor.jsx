@@ -57,9 +57,17 @@ export function NoteEditor({ html, onChange, editable = true }) {
     return () => {
       // Flush the open doc before TipTap tears down so a quick section/page
       // switch cannot drop the last keystrokes before React state updates.
+      // Never flush a near-empty doc: Strict Mode remounts and case switches
+      // used to write "<p></p>" over real notes for the previous case.
       if (!skipping.current && !editor.isDestroyed) {
         try {
-          onChangeRef.current?.(editor.getHTML())
+          const html = editor.getHTML()
+          const plain = html
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+          if (plain.length > 0) onChangeRef.current?.(html)
         } catch {
           /* ignore */
         }

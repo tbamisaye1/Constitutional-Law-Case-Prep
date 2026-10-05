@@ -16,7 +16,65 @@ import {
 } from './askAiMemory'
 import { prepNotesForAskAi } from '../lib/annotationSearch'
 import { queryWantsNotes } from '../lib/notebookSearch'
-import { useCaseLibrary } from '../hooks/useCaseLibrary'
+import { expandInstantCaseQuery, queryMentionsInstantCase } from '../data/caseAtBar'
+import { getCaseLibraryStore, useCaseLibrary } from '../hooks/useCaseLibrary'
+
+/** Turn locally matched note chunks into evidence cards Ask AI can show/open. */
+function evidenceFromClientNotes(notes) {
+  return (notes || []).map((n, i) => {
+    const text = String(n.text || '').trim()
+    const section = n.section_name ? String(n.section_name) : ''
+    const title = String(n.title || 'Note').trim() || 'Note'
+    const sourceType =
+      n.source_type === 'annotation' || n.source_type === 'user_note'
+        ? n.source_type
+        : 'notebook'
+    const label =
+      sourceType === 'annotation'
+        ? section
+          ? `${title} (Annotation · ${section})`
+          : `${title} (Annotation)`
+        : section
+          ? `${title} (Notes · ${section})`
+          : `${title} (Notes)`
+    return {
+      id: `note-local-${i}`,
+      source: label,
+      page: n.page != null && Number(n.page) > 0 ? Number(n.page) : null,
+      source_type: sourceType,
+      preview: text.slice(0, 220),
+      notes_path: n.notes_path || null,
+    }
+  })
+}
+
+function mergeEvidence(clientNotes, serverEvidence) {
+  const fromNotes = evidenceFromClientNotes(clientNotes)
+  const seen = new Set(
+    fromNotes.map((e) => `${e.source_type}|${e.notes_path}|${e.preview}`)
+  )
+  const rest = []
+  for (const ev of serverEvidence || []) {
+    const key = `${ev.source_type}|${ev.notes_path || ''}|${ev.preview || ''}`
+    if (seen.has(key)) continue
+    // Prefer the local annotation card when the server echoed the same note.
+    if (
+      (ev.source_type === 'annotation' ||
+        ev.source_type === 'notebook' ||
+        ev.source_type === 'user_note') &&
+      fromNotes.some(
+        (n) =>
+          n.notes_path &&
+          ev.notes_path &&
+          n.notes_path === ev.notes_path
+      )
+    ) {
+      continue
+    }
+    rest.push(ev)
+  }
+  return [...fromNotes, ...rest]
+}
 
 /**
  * Selection context for the Ask AI bubble.
@@ -38,9 +96,12 @@ const INCLUDE_NOTES_KEY = 'case-prep-ask-ai-include-notes'
 
 function readIncludeNotes() {
   try {
-    return localStorage.getItem(INCLUDE_NOTES_KEY) === '1'
+    const raw = localStorage.getItem(INCLUDE_NOTES_KEY)
+    // Default on so "where did I write…" searches annotations without a toggle hunt.
+    if (raw == null) return true
+    return raw === '1'
   } catch {
-    return false
+    return true
   }
 }
 
@@ -161,17 +222,39 @@ export function AiUiProvider({ children }) {
         content: t.content,
       }))
 
-      const wantsNotes = includeNotes || queryWantsNotes(user_prompt)
-      const notes = wantsNotes
-        ? prepNotesForAskAi(user_prompt, {
-            annotations: lib.annotations || [],
-            cases: lib.cases || [],
-            filesMeta: lib.filesMeta || [],
-            notesByCase: lib.notesByCase || {},
-            noteTabs: lib.noteTabs || [],
-            totalLimit: 8,
-          })
-        : []
+      const wantsInstantCase = queryMentionsInstantCase(user_prompt)
+      const wantsNotes =
+        includeNotes || queryWantsNotes(user_prompt) || wantsInstantCase
+      if (wantsNotes && !includeNotes) setIncludeNotes(true)
+
+      // "Instant case" → Bronner record aliases for local note/annotation search.
+      const notesQuery = expandInstantCaseQuery(user_prompt)
+
+      const collectNotes = () => {
+        if (!wantsNotes) return []
+        // Prefer the live store so a just-finished recover is visible immediately.
+        const store = getCaseLibraryStore() || {}
+        return prepNotesForAskAi(notesQuery, {
+          annotations: store.annotations || lib.annotations || [],
+          cases: store.cases || lib.cases || [],
+          filesMeta: store.filesMeta || lib.filesMeta || [],
+          notesByCase: store.notesByCase || lib.notesByCase || {},
+          noteTabs: store.noteTabs || lib.noteTabs || [],
+          totalLimit: 8,
+        })
+      }
+
+      let notes = collectNotes()
+      // Annotations live in this browser. If the Costanzo merge left them
+      // missing locally, pull from the server once and search again.
+      if (wantsNotes && notes.length === 0 && typeof lib.recoverFromServer === 'function') {
+        try {
+          await lib.recoverFromServer()
+        } catch {
+          /* offline — keep going with corpus */
+        }
+        notes = collectNotes()
+      }
 
       try {
         const data = await chatPrep(
@@ -188,18 +271,29 @@ export function AiUiProvider({ children }) {
         )
         const status = groundingStatusFromReply(data.grounding_status, data.reply)
         const replyText = data.reply || ''
+        const evidence = mergeEvidence(notes, data.evidence)
         const nextMemory = appendAskAiTurn(
           appendAskAiTurn(memory, { role: 'user', content: user_prompt }),
           { role: 'assistant', content: replyText }
         )
         persistMemory(nextMemory)
+        const groundingNotes = [
+          data.grounding_notes,
+          notes.length
+            ? `Matched ${notes.length} note/annotation chunk(s) in this browser.`
+            : wantsNotes
+              ? 'No matching notes/annotations in this browser yet — open Costanzo or hit Sync, then ask again.'
+              : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
         persistReply(
           {
             grounding_status: status,
             grounding_source: data.grounding_source || groundingSource,
             text: replyText,
-            grounding_notes: data.grounding_notes,
-            evidence: data.evidence,
+            grounding_notes: groundingNotes,
+            evidence,
             claims_verified: data.claims_verified,
             claims_total: data.claims_total,
             notes_used: notes.length,
@@ -207,11 +301,17 @@ export function AiUiProvider({ children }) {
           user_prompt
         )
       } catch (err) {
+        // Still surface local note hits when the API fails.
+        const evidence = mergeEvidence(notes, [])
         persistReply(
           {
-            grounding_status: 'no_evidence',
+            grounding_status: evidence.length ? 'partial' : 'no_evidence',
             grounding_source: groundingSource,
             text: formatAskAiFailure(err, groundingSource),
+            grounding_notes: notes.length
+              ? `Matched ${notes.length} local note/annotation chunk(s) even though Ask AI failed.`
+              : '',
+            evidence,
             notes_used: notes.length,
           },
           user_prompt

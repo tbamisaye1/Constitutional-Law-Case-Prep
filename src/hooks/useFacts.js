@@ -88,7 +88,48 @@ export function useFacts() {
     }
     setFacts((prev) => [fact, ...prev])
     setSelectedId(id)
+    return id
   }, [subsection, side, argumentTag])
+
+  /**
+   * Turn an Instant Case PDF highlight into a Fact card.
+   * Quote becomes the card text; page is stored as the cite.
+   */
+  const addFactFromHighlight = useCallback(
+    ({
+      text,
+      page,
+      footnote,
+      note,
+      subsection: sub,
+      side: factSide,
+      fileId,
+      annotationId,
+    } = {}) => {
+      const quote = String(text || '').trim()
+      if (!quote) return null
+      const id = `f-${Date.now()}`
+      const fact = {
+        id,
+        text: quote,
+        subsection: sub || (subsection === 'all' ? 'timeline' : subsection),
+        side: factSide || (side === 'all' ? 'neutral' : side),
+        source: {
+          page: page != null && page !== '' ? String(page) : '',
+          footnote: footnote != null && footnote !== '' ? String(footnote).trim() : '',
+          note: note || 'Instant Case record',
+          fileId: fileId || null,
+          annotationId: annotationId || null,
+        },
+        argumentTags: argumentTag === 'all' ? [] : [argumentTag],
+        memoriseLine: quote.length > 160 ? `${quote.slice(0, 157).trim()}…` : quote,
+      }
+      setFacts((prev) => [fact, ...prev])
+      setSelectedId(id)
+      return id
+    },
+    [subsection, side, argumentTag]
+  )
 
   const removeFact = useCallback(
     (id) => {
@@ -116,6 +157,7 @@ export function useFacts() {
     setView,
     updateFact,
     addFact,
+    addFactFromHighlight,
     removeFact,
   }
 }

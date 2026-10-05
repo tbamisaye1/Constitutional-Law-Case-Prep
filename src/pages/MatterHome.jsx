@@ -71,7 +71,7 @@ export function MatterHome() {
         <QuickLink
           to="/facts"
           icon={ListChecks}
-          title="Case facts"
+          title="Instant Case [Bronner v. USA]"
           body="Record facts, posture, memorise lines — from the guide timeline and orientation."
         />
         <QuickLink

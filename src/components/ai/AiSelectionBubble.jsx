@@ -334,26 +334,56 @@ export function AiSelectionBubble() {
     window.addEventListener('pointercancel', onUp)
   }
 
+  function goToEvidencePath(path) {
+    if (!path) return
+    // Collapse + close first so the destination page is visible (expanded Ask AI
+    // used to sit on top of /library while the URL changed underneath).
+    setExpanded(false)
+    try {
+      localStorage.setItem(EXPAND_KEY, '0')
+    } catch {
+      /* ignore */
+    }
+    closeBubble()
+    navigate(path)
+    // Hard fallback if the SPA route did not change (seen when opening from TOA).
+    window.setTimeout(() => {
+      const wantPath = path.split('?')[0]
+      if (window.location.pathname !== wantPath) {
+        window.location.assign(path)
+      }
+    }, 80)
+  }
+
   async function onOpenEvidence(ev) {
     if (!ev || ev.source_type === 'web') return
     if (isNotebookEvidence(ev)) {
-      const path = ev.notes_path
-      if (path) {
-        navigate(path)
-        closeBubble()
-      }
+      goToEvidencePath(ev.notes_path)
       return
     }
     setOpeningId(ev.id)
     setOpenError('')
     try {
+      // Collect the path without navigating mid-download; go once after close.
+      let pendingPath = ''
       const result = await openEvidencePdf({
         evidence: ev,
         lib,
-        navigate,
+        navigate: (path) => {
+          pendingPath = path || pendingPath
+        },
         downloadIngestFile,
       })
-      if (!result.ok && result.error) setOpenError(result.error)
+      const path = result?.path || pendingPath
+      if (path) {
+        goToEvidencePath(path)
+        if (!result.ok && result.error) {
+          // Still opened the case card; surface the attach warning briefly.
+          window.setTimeout(() => window.alert(result.error), 120)
+        }
+      } else if (result?.error) {
+        setOpenError(result.error)
+      }
     } catch (error) {
       setOpenError(error?.message || 'Could not open that PDF.')
     } finally {
@@ -640,8 +670,9 @@ export function AiSelectionBubble() {
             <div className="ai-sample-label mono">Working</div>
             {prompt ? <p className="ai-bubble-loading-q">{prompt}</p> : null}
             <p className="ai-bubble-loading-status">
-              {includeNotes || /my notes|notebook/i.test(prompt)
-                ? 'Searching your notes and uploaded articles…'
+              {includeNotes ||
+              /my notes|my ntoes|notebook|where (did|do) i write|in my notes/i.test(prompt)
+                ? 'Searching your notes/annotations and uploaded articles…'
                 : webPlus
                   ? 'Checking uploaded articles, then web search if needed…'
                   : 'Retrieving passages from uploaded articles and generating a grounded answer…'}
