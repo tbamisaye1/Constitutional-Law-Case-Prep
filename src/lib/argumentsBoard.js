@@ -6,6 +6,7 @@
 import {
   buildCategory3LadderDraft,
   CATEGORY3_LADDER_DRAFT_ID,
+  CATEGORY3_LADDER_SEED_VERSION,
 } from '../data/category3LadderDraft'
 
 const DEFAULT_NOTES = {
@@ -115,7 +116,7 @@ function normalizeDraft(raw, side, index = 0) {
       : index === 0
         ? 'Main'
         : `Draft ${index + 1}`
-  return {
+  const draft = {
     id,
     name,
     notes:
@@ -124,6 +125,27 @@ function normalizeDraft(raw, side, index = 0) {
         : DEFAULT_NOTES[side],
     sections: normalizeSections(raw.sections),
   }
+  // Seeded drafts carry a version so a later rewrite of the seed text can
+  // replace an older stored copy. User-created drafts have no version.
+  if (Number.isFinite(raw.seedVersion)) draft.seedVersion = raw.seedVersion
+  return draft
+}
+
+/**
+ * Append the seeded Category 3 ladder draft when it is missing, and refresh it
+ * when the stored copy predates the current seed text. The refresh exists
+ * because the first seeded version was written in shorthand that was hard to
+ * read without the guide open, so stored copies need the clearer rewrite.
+ */
+function withCategory3Ladder(petitionerDrafts) {
+  const index = petitionerDrafts.findIndex((d) => d.id === CATEGORY3_LADDER_DRAFT_ID)
+  if (index === -1) return [...petitionerDrafts, buildCategory3LadderDraft()]
+  const stored = petitionerDrafts[index]
+  const storedVersion = Number.isFinite(stored.seedVersion) ? stored.seedVersion : 0
+  if (storedVersion >= CATEGORY3_LADDER_SEED_VERSION) return petitionerDrafts
+  const next = [...petitionerDrafts]
+  next[index] = { ...buildCategory3LadderDraft(), name: stored.name }
+  return next
 }
 
 /**
@@ -196,11 +218,9 @@ export function normalizeArgumentsBoard(saved) {
     }
   }
 
-  if (!draftsBySide.petitioner.some((d) => d.id === CATEGORY3_LADDER_DRAFT_ID)) {
-    draftsBySide = {
-      ...draftsBySide,
-      petitioner: [...draftsBySide.petitioner, buildCategory3LadderDraft()],
-    }
+  draftsBySide = {
+    ...draftsBySide,
+    petitioner: withCategory3Ladder(draftsBySide.petitioner),
   }
 
   return {

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { CATEGORY3_LADDER_DRAFT_ID } from '../data/category3LadderDraft'
+import {
+  CATEGORY3_LADDER_DRAFT_ID,
+  CATEGORY3_LADDER_SEED_VERSION,
+} from '../data/category3LadderDraft'
 import { normalizeArgumentsBoard, normalizeSections } from './useArguments'
 
 describe('normalizeSections', () => {
@@ -66,5 +69,37 @@ describe('normalizeArgumentsBoard', () => {
       (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
     ).length
     expect(ladderCount).toBe(1)
+  })
+
+  it('replaces a seeded ladder draft saved before the current seed version', () => {
+    const stale = normalizeArgumentsBoard(null)
+    const staleLadder = stale.draftsBySide.petitioner.find(
+      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
+    )
+    staleLadder.notes = '<p>old cryptic shorthand</p>'
+    staleLadder.sections = []
+    delete staleLadder.seedVersion
+
+    const refreshed = normalizeArgumentsBoard(stale)
+    const ladder = refreshed.draftsBySide.petitioner.find(
+      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
+    )
+    expect(ladder.seedVersion).toBe(CATEGORY3_LADDER_SEED_VERSION)
+    expect(ladder.notes).not.toContain('old cryptic shorthand')
+    expect(ladder.sections.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('keeps a ladder draft that is already on the current seed version', () => {
+    const board = normalizeArgumentsBoard(null)
+    const ladder = board.draftsBySide.petitioner.find(
+      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
+    )
+    ladder.notes = '<p>my own edits</p>'
+
+    const again = normalizeArgumentsBoard(board)
+    const kept = again.draftsBySide.petitioner.find(
+      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
+    )
+    expect(kept.notes).toContain('my own edits')
   })
 })
