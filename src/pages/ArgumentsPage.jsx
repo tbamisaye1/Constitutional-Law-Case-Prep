@@ -15,8 +15,8 @@ function readExpanded() {
 }
 
 /**
- * Argument board: sections + prongs, each with its own notes, plus whole-argument
- * working notes and a joined read-through of every section/prong in order.
+ * Argument board: multiple drafts per side, each with sections/prongs,
+ * whole-argument notes, and a joined read-through.
  */
 export function ArgumentsPage() {
   const args = useArguments()
@@ -49,12 +49,16 @@ export function ArgumentsPage() {
           <div>
             <h1>Arguments</h1>
             <p className="lede">
-              Structure the side you are arguing. Add a section for each issue or theme, then add
-              prongs under it. Focus one piece to edit it, or open Full argument to read every
-              section joined in order. Edits save in this browser.
+              Keep a Main argument and as many alternate drafts as you want. Switch drafts above the
+              outline, focus a section or prong to edit it, or open Full argument to read everything
+              joined. Edits save in this browser.
             </p>
           </div>
           <div className="args-head-actions">
+            <button type="button" className="btn-ghost" onClick={args.addDraft}>
+              <Plus size={16} strokeWidth={1.75} />
+              New draft
+            </button>
             <button type="button" className="btn-ghost" onClick={args.addSection}>
               <Plus size={16} strokeWidth={1.75} />
               Add section
@@ -104,6 +108,7 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
   const isJoined = args.focus?.type === 'joined'
   const editorKey = [
     args.side,
+    args.activeDraftId || '',
     args.focus?.type || 'side',
     args.focus?.sectionId || '',
     args.focus?.prongId || '',
@@ -113,6 +118,48 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
     <div className={expanded ? 'args-split is-expanded' : 'args-split'}>
       {!expanded ? (
         <div className="args-outline">
+          <div className="args-drafts">
+            <div className="args-drafts-label mono">Drafts</div>
+            <div className="args-draft-chips">
+              {(args.drafts || []).map((draft) => (
+                <button
+                  key={draft.id}
+                  type="button"
+                  className={
+                    draft.id === args.activeDraftId ? 'args-draft-chip on' : 'args-draft-chip'
+                  }
+                  onClick={() => args.selectDraft(draft.id)}
+                >
+                  {draft.name}
+                </button>
+              ))}
+              <button type="button" className="args-draft-chip add" onClick={args.addDraft}>
+                + Draft
+              </button>
+            </div>
+            {args.activeDraft ? (
+              <div className="args-draft-rename">
+                <input
+                  className="args-input"
+                  value={args.activeDraft.name}
+                  aria-label="Draft name"
+                  onChange={(e) => args.renameDraft(args.activeDraftId, e.target.value)}
+                />
+                {args.canRemoveDraft ? (
+                  <button
+                    type="button"
+                    className="icon-btn danger"
+                    aria-label="Delete this draft"
+                    title="Delete this draft"
+                    onClick={() => args.removeDraft(args.activeDraftId)}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
           <div className="args-view-chips">
             <button
               type="button"
@@ -263,12 +310,12 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
         </div>
         <p className="args-notes-hint mono">
           {args.focus?.type === 'side'
-            ? 'Freeform flowing notes for this side. Separate from the section/prong outline.'
+            ? 'Freeform flowing notes for this draft. Separate from the section/prong outline.'
             : args.focus?.type === 'joined'
-              ? 'Every section and prong joined in outline order. Click Edit on a block to focus that piece.'
+              ? 'Every section and prong in this draft, joined in outline order. Click Edit to focus a piece.'
               : args.focus?.type === 'section'
-                ? 'Notes for this argument section only. Open Full argument (joined) to read everything together.'
-                : 'Notes for this prong only. Open Full argument (joined) to read everything together.'}
+                ? 'Notes for this section only. Switch drafts above, or open Full argument (joined).'
+                : 'Notes for this prong only. Switch drafts above, or open Full argument (joined).'}
         </p>
         {isJoined ? (
           <ArgsJoinedReadthrough

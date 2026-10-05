@@ -23,66 +23,85 @@ function chunkText(text, size = 900) {
   return parts
 }
 
+function draftsForSide(board, side) {
+  const list = board?.draftsBySide?.[side]
+  if (Array.isArray(list) && list.length) return list
+  // Legacy board: one implied Main draft from outlines + notes.
+  const sections = Array.isArray(board?.outlines?.[side]) ? board.outlines[side] : []
+  const notes = typeof board?.notes?.[side] === 'string' ? board.notes[side] : ''
+  if (!sections.length && !notes.trim()) return []
+  return [{ id: `${side}-main`, name: 'Main', notes, sections }]
+}
+
 /**
  * @param {object} board
  * @returns {Array<{id:string,title:string,sectionName:string,path:string,text:string,side:string,focusType:string}>}
  */
 export function flattenArgumentNotes(board) {
   if (!board || typeof board !== 'object') return []
-  const outlines = board.outlines || {}
-  const sideNotes = board.notes || {}
   const rows = []
 
   for (const side of ['petitioner', 'respondent']) {
     const sideLabel = side === 'petitioner' ? 'Petitioner' : 'Respondent'
-    const whole = stripHtml(sideNotes[side])
-    if (whole) {
-      rows.push({
-        id: `args-${side}-whole`,
-        title: `${sideLabel} · whole argument notes`,
-        sectionName: `Arguments · ${sideLabel}`,
-        path: `/arguments?side=${side}&focus=whole`,
-        text: whole,
-        side,
-        focusType: 'side',
-      })
-    }
+    const drafts = draftsForSide(board, side)
 
-    const sections = Array.isArray(outlines[side]) ? outlines[side] : []
-    sections.forEach((section, sectionIdx) => {
-      if (!section || typeof section !== 'object') return
-      const sectionTitle = String(section.title || `Section ${sectionIdx + 1}`).trim()
-      const sectionNum = sectionIdx + 1
-      const sectionHtml = stripHtml(section.notes)
-      if (sectionHtml) {
+    drafts.forEach((draft) => {
+      if (!draft || typeof draft !== 'object') return
+      const draftId = String(draft.id || `${side}-main`)
+      const draftName = String(draft.name || 'Draft').trim() || 'Draft'
+      const draftPath = `/arguments?side=${side}&draft=${encodeURIComponent(draftId)}`
+      const whole = stripHtml(draft.notes)
+      if (whole) {
         rows.push({
-          id: `args-${side}-sec-${section.id}`,
-          title: `${sectionNum}. ${sectionTitle}`,
-          sectionName: `Arguments · ${sideLabel} · section ${sectionNum}`,
-          path: `/arguments?side=${side}&focus=section&section=${encodeURIComponent(section.id)}`,
-          text: sectionHtml,
+          id: `args-${side}-${draftId}-whole`,
+          title: `${sideLabel} · ${draftName} · whole notes`,
+          sectionName: `Arguments · ${sideLabel} · ${draftName}`,
+          path: `${draftPath}&focus=whole`,
+          text: whole,
           side,
-          focusType: 'section',
-          sectionId: section.id,
+          draftId,
+          focusType: 'side',
         })
       }
 
-      const prongs = Array.isArray(section.prongs) ? section.prongs : []
-      prongs.forEach((prong, prongIdx) => {
-        if (!prong || typeof prong !== 'object') return
-        const prongTitle = String(prong.title || `Prong ${prongIdx + 1}`).trim()
-        const prongHtml = stripHtml(prong.notes)
-        if (!prongHtml) return
-        rows.push({
-          id: `args-${side}-pr-${prong.id}`,
-          title: `${sectionNum}.${prongIdx + 1} ${prongTitle}`,
-          sectionName: `Arguments · ${sideLabel} · ${sectionNum}. ${sectionTitle}`,
-          path: `/arguments?side=${side}&focus=prong&section=${encodeURIComponent(section.id)}&prong=${encodeURIComponent(prong.id)}`,
-          text: prongHtml,
-          side,
-          focusType: 'prong',
-          sectionId: section.id,
-          prongId: prong.id,
+      const sections = Array.isArray(draft.sections) ? draft.sections : []
+      sections.forEach((section, sectionIdx) => {
+        if (!section || typeof section !== 'object') return
+        const sectionTitle = String(section.title || `Section ${sectionIdx + 1}`).trim()
+        const sectionNum = sectionIdx + 1
+        const sectionHtml = stripHtml(section.notes)
+        if (sectionHtml) {
+          rows.push({
+            id: `args-${side}-${draftId}-sec-${section.id}`,
+            title: `${draftName} · ${sectionNum}. ${sectionTitle}`,
+            sectionName: `Arguments · ${sideLabel} · ${draftName} · section ${sectionNum}`,
+            path: `${draftPath}&focus=section&section=${encodeURIComponent(section.id)}`,
+            text: sectionHtml,
+            side,
+            draftId,
+            focusType: 'section',
+            sectionId: section.id,
+          })
+        }
+
+        const prongs = Array.isArray(section.prongs) ? section.prongs : []
+        prongs.forEach((prong, prongIdx) => {
+          if (!prong || typeof prong !== 'object') return
+          const prongTitle = String(prong.title || `Prong ${prongIdx + 1}`).trim()
+          const prongHtml = stripHtml(prong.notes)
+          if (!prongHtml) return
+          rows.push({
+            id: `args-${side}-${draftId}-pr-${prong.id}`,
+            title: `${draftName} · ${sectionNum}.${prongIdx + 1} ${prongTitle}`,
+            sectionName: `Arguments · ${sideLabel} · ${draftName} · ${sectionNum}. ${sectionTitle}`,
+            path: `${draftPath}&focus=prong&section=${encodeURIComponent(section.id)}&prong=${encodeURIComponent(prong.id)}`,
+            text: prongHtml,
+            side,
+            draftId,
+            focusType: 'prong',
+            sectionId: section.id,
+            prongId: prong.id,
+          })
         })
       })
     })

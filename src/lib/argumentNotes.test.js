@@ -76,4 +76,44 @@ describe('argumentNotes', () => {
     expect(blocks[1].kind).toBe('prong')
     expect(blocks[2].empty).toBe(true)
   })
+
+  it('flattens notes from every draft when draftsBySide is present', () => {
+    const board = {
+      draftsBySide: {
+        petitioner: [
+          {
+            id: 'petitioner-main',
+            name: 'Main',
+            notes: '<p>Main whole notes</p>',
+            sections: [],
+          },
+          {
+            id: 'alt-q2-ladder',
+            name: 'Alt · Q2 Category 3 ladder',
+            notes: '<p>Ladder whole notes about Youngstown Category Three.</p>',
+            sections: [
+              {
+                id: 'c3-s2',
+                title: 'Lowest Ebb',
+                notes: '<p>Section notes on lowest ebb.</p>',
+                prongs: [
+                  {
+                    id: 'c3-p21',
+                    title: 'Legal framework',
+                    notes: '<p>Prong notes citing Youngstown Jackson.</p>',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        respondent: [],
+      },
+    }
+    const rows = flattenArgumentNotes(board)
+    expect(rows.some((r) => r.title.includes('Main') && r.focusType === 'side')).toBe(true)
+    expect(rows.some((r) => r.draftId === 'alt-q2-ladder' && r.focusType === 'prong')).toBe(
+      true
+    )
+  })
 })

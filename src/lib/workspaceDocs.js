@@ -8,6 +8,7 @@
 
 import { readJson, writeJson } from './persist'
 import { SEED_FACTS } from '../data/factsSeed'
+import { normalizeArgumentsBoard } from './argumentsBoard'
 
 export const DOC_ROW_ID = 'main'
 
@@ -29,21 +30,6 @@ const DEFAULT_ARG_NOTES = {
   respondent: '<h2>Respondent working notes</h2><p>Structure and rebuttal scratch.</p>',
 }
 
-const DEFAULT_ARG_OUTLINES = {
-  petitioner: [
-    { id: 'p1', title: 'Opening theme', prongs: [] },
-    { id: 'p2', title: 'Q1 roadmap — search', prongs: [] },
-    { id: 'p3', title: 'Q2 roadmap — Youngstown', prongs: [] },
-    { id: 'p4', title: 'Hinge + close', prongs: [] },
-  ],
-  respondent: [
-    { id: 'r1', title: 'Opening theme', prongs: [] },
-    { id: 'r2', title: 'No search / Tuggle line', prongs: [] },
-    { id: 'r3', title: 'Category 1 authority', prongs: [] },
-    { id: 'r4', title: 'Rebuttal points', prongs: [] },
-  ],
-}
-
 const OPENINGS_SEED = {
   petitioner:
     '<h2>Petitioner opening</h2><p>May it please the Court. Counsel for Bobby Bronner…</p><h2>OA notes</h2><ul><li>Cold facts</li><li>Hardest question from the government</li><li>One-sentence hinge on Q1 / Q2</li></ul>',
@@ -63,73 +49,31 @@ export const WORKSPACE_DOCS = {
     storageKey: 'case-prep-arguments-v1',
     event: 'case-prep-arguments-hydrated',
     loadLocal() {
-      const saved = readJson(this.storageKey, null)
-      if (saved && typeof saved === 'object') {
-        return {
-          outlines: {
-            petitioner: Array.isArray(saved.outlines?.petitioner)
-              ? saved.outlines.petitioner
-              : DEFAULT_ARG_OUTLINES.petitioner.map((s) => ({ ...s, prongs: [] })),
-            respondent: Array.isArray(saved.outlines?.respondent)
-              ? saved.outlines.respondent
-              : DEFAULT_ARG_OUTLINES.respondent.map((s) => ({ ...s, prongs: [] })),
-          },
-          notes: {
-            petitioner:
-              typeof saved.notes?.petitioner === 'string'
-                ? saved.notes.petitioner
-                : DEFAULT_ARG_NOTES.petitioner,
-            respondent:
-              typeof saved.notes?.respondent === 'string'
-                ? saved.notes.respondent
-                : DEFAULT_ARG_NOTES.respondent,
-          },
-          activeSectionBySide: {
-            petitioner: saved.activeSectionBySide?.petitioner || null,
-            respondent: saved.activeSectionBySide?.respondent || null,
-          },
-          activeFocusBySide: {
-            petitioner: saved.activeFocusBySide?.petitioner || { type: 'side' },
-            respondent: saved.activeFocusBySide?.respondent || { type: 'side' },
-          },
-        }
-      }
-      return {
-        outlines: {
-          petitioner: DEFAULT_ARG_OUTLINES.petitioner.map((s) => ({ ...s, prongs: [] })),
-          respondent: DEFAULT_ARG_OUTLINES.respondent.map((s) => ({ ...s, prongs: [] })),
-        },
-        notes: { ...DEFAULT_ARG_NOTES },
-        activeSectionBySide: { petitioner: null, respondent: null },
-        activeFocusBySide: {
-          petitioner: { type: 'side' },
-          respondent: { type: 'side' },
-        },
-      }
+      return normalizeArgumentsBoard(readJson(this.storageKey, null))
     },
     toRow(data) {
+      const board = normalizeArgumentsBoard(data)
       return {
         id: DOC_ROW_ID,
-        outlines: data.outlines,
-        notes: data.notes,
-        activeSectionBySide: data.activeSectionBySide,
-        activeFocusBySide: data.activeFocusBySide,
+        draftsBySide: board.draftsBySide,
+        activeDraftBySide: board.activeDraftBySide,
+        activeSectionBySide: board.activeSectionBySide,
+        activeFocusBySide: board.activeFocusBySide,
+        // Keep legacy mirrors so older clients / Ask AI still see Main.
+        outlines: {
+          petitioner: board.draftsBySide.petitioner?.[0]?.sections || [],
+          respondent: board.draftsBySide.respondent?.[0]?.sections || [],
+        },
+        notes: {
+          petitioner: board.draftsBySide.petitioner?.[0]?.notes || DEFAULT_ARG_NOTES.petitioner,
+          respondent: board.draftsBySide.respondent?.[0]?.notes || DEFAULT_ARG_NOTES.respondent,
+        },
       }
     },
     fromRow(row) {
-      if (!row?.outlines || !row?.notes) return null
-      return {
-        outlines: row.outlines,
-        notes: row.notes,
-        activeSectionBySide: row.activeSectionBySide || {
-          petitioner: null,
-          respondent: null,
-        },
-        activeFocusBySide: row.activeFocusBySide || {
-          petitioner: { type: 'side' },
-          respondent: { type: 'side' },
-        },
-      }
+      if (!row) return null
+      if (!row.draftsBySide && !row.outlines) return null
+      return normalizeArgumentsBoard(row)
     },
     same: jsonSame,
   },

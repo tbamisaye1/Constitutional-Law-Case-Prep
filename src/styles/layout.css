@@ -1149,6 +1149,58 @@
   cursor: pointer;
 }
 
+.args-drafts {
+  margin: 0 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.args-drafts-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 6px;
+}
+
+.args-draft-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.args-draft-chip {
+  border: 1px solid var(--rule-soft);
+  background: var(--paper);
+  color: var(--ink-2);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  padding: 6px 10px;
+  cursor: pointer;
+  max-width: 100%;
+  text-align: left;
+}
+
+.args-draft-chip.on {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: var(--paper-2);
+  font-weight: 600;
+}
+
+.args-draft-chip.add {
+  border-style: dashed;
+  color: var(--ink-3);
+}
+
+.args-draft-rename {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 6px;
+  align-items: center;
+}
+
 .args-view-chips {
   display: grid;
   gap: 6px;

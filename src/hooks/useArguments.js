@@ -2,159 +2,55 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { onPageHide, readJson } from '../lib/persist'
 import { joinArgumentOutlineBlocks } from '../lib/argumentNotes'
 import { saveWorkspaceDoc, WORKSPACE_DOCS } from '../lib/workspaceDocs'
+import {
+  CATEGORY3_LADDER_DRAFT_ID,
+  normalizeArgumentsBoard,
+  normalizeFocus,
+  normalizeSections,
+  newId,
+} from '../lib/argumentsBoard'
+
+export { normalizeSections, normalizeArgumentsBoard }
 
 const STORAGE_KEY = 'case-prep-arguments-v1'
 const HYDRATE_EVENT = WORKSPACE_DOCS.arguments.event
 
-const DEFAULT_NOTES = {
-  petitioner: '<h2>Petitioner working notes</h2><p>Quips, corrections, language.</p>',
-  respondent: '<h2>Respondent working notes</h2><p>Structure and rebuttal scratch.</p>',
-}
-
-/**
- * Seed outline mirrors the old flat board as sections (no prongs yet).
- * Users add prongs under each section for Katz / Carpenter / Youngstown steps.
- */
-const DEFAULT_OUTLINES = {
-  petitioner: [
-    { id: 'p1', title: 'Opening theme', prongs: [], notes: '' },
-    { id: 'p2', title: 'Q1 roadmap — search', prongs: [], notes: '' },
-    { id: 'p3', title: 'Q2 roadmap — Youngstown', prongs: [], notes: '' },
-    { id: 'p4', title: 'Hinge + close', prongs: [], notes: '' },
-  ],
-  respondent: [
-    { id: 'r1', title: 'Opening theme', prongs: [], notes: '' },
-    { id: 'r2', title: 'No search / Tuggle line', prongs: [], notes: '' },
-    { id: 'r3', title: 'Category 1 authority', prongs: [], notes: '' },
-    { id: 'r4', title: 'Rebuttal points', prongs: [], notes: '' },
-  ],
-}
-
-function newId(prefix) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-}
-
-function normalizeFocus(raw) {
-  if (!raw || typeof raw !== 'object') return { type: 'side' }
-  if (raw.type === 'joined') return { type: 'joined' }
-  if (raw.type === 'section' && raw.sectionId) {
-    return { type: 'section', sectionId: String(raw.sectionId) }
-  }
-  if (raw.type === 'prong' && raw.sectionId && raw.prongId) {
-    return {
-      type: 'prong',
-      sectionId: String(raw.sectionId),
-      prongId: String(raw.prongId),
-    }
-  }
-  return { type: 'side' }
-}
-
-/**
- * Accept v1 section shape, or migrate the original flat `{id, title}` rows.
- * Preserves optional HTML notes on sections and prongs.
- */
-export function normalizeSections(raw) {
-  if (!Array.isArray(raw)) return []
-  return raw.map((row, index) => {
-    if (!row || typeof row !== 'object') {
-      return { id: newId('sec'), title: `Section ${index + 1}`, prongs: [], notes: '' }
-    }
-    const id = typeof row.id === 'string' && row.id ? row.id : newId('sec')
-    const title = typeof row.title === 'string' ? row.title : 'Untitled section'
-    const notes = typeof row.notes === 'string' ? row.notes : ''
-    const prongs = Array.isArray(row.prongs)
-      ? row.prongs
-          .filter((p) => p && typeof p === 'object')
-          .map((p, i) => ({
-            id: typeof p.id === 'string' && p.id ? p.id : newId('pr'),
-            title: typeof p.title === 'string' ? p.title : `Prong ${i + 1}`,
-            notes: typeof p.notes === 'string' ? p.notes : '',
-          }))
-      : []
-    return { id, title, notes, prongs }
-  })
-}
-
-function loadSideSections(raw, fallback) {
-  const sections = normalizeSections(raw)
-  return sections.length
-    ? sections
-    : fallback.map((s) => ({
-        ...s,
-        notes: typeof s.notes === 'string' ? s.notes : '',
-        prongs: (s.prongs || []).map((p) => ({
-          ...p,
-          notes: typeof p.notes === 'string' ? p.notes : '',
-        })),
-      }))
-}
-
 function loadState() {
-  const saved = readJson(STORAGE_KEY, null)
-  if (saved && typeof saved === 'object') {
-    return {
-      outlines: {
-        petitioner: loadSideSections(saved.outlines?.petitioner, DEFAULT_OUTLINES.petitioner),
-        respondent: loadSideSections(saved.outlines?.respondent, DEFAULT_OUTLINES.respondent),
-      },
-      notes: {
-        petitioner:
-          typeof saved.notes?.petitioner === 'string'
-            ? saved.notes.petitioner
-            : DEFAULT_NOTES.petitioner,
-        respondent:
-          typeof saved.notes?.respondent === 'string'
-            ? saved.notes.respondent
-            : DEFAULT_NOTES.respondent,
-      },
-      activeSectionBySide: {
-        petitioner: saved.activeSectionBySide?.petitioner || null,
-        respondent: saved.activeSectionBySide?.respondent || null,
-      },
-      activeFocusBySide: {
-        petitioner: normalizeFocus(saved.activeFocusBySide?.petitioner),
-        respondent: normalizeFocus(saved.activeFocusBySide?.respondent),
-      },
-    }
-  }
+  return normalizeArgumentsBoard(readJson(STORAGE_KEY, null))
+}
+
+function updateActiveDraft(draftsBySide, side, draftId, updater) {
   return {
-    outlines: {
-      petitioner: DEFAULT_OUTLINES.petitioner.map((s) => ({
-        ...s,
-        notes: '',
-        prongs: [],
-      })),
-      respondent: DEFAULT_OUTLINES.respondent.map((s) => ({
-        ...s,
-        notes: '',
-        prongs: [],
-      })),
-    },
-    notes: { ...DEFAULT_NOTES },
-    activeSectionBySide: { petitioner: null, respondent: null },
-    activeFocusBySide: {
-      petitioner: { type: 'side' },
-      respondent: { type: 'side' },
-    },
+    ...draftsBySide,
+    [side]: (draftsBySide[side] || []).map((d) =>
+      d.id === draftId ? updater(d) : d
+    ),
   }
 }
 
 /**
- * Argument board: sections with nested prongs, each with its own notes.
- * Side-level working notes stay available as "whole argument".
+ * Argument board: multiple drafts per side (Main + alternatives).
+ * Each draft has whole-argument notes + sections with nested prongs.
  */
 export function useArguments() {
   const initial = useMemo(() => loadState(), [])
   const [side, setSide] = useState('petitioner')
-  const [outlines, setOutlines] = useState(initial.outlines)
-  const [notes, setNotes] = useState(initial.notes)
+  const [draftsBySide, setDraftsBySide] = useState(initial.draftsBySide)
+  const [activeDraftBySide, setActiveDraftBySide] = useState(initial.activeDraftBySide)
   const [activeSectionBySide, setActiveSectionBySide] = useState(initial.activeSectionBySide)
   const [activeFocusBySide, setActiveFocusBySide] = useState(initial.activeFocusBySide)
   const skipFirstWrite = useRef(true)
   const applyingRemote = useRef(false)
 
-  const sections = outlines[side] || []
+  const drafts = draftsBySide[side] || []
+  const activeDraftId =
+    activeDraftBySide[side] && drafts.some((d) => d.id === activeDraftBySide[side])
+      ? activeDraftBySide[side]
+      : drafts[0]?.id || null
+  const activeDraft = drafts.find((d) => d.id === activeDraftId) || drafts[0] || null
+  const sections = activeDraft?.sections || []
+  const draftNotes = activeDraft?.notes || ''
+
   const activeSectionId =
     activeSectionBySide[side] && sections.some((s) => s.id === activeSectionBySide[side])
       ? activeSectionBySide[side]
@@ -186,33 +82,38 @@ export function useArguments() {
       const section = sections.find((s) => s.id === focus.sectionId)
       return section?.prongs?.find((p) => p.id === focus.prongId)?.notes || ''
     }
-    return notes[side] || ''
-  }, [focus, sections, notes, side])
+    return draftNotes
+  }, [focus, sections, draftNotes])
 
   const joinedBlocks = useMemo(() => joinArgumentOutlineBlocks(sections), [sections])
 
   const focusLabel = useMemo(() => {
-    const sideLabel = side === 'petitioner' ? 'Petitioner' : 'Respondent'
+    const draftName = activeDraft?.name || 'Draft'
     if (focus.type === 'joined') {
-      return `${sideLabel} · full argument (joined)`
+      return `${draftName} · full argument (joined)`
     }
     if (focus.type === 'section') {
       const idx = sections.findIndex((s) => s.id === focus.sectionId)
       const section = sections[idx]
-      return `${idx + 1}. ${section?.title || 'Section'} · section notes`
+      return `${draftName} · ${idx + 1}. ${section?.title || 'Section'}`
     }
     if (focus.type === 'prong') {
       const sIdx = sections.findIndex((s) => s.id === focus.sectionId)
       const section = sections[sIdx]
       const pIdx = (section?.prongs || []).findIndex((p) => p.id === focus.prongId)
       const prong = section?.prongs?.[pIdx]
-      return `${sIdx + 1}.${pIdx + 1} ${prong?.title || 'Prong'} · prong notes`
+      return `${draftName} · ${sIdx + 1}.${pIdx + 1} ${prong?.title || 'Prong'}`
     }
-    return `${sideLabel} · whole argument notes`
-  }, [focus, sections, side])
+    return `${draftName} · whole argument notes`
+  }, [focus, sections, activeDraft])
 
   function persist(
-    next = { outlines, notes, activeSectionBySide, activeFocusBySide }
+    next = {
+      draftsBySide,
+      activeDraftBySide,
+      activeSectionBySide,
+      activeFocusBySide,
+    }
   ) {
     saveWorkspaceDoc('arguments', next)
   }
@@ -227,34 +128,91 @@ export function useArguments() {
       return
     }
     persist()
-  }, [outlines, notes, activeSectionBySide, activeFocusBySide])
+  }, [draftsBySide, activeDraftBySide, activeSectionBySide, activeFocusBySide])
 
   useEffect(
-    () => onPageHide(() => persist()),
-    [outlines, notes, activeSectionBySide, activeFocusBySide]
+    () =>
+      onPageHide(() =>
+        persist({
+          draftsBySide,
+          activeDraftBySide,
+          activeSectionBySide,
+          activeFocusBySide,
+        })
+      ),
+    [draftsBySide, activeDraftBySide, activeSectionBySide, activeFocusBySide]
   )
 
   useEffect(() => {
     function onHydrate(event) {
       const next = event?.detail
-      if (!next?.outlines || !next?.notes) return
+      if (!next) return
+      const normalized = normalizeArgumentsBoard(next)
       applyingRemote.current = true
-      setOutlines({
-        petitioner: normalizeSections(next.outlines.petitioner),
-        respondent: normalizeSections(next.outlines.respondent),
-      })
-      setNotes(next.notes)
-      setActiveSectionBySide(
-        next.activeSectionBySide || { petitioner: null, respondent: null }
-      )
-      setActiveFocusBySide({
-        petitioner: normalizeFocus(next.activeFocusBySide?.petitioner),
-        respondent: normalizeFocus(next.activeFocusBySide?.respondent),
-      })
+      setDraftsBySide(normalized.draftsBySide)
+      setActiveDraftBySide(normalized.activeDraftBySide)
+      setActiveSectionBySide(normalized.activeSectionBySide)
+      setActiveFocusBySide(normalized.activeFocusBySide)
     }
     window.addEventListener(HYDRATE_EVENT, onHydrate)
     return () => window.removeEventListener(HYDRATE_EVENT, onHydrate)
   }, [])
+
+  const selectDraft = useCallback(
+    (draftId) => {
+      if (!drafts.some((d) => d.id === draftId)) return
+      setActiveDraftBySide((prev) => ({ ...prev, [side]: draftId }))
+      setActiveFocusBySide((prev) => ({ ...prev, [side]: { type: 'side' } }))
+    },
+    [side, drafts]
+  )
+
+  const addDraft = useCallback(() => {
+    const id = newId('draft')
+    const draft = {
+      id,
+      name: 'New draft',
+      notes: '<h2>New draft</h2><p>Scratch structure for this side.</p>',
+      sections: [
+        { id: newId('sec'), title: 'Opening theme', notes: '', prongs: [] },
+        { id: newId('sec'), title: 'First issue', notes: '', prongs: [] },
+      ],
+    }
+    setDraftsBySide((prev) => ({
+      ...prev,
+      [side]: [...(prev[side] || []), draft],
+    }))
+    setActiveDraftBySide((prev) => ({ ...prev, [side]: id }))
+    setActiveFocusBySide((prev) => ({ ...prev, [side]: { type: 'side' } }))
+  }, [side])
+
+  const renameDraft = useCallback(
+    (draftId, name) => {
+      const nextName = String(name || '').trim() || 'Untitled draft'
+      setDraftsBySide((prev) =>
+        updateActiveDraft(prev, side, draftId, (d) => ({ ...d, name: nextName }))
+      )
+    },
+    [side]
+  )
+
+  const removeDraft = useCallback(
+    (draftId) => {
+      setDraftsBySide((prev) => {
+        const list = prev[side] || []
+        if (list.length <= 1) return prev
+        const next = list.filter((d) => d.id !== draftId)
+        if (next.length === list.length) return prev
+        setActiveDraftBySide((active) => {
+          if (active[side] !== draftId) return active
+          return { ...active, [side]: next[0].id }
+        })
+        setActiveFocusBySide((active) => ({ ...active, [side]: { type: 'side' } }))
+        return { ...prev, [side]: next }
+      })
+    },
+    [side]
+  )
 
   const focusWholeArgument = useCallback(() => {
     setActiveFocusBySide((prev) => ({ ...prev, [side]: { type: 'side' } }))
@@ -286,34 +244,42 @@ export function useArguments() {
     [side]
   )
 
+  const patchActiveDraft = useCallback(
+    (updater) => {
+      if (!activeDraftId) return
+      setDraftsBySide((prev) => updateActiveDraft(prev, side, activeDraftId, updater))
+    },
+    [side, activeDraftId]
+  )
+
   const addSection = useCallback(() => {
     const id = newId(side[0])
     const section = { id, title: 'New section', notes: '', prongs: [] }
-    setOutlines((prev) => ({
-      ...prev,
-      [side]: [...(prev[side] || []), section],
+    patchActiveDraft((d) => ({
+      ...d,
+      sections: [...(d.sections || []), section],
     }))
     setActiveSectionBySide((prev) => ({ ...prev, [side]: id }))
     setActiveFocusBySide((prev) => ({
       ...prev,
       [side]: { type: 'section', sectionId: id },
     }))
-  }, [side])
+  }, [side, patchActiveDraft])
 
   const updateSectionTitle = useCallback(
     (sectionId, title) => {
-      setOutlines((prev) => ({
-        ...prev,
-        [side]: (prev[side] || []).map((s) => (s.id === sectionId ? { ...s, title } : s)),
+      patchActiveDraft((d) => ({
+        ...d,
+        sections: (d.sections || []).map((s) => (s.id === sectionId ? { ...s, title } : s)),
       }))
     },
-    [side]
+    [patchActiveDraft]
   )
 
   const removeSection = useCallback(
     (sectionId) => {
-      setOutlines((prev) => {
-        const next = (prev[side] || []).filter((s) => s.id !== sectionId)
+      patchActiveDraft((d) => {
+        const next = (d.sections || []).filter((s) => s.id !== sectionId)
         setActiveSectionBySide((active) => {
           if (active[side] !== sectionId) return active
           return { ...active, [side]: next[0]?.id || null }
@@ -323,10 +289,10 @@ export function useArguments() {
           if (cur.sectionId !== sectionId) return active
           return { ...active, [side]: { type: 'side' } }
         })
-        return { ...prev, [side]: next }
+        return { ...d, sections: next }
       })
     },
-    [side]
+    [side, patchActiveDraft]
   )
 
   const addProng = useCallback(
@@ -335,10 +301,10 @@ export function useArguments() {
       if (!targetId) {
         const secId = newId(side[0])
         const prongId = newId('pr')
-        setOutlines((prev) => ({
-          ...prev,
-          [side]: [
-            ...(prev[side] || []),
+        patchActiveDraft((d) => ({
+          ...d,
+          sections: [
+            ...(d.sections || []),
             {
               id: secId,
               title: 'New section',
@@ -355,9 +321,9 @@ export function useArguments() {
         return
       }
       const prong = { id: newId('pr'), title: 'New prong', notes: '' }
-      setOutlines((prev) => ({
-        ...prev,
-        [side]: (prev[side] || []).map((s) =>
+      patchActiveDraft((d) => ({
+        ...d,
+        sections: (d.sections || []).map((s) =>
           s.id === targetId ? { ...s, prongs: [...(s.prongs || []), prong] } : s
         ),
       }))
@@ -367,14 +333,14 @@ export function useArguments() {
         [side]: { type: 'prong', sectionId: targetId, prongId: prong.id },
       }))
     },
-    [side, activeSectionId]
+    [side, activeSectionId, patchActiveDraft]
   )
 
   const updateProngTitle = useCallback(
     (sectionId, prongId, title) => {
-      setOutlines((prev) => ({
-        ...prev,
-        [side]: (prev[side] || []).map((s) =>
+      patchActiveDraft((d) => ({
+        ...d,
+        sections: (d.sections || []).map((s) =>
           s.id === sectionId
             ? {
                 ...s,
@@ -384,14 +350,14 @@ export function useArguments() {
         ),
       }))
     },
-    [side]
+    [patchActiveDraft]
   )
 
   const removeProng = useCallback(
     (sectionId, prongId) => {
-      setOutlines((prev) => ({
-        ...prev,
-        [side]: (prev[side] || []).map((s) =>
+      patchActiveDraft((d) => ({
+        ...d,
+        sections: (d.sections || []).map((s) =>
           s.id === sectionId
             ? { ...s, prongs: (s.prongs || []).filter((p) => p.id !== prongId) }
             : s
@@ -405,25 +371,25 @@ export function useArguments() {
         return active
       })
     },
-    [side]
+    [side, patchActiveDraft]
   )
 
   const setFocusedNotes = useCallback(
     (html) => {
       if (focus.type === 'joined') return
       if (focus.type === 'section') {
-        setOutlines((prev) => ({
-          ...prev,
-          [side]: (prev[side] || []).map((s) =>
+        patchActiveDraft((d) => ({
+          ...d,
+          sections: (d.sections || []).map((s) =>
             s.id === focus.sectionId ? { ...s, notes: html } : s
           ),
         }))
         return
       }
       if (focus.type === 'prong') {
-        setOutlines((prev) => ({
-          ...prev,
-          [side]: (prev[side] || []).map((s) =>
+        patchActiveDraft((d) => ({
+          ...d,
+          sections: (d.sections || []).map((s) =>
             s.id === focus.sectionId
               ? {
                   ...s,
@@ -436,23 +402,38 @@ export function useArguments() {
         }))
         return
       }
-      setNotes((prev) => ({ ...prev, [side]: html }))
+      patchActiveDraft((d) => ({ ...d, notes: html }))
     },
-    [focus, side]
+    [focus, patchActiveDraft]
   )
 
-  /** Snapshot for Ask AI (outline + all note layers). */
   const boardSnapshot = useMemo(
     () => ({
-      outlines,
-      notes,
+      draftsBySide,
+      outlines: {
+        petitioner: draftsBySide.petitioner?.[0]?.sections || [],
+        respondent: draftsBySide.respondent?.[0]?.sections || [],
+      },
+      notes: {
+        petitioner: draftsBySide.petitioner?.[0]?.notes || '',
+        respondent: draftsBySide.respondent?.[0]?.notes || '',
+      },
     }),
-    [outlines, notes]
+    [draftsBySide]
   )
 
   return {
     side,
     setSide,
+    drafts,
+    activeDraftId,
+    activeDraft,
+    selectDraft,
+    addDraft,
+    renameDraft,
+    removeDraft,
+    canRemoveDraft: drafts.length > 1,
+    isSeededLadder: activeDraftId === CATEGORY3_LADDER_DRAFT_ID,
     sections,
     activeSectionId,
     focus,
