@@ -239,7 +239,7 @@ export function AuthoritiesPage() {
                         <div className="toa-row-names">
                           <span className="toa-index mono">{i + 1}</span>
                           <em className="toa-short">{shortCaseName(r.name)}</em>
-                          <strong className="toa-full">{r.name}</strong>
+                          <span className="toa-full">{r.name}</span>
                         </div>
                         <span className="mono cite toa-cite">{r.cite}</span>
                         {r.blurb ? <p className="toa-blurb">{r.blurb}</p> : null}

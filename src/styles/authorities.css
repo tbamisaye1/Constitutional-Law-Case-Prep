@@ -213,21 +213,35 @@
   list-style: none;
   margin: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .toa-list-official {
-  padding: 10px 10px 12px;
+  padding: 14px 12px 16px;
   counter-reset: none;
 }
 
+.toa-list-official > li {
+  margin: 0;
+}
+
 .toa-index {
+  grid-row: 1 / span 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.5rem;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  margin-top: 2px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
   font-size: 10px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--ink-3);
+  background: var(--paper-3);
+  flex-shrink: 0;
 }
 
 .toa-missing {
@@ -239,31 +253,28 @@
   cursor: default;
 }
 
-.toa-row-static:hover {
-  background: transparent;
-  border-color: transparent;
-}
-
 .toa-row {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 10px;
+  gap: 12px;
   align-items: start;
-  padding: 12px 12px 13px;
-  margin-bottom: 6px;
-  border: 1px solid transparent;
-  border-radius: 10px;
+  padding: 16px 16px 15px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--paper-2);
+  box-shadow: 0 1px 0 rgba(20, 22, 26, 0.04);
   text-decoration: none;
   color: inherit;
   transition:
     background 140ms ease,
     border-color 140ms ease,
-    transform 140ms ease;
+    box-shadow 140ms ease;
 }
 
 .toa-row:hover {
-  background: var(--paper-2);
-  border-color: var(--rule-soft);
+  background: var(--paper-3);
+  border-color: var(--ink-3);
+  box-shadow: 0 2px 8px rgba(20, 22, 26, 0.06);
 }
 
 .toa-row:focus-visible {
@@ -271,49 +282,70 @@
   outline-offset: 2px;
 }
 
+.toa-issue-q1 .toa-row {
+  border-left: 3px solid color-mix(in srgb, var(--four) 55%, var(--rule));
+}
+
+.toa-issue-q2 .toa-row {
+  border-left: 3px solid color-mix(in srgb, var(--two) 55%, var(--rule));
+}
+
 .toa-issue-q1 .toa-row:hover {
-  border-color: color-mix(in srgb, var(--four) 35%, var(--rule-soft));
+  border-color: color-mix(in srgb, var(--four) 45%, var(--rule));
+  border-left-color: var(--four);
 }
 
 .toa-issue-q2 .toa-row:hover {
-  border-color: color-mix(in srgb, var(--two) 35%, var(--rule-soft));
+  border-color: color-mix(in srgb, var(--two) 45%, var(--rule));
+  border-left-color: var(--two);
+}
+
+.toa-row-main {
+  min-width: 0;
 }
 
 .toa-row-names {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 12px;
-  margin-bottom: 4px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  row-gap: 2px;
+  align-items: start;
+  margin-bottom: 6px;
 }
 
 .toa-short {
+  grid-column: 2;
   font-family: var(--font-body);
   font-style: italic;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 500;
   color: var(--ink);
   letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 
 .toa-full {
+  grid-column: 2;
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--ink-2);
+  line-height: 1.35;
 }
 
 .toa-cite {
   display: block;
-  margin-bottom: 6px;
+  margin: 0 0 8px 2.1rem;
 }
 
 .toa-blurb {
-  margin: 0 0 8px;
+  margin: 0 0 10px 2.1rem;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule-soft);
   font-size: 13.5px;
   line-height: 1.45;
   color: var(--ink-2);
-  max-width: 62ch;
+  max-width: 58ch;
 }
 
 .toa-row-flags {
@@ -321,6 +353,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  margin-left: 2.1rem;
 }
 
 .toa-row-arrow {
