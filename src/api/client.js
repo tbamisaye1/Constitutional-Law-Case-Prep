@@ -73,6 +73,7 @@ export async function chatPrep(
     message,
     matter_id: matterId,
     grounding_source: groundingSource === "web_plus" ? "web_plus" : "documents",
+    model_tier: options?.model_tier === "advanced" ? "advanced" : "standard",
   };
   const sel = typeof selection === "string" ? selection.trim() : "";
   if (sel) body.selection = sel;

@@ -88,11 +88,15 @@ function mergeEvidence(clientNotes, serverEvidence) {
  * matching notebook pages, PDF annotations, and case-library note tabs are
  * searched in this browser and sent with /chat. Never uploaded silently.
  *
+ * advancedResponses: when on, /chat uses the stronger GPT mini (gpt-5-mini)
+ * instead of the cheap default. Flip this for hard questions.
+ *
  * memory: prior user/assistant turns for this browser tab (sessionStorage).
  */
 
 const AiUiContext = createContext(null)
 const INCLUDE_NOTES_KEY = 'case-prep-ask-ai-include-notes'
+const ADVANCED_KEY = 'case-prep-ask-ai-advanced'
 
 function readIncludeNotes() {
   try {
@@ -102,6 +106,14 @@ function readIncludeNotes() {
     return raw === '1'
   } catch {
     return true
+  }
+}
+
+function readAdvancedResponses() {
+  try {
+    return localStorage.getItem(ADVANCED_KEY) === '1'
+  } catch {
+    return false
   }
 }
 
@@ -121,6 +133,7 @@ export function AiUiProvider({ children }) {
   })
   const [groundingSource, setGroundingSource] = useState('documents')
   const [includeNotes, setIncludeNotesState] = useState(readIncludeNotes)
+  const [advancedResponses, setAdvancedResponsesState] = useState(readAdvancedResponses)
   const [memory, setMemory] = useState(() => readAskAiMemory())
   const [prompt, setPrompt] = useState(() => resolveAskAiLastView()?.prompt || '')
   const [loading, setLoading] = useState(false)
@@ -141,6 +154,16 @@ export function AiUiProvider({ children }) {
     setIncludeNotesState(on)
     try {
       localStorage.setItem(INCLUDE_NOTES_KEY, on ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const setAdvancedResponses = useCallback((next) => {
+    const on = Boolean(next)
+    setAdvancedResponsesState(on)
+    try {
+      localStorage.setItem(ADVANCED_KEY, on ? '1' : '0')
     } catch {
       /* ignore */
     }
@@ -257,6 +280,7 @@ export function AiUiProvider({ children }) {
       }
 
       try {
+        const modelTier = advancedResponses ? 'advanced' : 'standard'
         const data = await chatPrep(
           user_prompt,
           ctx.matter_id || MATTER.id,
@@ -267,6 +291,7 @@ export function AiUiProvider({ children }) {
             page: ctx.page,
             history: historyForApi,
             notes,
+            model_tier: modelTier,
           }
         )
         const status = groundingStatusFromReply(data.grounding_status, data.reply)
@@ -277,6 +302,7 @@ export function AiUiProvider({ children }) {
           { role: 'assistant', content: replyText }
         )
         persistMemory(nextMemory)
+        const usedTier = data.model_tier === 'advanced' ? 'advanced' : modelTier
         const groundingNotes = [
           data.grounding_notes,
           notes.length
@@ -291,6 +317,7 @@ export function AiUiProvider({ children }) {
           {
             grounding_status: status,
             grounding_source: data.grounding_source || groundingSource,
+            model_tier: usedTier,
             text: replyText,
             grounding_notes: groundingNotes,
             evidence,
@@ -328,6 +355,7 @@ export function AiUiProvider({ children }) {
       prompt,
       groundingSource,
       includeNotes,
+      advancedResponses,
       memory,
       persistMemory,
       persistReply,
@@ -358,6 +386,8 @@ export function AiUiProvider({ children }) {
       switchGroundingSource,
       includeNotes,
       setIncludeNotes,
+      advancedResponses,
+      setAdvancedResponses,
       prompt,
       setPrompt,
       loading,
@@ -381,6 +411,8 @@ export function AiUiProvider({ children }) {
       switchGroundingSource,
       includeNotes,
       setIncludeNotes,
+      advancedResponses,
+      setAdvancedResponses,
       prompt,
       loading,
       reply,

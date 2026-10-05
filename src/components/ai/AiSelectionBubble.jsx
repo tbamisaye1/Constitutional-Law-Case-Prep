@@ -104,6 +104,8 @@ export function AiSelectionBubble() {
     switchGroundingSource,
     includeNotes,
     setIncludeNotes,
+    advancedResponses,
+    setAdvancedResponses,
     prompt,
     setPrompt,
     loading,
@@ -522,7 +524,25 @@ export function AiSelectionBubble() {
             Include my notes
             <span className="ai-notes-toggle-hint">
               Searches notebook pages, PDF highlights/page notes, and case-library tabs.
-              Off by default.
+            </span>
+          </span>
+        </label>
+
+        <label
+          className={
+            advancedResponses ? 'ai-notes-toggle ai-advanced-toggle on' : 'ai-notes-toggle ai-advanced-toggle'
+          }
+        >
+          <input
+            type="checkbox"
+            checked={advancedResponses}
+            onChange={(e) => setAdvancedResponses(e.target.checked)}
+          />
+          <span>
+            Advanced responses
+            <span className="ai-notes-toggle-hint">
+              Uses GPT-5 Mini instead of GPT-4o Mini. Flip on when a hard question is failing;
+              costs a bit more per ask.
             </span>
           </span>
         </label>
@@ -533,6 +553,7 @@ export function AiSelectionBubble() {
               <strong>Uploaded articles + web.</strong> Prefers your PDFs
               {includeNotes ? ' and matching notes/annotations' : ''}; searches the web when the
               corpus is thin or you ask for outside definitions and background.
+              {advancedResponses ? ' Advanced model is on for this ask.' : ''}
             </>
           ) : (
             <>
@@ -540,6 +561,7 @@ export function AiSelectionBubble() {
               {includeNotes ? ' and your notes/annotations when they match' : ''}; refuses if the
               corpus is not enough. Say “in my notes” or “my highlights” anytime to pull local
               notes for one question.
+              {advancedResponses ? ' Advanced model is on for this ask.' : ''}
             </>
           )}
         </p>
@@ -670,6 +692,7 @@ export function AiSelectionBubble() {
             <div className="ai-sample-label mono">Working</div>
             {prompt ? <p className="ai-bubble-loading-q">{prompt}</p> : null}
             <p className="ai-bubble-loading-status">
+              {advancedResponses ? 'Advanced model · ' : ''}
               {includeNotes ||
               /my notes|my ntoes|notebook|where (did|do) i write|in my notes/i.test(prompt)
                 ? 'Searching your notes/annotations and uploaded articles…'
@@ -688,6 +711,11 @@ export function AiSelectionBubble() {
                 articleMode={!webPlus}
                 webPlus={webPlus || reply.grounding_source === 'web_plus'}
               />
+              {reply.model_tier === 'advanced' ? (
+                <span className="mono ai-advanced-badge" title="Answered with GPT-5 Mini">
+                  Advanced
+                </span>
+              ) : null}
               {reply.claims_total != null ? (
                 <span className="mono ai-stub">
                   quotes {reply.claims_verified}/{reply.claims_total}

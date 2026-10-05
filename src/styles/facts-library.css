@@ -3941,6 +3941,21 @@ button.ai-memory-turn-btn:focus-visible {
   letter-spacing: 0.02em;
 }
 
+.ai-advanced-toggle.on {
+  border-color: var(--gold, #b8860b);
+  background: color-mix(in srgb, var(--gold, #b8860b) 10%, var(--paper));
+}
+
+.ai-advanced-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--gold, #b8860b);
+  color: var(--gold, #b8860b);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
 .ai-ev-url {
   display: block;
   font-size: 11px;
