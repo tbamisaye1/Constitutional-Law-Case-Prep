@@ -48,7 +48,7 @@ function describe(sync) {
   const when = sync.lastSyncedAt ? ` Last sync ${clock(sync.lastSyncedAt)}.` : ''
   return {
     tone: 'ok',
-    text: `On the database (survives hard refresh): notes, arguments, guide, facts, openings, annotations, PDFs.${when}`,
+    text: `On the database and syncing as you type (incognito / other devices get the same copy): notes, arguments, guide, facts, openings, annotations, PDFs.${when}`,
   }
 }
 

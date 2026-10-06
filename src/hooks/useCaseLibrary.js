@@ -52,10 +52,19 @@ import {
 const KEY = 'case-prep-library-v5'
 
 /** Quiet period before a burst of edits turns into one push. */
-const SYNC_DEBOUNCE_MS = 1200
+const SYNC_DEBOUNCE_MS = 400
+
+/** Workspace docs (arguments / notes board) push immediately after each save. */
+const WORKSPACE_DOC_SYNC_MS = 0
 
 /** How often to retry after a failed sync, so a dropped connection recovers. */
 const SYNC_RETRY_MS = 30_000
+
+/**
+ * Until the first pull finishes, do not push. A fresh / incognito tab used to
+ * mark seed arguments dirty and overwrite real Postgres notes before pull ran.
+ */
+let syncBootstrapDone = false
 
 /**
  * This browser's workspace key, read once.
@@ -244,6 +253,7 @@ function publishNotebookToSync(tree, pagesBySection) {
     (s) => ({ ...s, notebook: [nextRow] }),
     [metaKey('library_records', 'notebook', NOTEBOOK_ROW_ID)]
   )
+  if (syncBootstrapDone) scheduleSync(WORKSPACE_DOC_SYNC_MS)
 }
 
 registerNotebookSyncPublisher(publishNotebookToSync)
@@ -258,6 +268,8 @@ function publishWorkspaceDocToSync(kind, data) {
     (s) => ({ ...s, [spec.collection]: [nextRow] }),
     [metaKey('library_records', spec.kind, DOC_ROW_ID)]
   )
+  // Arguments / facts / openings must hit Postgres on every edit, not after 1.2s.
+  if (syncBootstrapDone) scheduleSync(WORKSPACE_DOC_SYNC_MS)
 }
 
 for (const kind of allWorkspaceDocKinds()) {
@@ -278,15 +290,8 @@ function markUnsyncedDocDirty(kind, collection, rowId) {
   }
 }
 
-// First visit / upgrade: local docs exist but were never offered to sync.
-markUnsyncedDocDirty('notebook', 'notebook', NOTEBOOK_ROW_ID)
-for (const kind of allWorkspaceDocKinds()) {
-  const spec = WORKSPACE_DOCS[kind]
-  markUnsyncedDocDirty(spec.kind, spec.collection, DOC_ROW_ID)
-}
-queueMicrotask(() => {
-  if (WORKSPACE_ID && pendingCount(memory.store.syncMeta) > 0) scheduleSync(0)
-})
+// Do not mark seed rows dirty or scheduleSync here. bootstrapSync pulls first;
+// only then do we offer local-only rows. Early push was wiping Arguments.
 
 function emit() {
   for (const fn of listeners) fn()
@@ -358,6 +363,10 @@ function setSyncMeta(syncMeta) {
 
 function scheduleSync(delay = SYNC_DEBOUNCE_MS, options = {}) {
   if (memory.syncStatus === 'off') return
+  // Block outbound pushes until the first pull finished (incognito / new device).
+  if (!syncBootstrapDone && !options.forcePull && !options.allowBeforeBootstrap) {
+    return
+  }
   window.clearTimeout(syncTimer)
   syncTimer = window.setTimeout(() => runSync(options), delay)
 }
@@ -435,8 +444,9 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
 }
 
 /** Push dirty rows and pull whatever else changed. */
-async function runSync({ keepalive = false, forcePull = false } = {}) {
+async function runSync({ keepalive = false, forcePull = false, allowBeforeBootstrap = false } = {}) {
   if (memory.syncStatus === 'off') return
+  if (!syncBootstrapDone && !allowBeforeBootstrap && !forcePull) return
 
   // An edit that lands mid-request must not be dropped. Come back once the
   // current exchange is done rather than returning and waiting for either
@@ -524,17 +534,35 @@ async function recoverNotesFromServerOnce() {
  * offered as new.
  */
 async function bootstrapSync() {
-  if (memory.syncStatus === 'off') return
+  if (memory.syncStatus === 'off') {
+    syncBootstrapDone = true
+    return
+  }
 
   await recoverNotesFromServerOnce()
 
-  if (memory.store.syncMeta.cursor === 0) {
-    const ok = await exchange({}, {})
-    if (!ok) return
+  // Always pull before any push so seed / empty localStorage cannot overwrite
+  // real argument notes that already live in Postgres.
+  const pulled = await exchange({}, {}, { keepalive: false })
+  if (!pulled) {
+    // Retry later; stay blocked for pushes so we do not upload seed.
+    scheduleSync(SYNC_RETRY_MS, { forcePull: true, allowBeforeBootstrap: true })
+    return
+  }
+
+  // Dedicated editor keys can be ahead of the library mirror after a tab crash.
+  markStaleNotebookMirrorDirty(memory.store)
+  markStaleArgumentsMirrorDirty(memory.store)
+
+  markUnsyncedDocDirty('notebook', 'notebook', NOTEBOOK_ROW_ID)
+  for (const kind of allWorkspaceDocKinds()) {
+    const spec = WORKSPACE_DOCS[kind]
+    markUnsyncedDocDirty(spec.kind, spec.collection, DOC_ROW_ID)
   }
 
   setSyncMeta(markSeedRowsDirty(memory.store, memory.store.syncMeta, Date.now()))
-  await runSync()
+  syncBootstrapDone = true
+  await runSync({ allowBeforeBootstrap: true })
 }
 
 /**

@@ -236,18 +236,26 @@ export function preferLocalArgumentDeletions(remoteDraftsBySide, localDraftsBySi
       if (!localDraft) return remoteDraft
       const remoteCount = countOutlineNodes(remoteDraft)
       const localCount = countOutlineNodes(localDraft)
-      // Local is a strict subset (deletions) — keep local structure, prefer its notes.
+      // Local deleted prongs the remote still has — keep the trimmed local outline.
       if (localCount < remoteCount && outlineIsSubset(localDraft, remoteDraft)) {
-        return {
+        return mergeDraftNotesPreferRicher({
           ...remoteDraft,
           name: localDraft.name || remoteDraft.name,
-          notes: preferStoredNotes(localDraft.notes, remoteDraft.notes),
           sections: localDraft.sections,
           seedVersion: Math.max(
             Number(localDraft.seedVersion) || 0,
             Number(remoteDraft.seedVersion) || 0
           ),
-        }
+        }, localDraft)
+      }
+      // Remote is trimmed (server dropped seed prongs) — do not rehydrate them
+      // from a stale local seed copy. Keep remote structure; prefer richer notes.
+      if (remoteCount < localCount && outlineIsSubset(remoteDraft, localDraft)) {
+        return mergeDraftNotesPreferRicher(remoteDraft, localDraft)
+      }
+      // Same shape: keep remote structure, prefer whichever note body is richer.
+      if (remoteCount === localCount) {
+        return mergeDraftNotesPreferRicher(remoteDraft, localDraft)
       }
       return remoteDraft
     })
@@ -259,6 +267,48 @@ export function preferLocalArgumentDeletions(remoteDraftsBySide, localDraftsBySi
     }
   }
   return next
+}
+
+/** Prefer non-empty / longer notes from local when hydrating a remote outline. */
+function mergeDraftNotesPreferRicher(remoteDraft, localDraft) {
+  const localSections = Object.fromEntries(
+    (localDraft.sections || []).map((s) => [s.id, s])
+  )
+  return {
+    ...remoteDraft,
+    notes: preferStoredNotes(localDraft.notes, remoteDraft.notes),
+    sections: (remoteDraft.sections || []).map((remoteSection) => {
+      const localSection = localSections[remoteSection.id]
+      if (!localSection) return remoteSection
+      const localProngs = Object.fromEntries(
+        (localSection.prongs || []).map((p) => [p.id, p])
+      )
+      return {
+        ...remoteSection,
+        title:
+          typeof localSection.title === 'string' &&
+          localSection.title.trim() &&
+          localSection.title !== remoteSection.title
+            ? localSection.title
+            : remoteSection.title,
+        notes: preferStoredNotes(localSection.notes, remoteSection.notes),
+        prongs: (remoteSection.prongs || []).map((remoteProng) => {
+          const localProng = localProngs[remoteProng.id]
+          if (!localProng) return remoteProng
+          return {
+            ...remoteProng,
+            title:
+              typeof localProng.title === 'string' &&
+              localProng.title.trim() &&
+              localProng.title !== remoteProng.title
+                ? localProng.title
+                : remoteProng.title,
+            notes: preferStoredNotes(localProng.notes, remoteProng.notes),
+          }
+        }),
+      }
+    }),
+  }
 }
 
 function countOutlineNodes(draft) {
