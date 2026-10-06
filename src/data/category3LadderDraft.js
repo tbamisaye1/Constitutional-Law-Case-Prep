@@ -11,7 +11,7 @@
  */
 
 export const CATEGORY3_LADDER_DRAFT_ID = 'alt-q2-ladder'
-export const CATEGORY3_LADDER_SEED_VERSION = 3
+export const CATEGORY3_LADDER_SEED_VERSION = 4
 
 export function buildCategory3LadderDraft() {
   return {
@@ -62,7 +62,7 @@ export function buildCategory3LadderDraft() {
       },
       {
         id: 'c3-s1',
-        title: '1) Lowest ebb: he acted against Congress',
+        title: '1) Lowest ebb: The president acted against Congress',
         notes: [
           '<h2>Framework</h2>',
           '<p>Youngstown Sheet &amp; Tube v. Sawyer, 343 U.S. 579 (1952) = the steel seizure case. Truman seized the mills during a wartime strike, told Congress twice, Congress did nothing, seizure held unconstitutional. Jackson\u2019s concurrence is the test everyone uses.</p>',
@@ -76,7 +76,7 @@ export function buildCategory3LadderDraft() {
         prongs: [
           {
             id: 'c3-s1-a',
-            title: 'a. Jackson\u2019s method, not just his labels',
+            title: 'a. Under Youngstown, President falls into lowest ebb',
             notes: [
               '<h2>Walk the three steps he walked</h2>',
               '<ol>',
@@ -110,7 +110,7 @@ export function buildCategory3LadderDraft() {
             title: 'b. Even if in 2nd ebb - Silence is not permission',
             notes: [
               '<h2>b. Even if in Category 2, silence is not permission</h2>',
-              '<p>They cannot point to a grant, so they point to 4 substitutes: a disclaimer, an affirmation, silence, and his own say-so. None is a grant. Keith says we cannot use Congress\\u2019 inaction as authority.</p>',
+              '<p>They cannot point to a grant, so they point to 4 substitutes: a disclaimer, an affirmation, silence, and his own say-so. None is a grant. Keith says we cannot use Congress\u2019 inaction as authority.</p>',
               '<ol>',
 
               '<li><strong>a. The framework we must use: Keith, a disclaimer is not a grant</strong>',
