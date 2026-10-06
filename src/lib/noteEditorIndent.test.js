@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  exitBlockquoteOnEnter,
   indentSelection,
   nestedAttrsForParent,
   outdentSelection,
@@ -54,6 +55,7 @@ function mockEditor({
     can: () => ({
       sinkListItem: () => canSink,
       liftListItem: () => canLift,
+      lift: () => false,
     }),
     isActive: (name) => name === 'orderedList' && inOrdered,
     getAttributes: () => ({ type: orderedType }),
@@ -82,6 +84,31 @@ describe('indentSelection', () => {
 })
 
 describe('outdentSelection', () => {
+  it('exits a blockquote before lifting the list item', () => {
+    const lift = vi.fn(() => true)
+    const editor = {
+      isDestroyed: false,
+      isActive: (name) => name === 'blockquote',
+      can: () => ({
+        lift: (name) => name === 'blockquote',
+        liftListItem: () => true,
+      }),
+      chain: () => {
+        const api = {
+          focus: () => api,
+          lift: (name) => {
+            lift(name)
+            return api
+          },
+          run: () => true,
+        }
+        return api
+      },
+    }
+    expect(outdentSelection(editor)).toBe(true)
+    expect(lift).toHaveBeenCalledWith('blockquote')
+  })
+
   it('lifts a nested list item when possible', () => {
     const editor = mockEditor({ canLift: true })
     expect(outdentSelection(editor)).toBe(true)
@@ -92,6 +119,50 @@ describe('outdentSelection', () => {
     const editor = mockEditor({ canLift: false, outdentOk: true })
     expect(outdentSelection(editor)).toBe(true)
     expect(editor._chain.outdentBlocks).toHaveBeenCalled()
+  })
+})
+
+describe('exitBlockquoteOnEnter', () => {
+  it('lifts an empty quoted line out of the blockquote', () => {
+    const lift = vi.fn(() => true)
+    const editor = {
+      isDestroyed: false,
+      isActive: (name) => name === 'blockquote',
+      can: () => ({ lift: () => true }),
+      state: {
+        selection: {
+          empty: true,
+          $from: { parent: { isTextblock: true, content: { size: 0 } } },
+        },
+      },
+      chain: () => {
+        const api = {
+          focus: () => api,
+          lift: (name) => {
+            lift(name)
+            return api
+          },
+          run: () => true,
+        }
+        return api
+      },
+    }
+    expect(exitBlockquoteOnEnter(editor)).toBe(true)
+    expect(lift).toHaveBeenCalledWith('blockquote')
+  })
+
+  it('does nothing when the quoted line still has text', () => {
+    const editor = {
+      isDestroyed: false,
+      isActive: () => true,
+      state: {
+        selection: {
+          empty: true,
+          $from: { parent: { isTextblock: true, content: { size: 12 } } },
+        },
+      },
+    }
+    expect(exitBlockquoteOnEnter(editor)).toBe(false)
   })
 })
 

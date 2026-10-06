@@ -18,6 +18,7 @@ import { AlphaListInput } from '../extensions/alphaListInput'
 import { BlockIndent } from '../extensions/blockIndent'
 import { ListItemWithBlocks } from '../extensions/listItemWithBlocks'
 import {
+  exitBlockquoteOnEnter,
   indentSelection,
   outdentSelection,
   toggleOrCycleOrderedList,
@@ -68,11 +69,19 @@ export function NoteEditor({ html, onChange, editable = true }) {
         class: 'note-prose',
       },
       handleKeyDown: (_view, event) => {
-        if (event.key !== 'Tab') return false
         const ed = editorRef.current
         if (!ed || ed.isDestroyed) return false
+
+        // Empty line inside a quote: Enter exits the quote and stays on the
+        // same list item so the next Enter can continue 3. 4. …
+        if (event.key === 'Enter' && !event.shiftKey && exitBlockquoteOnEnter(ed)) {
+          return true
+        }
+
+        if (event.key !== 'Tab') return false
         // Always consume Tab so focus stays in the note. At the indent bound
         // the command is a no-op, which is better than jumping to the next control.
+        // Shift+Tab inside a quote lifts out of the quote before leaving the list.
         if (event.shiftKey) outdentSelection(ed)
         else indentSelection(ed)
         return true

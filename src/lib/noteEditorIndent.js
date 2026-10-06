@@ -4,6 +4,9 @@
  * Tab nests a list item, then flips only that nested level to the next marker
  * cycle (A.B.C → 1.2.3 → a.b.c) so the outer list keeps its own sequence when
  * you later outdent.
+ *
+ * Quotes inside a list: Shift+Tab / Enter on an empty quoted line lifts out of
+ * the quote first so the numbered cycle continues instead of starting a new 1.
  */
 
 const ORDERED_TYPES = [null, 'a', 'i']
@@ -71,6 +74,41 @@ export function applyNestedListCycle(editor) {
     .run()
 }
 
+/** True when the caret is in an empty textblock (e.g. blank line under a quote). */
+export function isEmptyTextblockSelection(editor) {
+  const selection = editor?.state?.selection
+  if (!selection?.empty) return false
+  const parent = selection.$from?.parent
+  return Boolean(parent?.isTextblock && parent.content.size === 0)
+}
+
+/**
+ * Lift out of a blockquote. Used by outdent and by Enter on an empty quoted line
+ * so the surrounding list item / number cycle stays intact.
+ */
+export function exitBlockquote(editor) {
+  if (!editor || editor.isDestroyed) return false
+  if (!editor.isActive('blockquote')) return false
+  if (editor.can().lift('blockquote')) {
+    return editor.chain().focus().lift('blockquote').run()
+  }
+  if (typeof editor.commands.unsetBlockquote === 'function') {
+    return editor.chain().focus().unsetBlockquote().run()
+  }
+  return editor.chain().focus().toggleBlockquote().run()
+}
+
+/**
+ * Enter on an empty line inside a quote exits the quote (OneNote-style) instead
+ * of keeping you trapped in the quote or spawning a fresh 1. list.
+ */
+export function exitBlockquoteOnEnter(editor) {
+  if (!editor || editor.isDestroyed) return false
+  if (!editor.isActive('blockquote')) return false
+  if (!isEmptyTextblockSelection(editor)) return false
+  return exitBlockquote(editor)
+}
+
 /**
  * Indent the current block. Returns true when something changed.
  */
@@ -88,9 +126,14 @@ export function indentSelection(editor) {
 
 /**
  * Outdent the current block. Returns true when something changed.
+ * Quote → list item → outer list → paragraph indent, in that order.
  */
 export function outdentSelection(editor) {
   if (!editor || editor.isDestroyed) return false
+
+  if (editor.isActive('blockquote') && exitBlockquote(editor)) {
+    return true
+  }
 
   if (editor.can().liftListItem('listItem')) {
     return editor.chain().focus().liftListItem('listItem').run()
