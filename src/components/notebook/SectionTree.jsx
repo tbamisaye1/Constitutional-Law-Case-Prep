@@ -56,11 +56,9 @@ export function SectionTree({
             openByDefault
             selection={selectedSectionId || undefined}
             onRename={({ id, name }) => onRenameNode(id, name)}
-            onDelete={({ ids }) => {
-              const label =
-                ids.length === 1 ? findNodeName(tree, ids[0]) || 'this item' : `${ids.length} items`
-              confirmAndDelete(ids, label)
-            }}
+            // Do not pass onDelete: react-arborist binds Delete/Backspace to it,
+            // which wiped whole sections when the tree still had focus. Trash
+            // buttons below call confirmAndDelete explicitly.
             onMove={({ dragIds, parentId, index }) => {
               setTree((prev) => moveNodes(prev, dragIds, parentId, index))
             }}

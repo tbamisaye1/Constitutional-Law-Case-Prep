@@ -10,6 +10,8 @@
 import { NOTEBOOK_STORAGE_KEY } from './articleTakeaways'
 import { writeJson, readJson } from './persist'
 import { SEED_PAGES, SEED_TREE } from '../data/notebookSeed'
+import { mergeNotebookSnapshots } from './notebookMerge'
+import { snapshotDocRevision } from './docRevisions'
 
 export const NOTEBOOK_ROW_ID = 'main'
 export const NOTEBOOK_HYDRATE_EVENT = 'case-prep-notebook-hydrated'
@@ -77,27 +79,47 @@ export function notebookSnapshotsEqual(a, b) {
  * Apply a server (or other-device) notebook onto this browser and notify editors.
  *
  * Callers must only pass a row that applyChanges accepted as newer than local
- * sync meta. Unconditional hydrate after every sync used to rewrite the
- * dedicated notes key with a stale library-mirror copy and wipe new sections.
+ * sync meta. We merge with the dedicated local key so a smaller remote notebook
+ * cannot erase sections that still have pages here (the Background wipe).
  */
 export function hydrateNotebookFromRemote(row) {
   if (!row?.tree || !row?.pagesBySection) return false
   const current = readJson(NOTEBOOK_STORAGE_KEY, null)
   if (notebookSnapshotsEqual(current, row)) return false
-  writeJson(NOTEBOOK_STORAGE_KEY, {
-    tree: row.tree,
-    pagesBySection: row.pagesBySection,
-  })
-  try {
-    window.dispatchEvent(
-      new CustomEvent(NOTEBOOK_HYDRATE_EVENT, {
-        detail: { tree: row.tree, pagesBySection: row.pagesBySection },
-      })
-    )
-  } catch {
-    /* SSR / tests */
+
+  const remote = { tree: row.tree, pagesBySection: row.pagesBySection }
+  const merged =
+    current?.tree && current?.pagesBySection
+      ? mergeNotebookSnapshots(remote, current)
+      : remote
+
+  const localChanged = !notebookSnapshotsEqual(current, merged)
+  const remoteMissingLocal = !notebookSnapshotsEqual(merged, remote)
+
+  if (localChanged) {
+    if (current?.tree) snapshotDocRevision('notebook', current, 'hydrate')
+    writeJson(NOTEBOOK_STORAGE_KEY, {
+      tree: merged.tree,
+      pagesBySection: merged.pagesBySection,
+    })
+    try {
+      window.dispatchEvent(
+        new CustomEvent(NOTEBOOK_HYDRATE_EVENT, {
+          detail: { tree: merged.tree, pagesBySection: merged.pagesBySection },
+        })
+      )
+    } catch {
+      /* SSR / tests */
+    }
   }
-  return true
+
+  // Always push when the union is richer than remote so Postgres is not left
+  // on a smaller wipe (even if this browser already had the full local tree).
+  if (typeof syncPublisher === 'function' && remoteMissingLocal) {
+    syncPublisher(merged.tree, merged.pagesBySection)
+  }
+
+  return localChanged || remoteMissingLocal
 }
 
 export function notebookRowsFromLocal() {

@@ -71,6 +71,35 @@ describe('notebookWorkspace persistence', () => {
     expect(hydrateNotebookFromRemote({ id: 'main', ...snap })).toBe(false)
   })
 
+  it('keeps a local section with pages when a smaller remote notebook hydrates', () => {
+    const local = {
+      tree: [
+        { id: 'sec-1', name: 'Issue 1 Notes', kind: 'section' },
+        { id: 'sec-bg', name: 'Background info', kind: 'section' },
+      ],
+      pagesBySection: {
+        'sec-1': [{ id: 'pg-1', title: 'A', html: '<p>x</p>' }],
+        'sec-bg': [{ id: 'pg-ndaa', title: 'NDAA', html: '<p>covered person</p>' }],
+      },
+    }
+    saveNotebookSnapshot(local.tree, local.pagesBySection)
+
+    const remote = {
+      id: 'main',
+      tree: [{ id: 'sec-1', name: 'Issue 1 Notes', kind: 'section' }],
+      pagesBySection: {
+        'sec-1': [{ id: 'pg-1', title: 'A', html: '<p>x</p>' }],
+      },
+    }
+
+    // Local already has Background; hydrate still returns true so sync can
+    // push the richer union back up to Postgres.
+    expect(hydrateNotebookFromRemote(remote)).toBe(true)
+    const saved = JSON.parse(localStorage.getItem(NOTEBOOK_STORAGE_KEY))
+    expect(saved.tree.map((n) => n.id)).toContain('sec-bg')
+    expect(saved.pagesBySection['sec-bg'][0].html).toContain('covered person')
+  })
+
   it('notebookSnapshotsEqual distinguishes section edits', () => {
     const a = {
       tree: [{ id: 'sec-1', name: 'Fourth Amendment', kind: 'section' }],
