@@ -951,7 +951,7 @@
 }
 
 .args-workspace.is-expanded {
-  overflow: auto;
+  overflow: hidden;
 }
 
 .args-workspace > .workspace-head,
@@ -992,8 +992,9 @@
 
 .args-split.is-expanded {
   grid-template-columns: minmax(0, 1fr) 240px;
-  min-height: calc(100vh - 140px);
-  height: auto;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
   align-items: stretch;
 }
 
@@ -1002,10 +1003,10 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  height: auto;
-  max-height: 100%;
+  flex: 1;
+  height: 100%;
   overflow: auto;
-  padding: 10px 14px 20px;
+  padding: 10px 14px 0;
   background: var(--paper-2);
 }
 
@@ -1040,13 +1041,12 @@
 }
 
 .args-workspace.is-expanded .args-notes {
-  padding: 14px 28px 40px;
+  padding: 14px 28px 0;
   max-width: none;
   margin: 0;
   width: 100%;
-  height: auto;
-  max-height: none;
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 .args-notes .note-editor {
@@ -1057,19 +1057,21 @@
   overflow: visible;
 }
 
-.args-workspace.is-expanded .note-editor {
-  min-height: calc(100vh - 220px);
-  height: auto;
-}
-
 .args-notes .note-editor .tiptap,
 .args-notes .note-prose {
   height: auto;
   overflow: visible;
+  min-height: calc(100vh - 260px);
+  padding-bottom: 50vh;
+}
+
+.args-workspace.is-expanded .note-editor {
+  min-height: 0;
+  height: auto;
 }
 
 .args-workspace.is-expanded .note-prose {
-  min-height: calc(100vh - 290px);
+  min-height: calc(100vh - 220px);
 }
 
 .args-expand-nav {
