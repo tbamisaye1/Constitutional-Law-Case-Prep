@@ -260,8 +260,9 @@ function writeWorkspaceDocLocal(kind, data) {
   writeJson(spec.storageKey, payload)
 }
 
-function writeWorkspaceDocNow(kind, data) {
+function writeWorkspaceDocNow(kind, data, { sync = true } = {}) {
   writeWorkspaceDocLocal(kind, data)
+  if (!sync) return
   if (typeof publishers[kind] === 'function') publishers[kind](data)
 }
 
@@ -272,7 +273,7 @@ function writeWorkspaceDocNow(kind, data) {
  */
 export function stageWorkspaceDocLocal(kind, data) {
   if (!WORKSPACE_DOCS[kind]) return
-  pendingSaves[kind] = data
+  pendingSaves[kind] = { data, sync: true }
   globalThis.clearTimeout(saveTimers[kind])
   writeWorkspaceDocLocal(kind, data)
 }
@@ -280,20 +281,32 @@ export function stageWorkspaceDocLocal(kind, data) {
 /**
  * Persist a workspace doc. Debounced by default so outline titles and TipTap
  * notes stay smooth; pass `{ immediate: true }` on pagehide / Backup now.
+ *
+ * Pass `{ sync: false }` for browser-local chrome (which prong is open) so the
+ * tab does not re-push the whole Arguments board and bump Postgres updated_at.
  */
-export function saveWorkspaceDoc(kind, data, { immediate = false } = {}) {
+export function saveWorkspaceDoc(kind, data, { immediate = false, sync = true } = {}) {
   if (!WORKSPACE_DOCS[kind]) return
-  pendingSaves[kind] = data
+  const prevPending = pendingSaves[kind]
+  // A chrome-only save must not cancel a pending content push.
+  if (prevPending && !sync && prevPending.sync) {
+    writeWorkspaceDocLocal(kind, data)
+    return
+  }
+  pendingSaves[kind] = { data, sync: Boolean(sync) }
   globalThis.clearTimeout(saveTimers[kind])
   if (immediate) {
+    const pending = pendingSaves[kind]
     delete pendingSaves[kind]
-    writeWorkspaceDocNow(kind, data)
+    writeWorkspaceDocNow(kind, pending.data, { sync: pending.sync })
     return
   }
   saveTimers[kind] = globalThis.setTimeout(() => {
-    const next = pendingSaves[kind]
+    const pending = pendingSaves[kind]
     delete pendingSaves[kind]
-    if (next !== undefined) writeWorkspaceDocNow(kind, next)
+    if (pending !== undefined) {
+      writeWorkspaceDocNow(kind, pending.data, { sync: pending.sync })
+    }
   }, SAVE_DEBOUNCE_MS)
 }
 
@@ -301,9 +314,11 @@ export function saveWorkspaceDoc(kind, data, { immediate = false } = {}) {
 export function flushWorkspaceDocSaves() {
   for (const kind of Object.keys(pendingSaves)) {
     globalThis.clearTimeout(saveTimers[kind])
-    const next = pendingSaves[kind]
+    const pending = pendingSaves[kind]
     delete pendingSaves[kind]
-    if (next !== undefined) writeWorkspaceDocNow(kind, next)
+    if (pending !== undefined) {
+      writeWorkspaceDocNow(kind, pending.data, { sync: pending.sync })
+    }
   }
 }
 
@@ -318,7 +333,10 @@ export function hydrateWorkspaceDocFromRemote(kind, row, { forceRemote = false }
     pendingSaves.arguments !== undefined &&
     !forceRemote
   ) {
-    if (typeof publishers[kind] === 'function') publishers[kind](pendingSaves.arguments)
+    const pending = pendingSaves.arguments
+    if (pending.sync !== false && typeof publishers[kind] === 'function') {
+      publishers[kind](pending.data)
+    }
     return false
   }
   const data =

@@ -11,6 +11,8 @@ vi.stubGlobal('localStorage', {
 const {
   WORKSPACE_DOCS,
   hasPersistedArgumentsSave,
+  registerWorkspaceDocPublisher,
+  saveWorkspaceDoc,
   workspaceDocRowsFromLocal,
 } = await import('./workspaceDocs')
 
@@ -123,5 +125,49 @@ describe('arguments fromRow', () => {
     const board = WORKSPACE_DOCS.arguments.fromRow(remote, { forceRemote: true })
     expect(board.draftsBySide.petitioner[0].notes).toContain('2nd Ebb')
     expect(board.draftsBySide.petitioner[0].notes).not.toContain('Introduction')
+  })
+})
+
+describe('saveWorkspaceDoc sync flag', () => {
+  beforeEach(() => {
+    memory.clear()
+    vi.useFakeTimers()
+  })
+
+  it('does not notify the sync publisher for chrome-only saves', () => {
+    const published = []
+    registerWorkspaceDocPublisher('arguments', (data) => published.push(data))
+    const board = {
+      draftsBySide: {
+        petitioner: [{ id: 'petitioner-main', name: 'Main', notes: '', sections: [] }],
+        respondent: [],
+      },
+      activeDraftBySide: { petitioner: 'petitioner-main' },
+      activeSectionBySide: {},
+      activeFocusBySide: { petitioner: { type: 'side' } },
+    }
+    saveWorkspaceDoc('arguments', board, { immediate: true, sync: false })
+    expect(published).toEqual([])
+    expect(hasPersistedArgumentsSave(JSON.parse(memory.get('case-prep-arguments-v1')))).toBe(
+      true
+    )
+  })
+
+  it('still publishes when sync stays on', () => {
+    const published = []
+    registerWorkspaceDocPublisher('arguments', (data) => published.push(data))
+    const board = {
+      draftsBySide: {
+        petitioner: [
+          { id: 'petitioner-main', name: 'Main', notes: '<p>hi</p>', sections: [] },
+        ],
+        respondent: [],
+      },
+      activeDraftBySide: { petitioner: 'petitioner-main' },
+      activeSectionBySide: {},
+      activeFocusBySide: { petitioner: { type: 'side' } },
+    }
+    saveWorkspaceDoc('arguments', board, { immediate: true })
+    expect(published).toHaveLength(1)
   })
 })

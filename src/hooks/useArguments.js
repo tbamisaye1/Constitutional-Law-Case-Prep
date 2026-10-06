@@ -111,7 +111,7 @@ export function useArguments() {
     return `${draftName} · whole argument notes`
   }, [focus, sections, activeDraft])
 
-  function persist(
+  function boardState(
     next = {
       draftsBySide,
       activeDraftBySide,
@@ -119,7 +119,17 @@ export function useArguments() {
       activeFocusBySide,
     }
   ) {
+    return next
+  }
+
+  /** Content that syncs to Postgres (not which prong is open in this tab). */
+  function persistContent(next = boardState()) {
     saveWorkspaceDoc('arguments', next)
+  }
+
+  /** Outline focus / section selection stay browser-local. */
+  function persistChrome(next = boardState()) {
+    saveWorkspaceDoc('arguments', next, { sync: false })
   }
 
   useEffect(() => {
@@ -131,8 +141,13 @@ export function useArguments() {
       applyingRemote.current = false
       return
     }
-    persist()
-  }, [draftsBySide, activeDraftBySide, activeSectionBySide, activeFocusBySide])
+    persistContent()
+  }, [draftsBySide, activeDraftBySide])
+
+  useEffect(() => {
+    if (skipFirstWrite.current) return
+    persistChrome()
+  }, [activeSectionBySide, activeFocusBySide])
 
   useEffect(
     () =>
@@ -484,6 +499,9 @@ export function useArguments() {
   const setFocusedNotes = useCallback(
     (html) => {
       if (focus.type === 'joined') return
+      // TipTap fires onUpdate even when the HTML is unchanged. Skip those so
+      // idle tabs do not re-mark Arguments dirty every few seconds.
+      if (html === focusedNotesHtml) return
       if (focus.type === 'section') {
         patchActiveDraft((d) => ({
           ...d,
@@ -511,7 +529,7 @@ export function useArguments() {
       }
       patchActiveDraft((d) => ({ ...d, notes: html }))
     },
-    [focus, patchActiveDraft]
+    [focus, focusedNotesHtml, patchActiveDraft]
   )
 
   const boardSnapshot = useMemo(

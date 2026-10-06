@@ -313,7 +313,12 @@ function publishWorkspaceDocToSync(kind, data) {
   if (!spec) return
   const nextRow = spec.toRow(data)
   const prev = memory.store[spec.collection]?.[0]
-  if (prev && JSON.stringify(prev) === JSON.stringify(nextRow)) return
+  // Compare the syncable payload shape (toRow), not raw store objects that may
+  // carry pull-only fields. No-op content must not bump dirty / updatedAt.
+  if (prev) {
+    const prevRow = spec.toRow(prev)
+    if (JSON.stringify(prevRow) === JSON.stringify(nextRow)) return
+  }
   updateStore(
     (s) => ({ ...s, [spec.collection]: [nextRow] }),
     [metaKey('library_records', spec.kind, DOC_ROW_ID)]
