@@ -216,8 +216,13 @@
   background: var(--rule);
 }
 
-.argpage-struct {
+/* Two classes so this beats .note-tool's fixed 30px width whatever order the
+   stylesheets load in; otherwise "Section" and "Prong" overlap. */
+.note-tool.argpage-struct {
   width: auto;
+  min-width: max-content;
+  gap: 5px;
+  white-space: nowrap;
   padding: 0 10px;
   font-family: var(--font-mono);
   font-size: 11px;
@@ -225,7 +230,7 @@
   text-transform: uppercase;
 }
 
-.argpage-struct:disabled {
+.note-tool.argpage-struct:disabled {
   opacity: 0.4;
   cursor: default;
 }

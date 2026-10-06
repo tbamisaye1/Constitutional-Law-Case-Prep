@@ -360,16 +360,16 @@ export function hydrateWorkspaceDocFromRemote(kind, row, { forceRemote = false }
   // A pull that lands while Arguments still has a debounced save would write
   // the older remote board over a prong the user just added or moved.
   // Boot forceRemote still wins so a seed cache cannot block Postgres.
-  if (
-    kind === 'arguments' &&
-    pendingSaves.arguments !== undefined &&
-    !forceRemote
-  ) {
+  //
+  // Settle the debounced save into localStorage first (without publishing it)
+  // and fall through to the three-way merge below. Publishing the raw pending
+  // board here, as before, sent it with the NEW server base and silently
+  // overwrote whatever the other tab / MCP had just written.
+  if (kind === 'arguments' && pendingSaves.arguments !== undefined) {
     const pending = pendingSaves.arguments
-    if (pending.sync !== false && typeof publishers[kind] === 'function') {
-      publishers[kind](pending.data)
-    }
-    return false
+    globalThis.clearTimeout(saveTimers.arguments)
+    delete pendingSaves.arguments
+    if (!forceRemote) writeWorkspaceDocLocal(kind, pending.data)
   }
   const data =
     kind === 'arguments' ? spec.fromRow(row, { forceRemote }) : spec.fromRow(row)

@@ -265,6 +265,29 @@ function removeById(list, id) {
  *
  * @returns {{store: object, syncMeta: object, applied: number}}
  */
+/**
+ * Turn an Arguments stale-base rejection into a pullable row.
+ *
+ * The version stamp MUST be the server row's own updated_at
+ * (`serverUpdatedAt`). applyChanges copies it into baseUpdatedAt, and the
+ * server only accepts a push whose base equals updated_at exactly. Stamping
+ * the response's serverTime instead (the old behaviour) left every later push
+ * one version behind: reject → echo → push → reject, forever.
+ */
+export function rejectedArgumentsEcho(rejected, fallbackTime) {
+  const serverUpdatedAt = Number(rejected?.serverUpdatedAt)
+  return {
+    kind: 'arguments',
+    id: rejected?.id || 'main',
+    data: rejected?.data,
+    // Older servers did not send serverUpdatedAt; serverTime is the best we
+    // have and the next push will simply be rejected once more with it.
+    updatedAt: Number.isFinite(serverUpdatedAt) && serverUpdatedAt > 0 ? serverUpdatedAt : fallbackTime,
+    deleted: false,
+    forceApply: true,
+  }
+}
+
 export function applyChanges(store, syncMeta, changes) {
   let nextStore = store
   const rows = { ...syncMeta.rows }
@@ -397,10 +420,15 @@ export function applyChanges(store, syncMeta, changes) {
     // Arguments: a dirty tab stamps Date.now(), so isNewer would skip a peer /
     // MCP write that landed after our base. Take the remote board whenever it
     // is newer than the version we started editing from.
+    // `forceApply` is a client-only flag (never sent by the server) set on the
+    // board echoed back with a stale-base rejection. That board IS the server
+    // row, at its true updated_at, so it must land even when a corrupted local
+    // base claims to be newer; otherwise the base never heals and every push
+    // is rejected again.
     const argumentsForceRemote =
       row.kind === 'arguments' &&
-      Boolean(dirty[key]) &&
-      Number(row.updatedAt) > Number(base)
+      (row.forceApply === true ||
+        (Boolean(dirty[key]) && Number(row.updatedAt) > Number(base)))
     if (!isNewer(key, row) && !argumentsForceRemote) continue
     const current = nextStore[collection] || []
     nextStore = {

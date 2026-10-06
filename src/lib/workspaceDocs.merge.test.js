@@ -20,7 +20,9 @@ const {
   WORKSPACE_DOCS,
   hydrateWorkspaceDocFromRemote,
   readArgumentsBase,
+  registerWorkspaceDocPublisher,
   rememberArgumentsBase,
+  saveWorkspaceDoc,
 } = await import('./workspaceDocs')
 
 const spec = WORKSPACE_DOCS.arguments
@@ -104,5 +106,30 @@ describe('hydrateWorkspaceDocFromRemote', () => {
     expect(memory.has(ARGUMENTS_BASE_KEY)).toBe(true)
     expect(notesOf(readArgumentsBase())).toBe('<p>new from server</p>')
     expect(notesOf(JSON.parse(memory.get(spec.storageKey)))).toBe('<p>new from server</p>')
+  })
+
+  it('merges a pull into a still-debounced local save instead of overwriting either', () => {
+    const published = []
+    registerWorkspaceDocPublisher('arguments', (data) => published.push(data))
+    const start = boardWith('<p>keith</p>')
+    rememberArgumentsBase(start)
+    memory.set(spec.storageKey, JSON.stringify(start))
+
+    // User is mid-typing in the draft intro (save not flushed yet)...
+    const typing = boardWith('<p>keith</p>')
+    typing.draftsBySide.petitioner[0].notes = '<p>top + what I am typing</p>'
+    saveWorkspaceDoc('arguments', typing)
+
+    // ...when an MCP edit to the prong lands.
+    hydrateWorkspaceDocFromRemote('arguments', boardWith('<p>keith + MCP line</p>'))
+
+    const stored = JSON.parse(memory.get(spec.storageKey))
+    expect(stored.draftsBySide.petitioner[0].notes).toBe('<p>top + what I am typing</p>')
+    expect(notesOf(stored)).toBe('<p>keith + MCP line</p>')
+    // The merged board (not the raw pending one) is what gets pushed.
+    const last = published.at(-1)
+    expect(notesOf(last)).toBe('<p>keith + MCP line</p>')
+    expect(last.draftsBySide.petitioner[0].notes).toBe('<p>top + what I am typing</p>')
+    registerWorkspaceDocPublisher('arguments', undefined)
   })
 })

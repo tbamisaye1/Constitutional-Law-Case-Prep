@@ -17,6 +17,7 @@ import {
   markSeedRowsDirty,
   metaKey,
   pendingCount,
+  rejectedArgumentsEcho,
 } from './sync'
 
 function store(overrides = {}) {
@@ -397,5 +398,60 @@ describe('markSeedRowsDirty', () => {
     const meta = markSeedRowsDirty(pulled.store, pulled.syncMeta, 9_000)
 
     expect(pendingCount(meta)).toBe(0)
+  })
+})
+
+describe('Arguments stale-base rejection', () => {
+  const key = metaKey('library_records', 'arguments', 'main')
+  const serverBoard = { id: 'main', notes: { petitioner: '<p>server</p>' } }
+
+  it('stamps the echo with the server row version, not the response time', () => {
+    const echo = rejectedArgumentsEcho(
+      { id: 'main', data: serverBoard, serverUpdatedAt: 7_000 },
+      12_000
+    )
+    expect(echo.updatedAt).toBe(7_000)
+    expect(echo.forceApply).toBe(true)
+  })
+
+  it('falls back to serverTime when an older server omits serverUpdatedAt', () => {
+    expect(rejectedArgumentsEcho({ data: serverBoard }, 12_000).updatedAt).toBe(12_000)
+    expect(rejectedArgumentsEcho({ data: serverBoard, serverUpdatedAt: null }, 12_000).updatedAt).toBe(
+      12_000
+    )
+  })
+
+  it('heals a corrupted base so the next push carries the exact server version', () => {
+    // A browser that ran the old code: base is a serverTime (9_500) that is
+    // NEWER than the real row (7_000), and the local copy is dirty.
+    let meta = {
+      cursor: 0,
+      rows: { [key]: { updatedAt: 9_500, deleted: false, baseUpdatedAt: 9_500 } },
+      dirty: {},
+    }
+    meta = markDirty(meta, [key], 10_000)
+    const base = store({
+      argumentsBoard: [{ id: 'main', notes: { petitioner: '<p>local</p>' } }],
+    })
+
+    const echo = rejectedArgumentsEcho({ id: 'main', data: serverBoard, serverUpdatedAt: 7_000 }, 12_000)
+    const pulled = applyChanges(base, meta, { library_records: [echo] })
+
+    expect(pulled.applied).toBe(1)
+    expect(pulled.store.argumentsBoard[0].notes.petitioner).toBe('<p>server</p>')
+    expect(pulled.syncMeta.rows[key].baseUpdatedAt).toBe(7_000)
+
+    // The merged board is re-published (marked dirty) and pushed again: the
+    // base it carries now matches the server exactly, so it is accepted.
+    const again = markDirty(pulled.syncMeta, [key], 13_000)
+    const { changes } = collectChanges(pulled.store, again)
+    const args = changes.library_records.find((row) => row.kind === 'arguments')
+    expect(args.baseUpdatedAt).toBe(7_000)
+  })
+
+  it('never sends the client-only forceApply flag into the stored board', () => {
+    const echo = rejectedArgumentsEcho({ id: 'main', data: serverBoard, serverUpdatedAt: 7_000 }, 1)
+    const pulled = applyChanges(store(), emptySyncMeta(), { library_records: [echo] })
+    expect(pulled.store.argumentsBoard[0].forceApply).toBeUndefined()
   })
 })

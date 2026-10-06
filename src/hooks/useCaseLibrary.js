@@ -29,6 +29,7 @@ import {
   markDirty,
   metaKey,
   pendingCount,
+  rejectedArgumentsEcho,
 } from '../lib/sync'
 import { getWorkspaceId } from '../lib/workspace'
 import { suppressEditorFlush } from '../lib/editorFlush'
@@ -457,15 +458,7 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
     if (rejectedArgs.length) {
       const library = [...(pullChanges.library_records || [])]
       for (const row of rejectedArgs) {
-        library.push({
-          kind: 'arguments',
-          id: row.id || 'main',
-          data: row.data,
-          // serverTime is strictly newer than any local dirty stamp from this
-          // round-trip, so applyChanges replaces the stale board.
-          updatedAt: response.serverTime,
-          deleted: false,
-        })
+        library.push(rejectedArgumentsEcho(row, response.serverTime))
       }
       pullChanges = { ...pullChanges, library_records: library }
     }
