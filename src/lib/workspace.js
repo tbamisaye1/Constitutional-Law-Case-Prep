@@ -111,15 +111,16 @@ const SANDBOX_KEY = 'case-prep-workspace-sandbox'
  * branch can be tested against real-shaped data without touching the pinned
  * production workspace. `?workspace=clear` removes it.
  *
- * Disabled on the production host. Every localStorage cache in this app is
+ * Allowed on Vercel preview builds and localhost only; never in production. Every localStorage cache in this app is
  * global to the origin, so switching workspaces on the production origin would
  * mix two workspaces' caches; preview hosts have their own origin.
  */
 export function sandboxAllowed() {
   if (import.meta.env.VITE_ALLOW_WORKSPACE_OVERRIDE === '1') return true
+  if (import.meta.env.VITE_VERCEL_ENV === 'preview') return true
   if (typeof location === 'undefined') return false
   const host = location.hostname || ''
-  return host === 'localhost' || host === '127.0.0.1' || host.includes('-git-')
+  return host === 'localhost' || host === '127.0.0.1'
 }
 
 export function getSandboxWorkspaceId() {
