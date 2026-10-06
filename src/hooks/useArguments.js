@@ -189,9 +189,23 @@ export function useArguments() {
 
   const renameDraft = useCallback(
     (draftId, name) => {
-      const nextName = String(name || '').trim() || 'Untitled draft'
+      // Do not trim on every keystroke: that eats the space before the next word
+      // ("Working " → "Working") so draft names could never contain spaces.
+      const nextName = String(name ?? '')
       setDraftsBySide((prev) =>
         updateActiveDraft(prev, side, draftId, (d) => ({ ...d, name: nextName }))
+      )
+    },
+    [side]
+  )
+
+  const commitDraftName = useCallback(
+    (draftId) => {
+      setDraftsBySide((prev) =>
+        updateActiveDraft(prev, side, draftId, (d) => {
+          const trimmed = String(d.name || '').trim()
+          return { ...d, name: trimmed || 'Untitled draft' }
+        })
       )
     },
     [side]
@@ -492,6 +506,7 @@ export function useArguments() {
     selectDraft,
     addDraft,
     renameDraft,
+    commitDraftName,
     removeDraft,
     canRemoveDraft: drafts.length > 1,
     isSeededLadder: activeDraftId === CATEGORY3_LADDER_DRAFT_ID,

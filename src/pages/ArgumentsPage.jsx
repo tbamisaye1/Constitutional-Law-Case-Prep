@@ -193,6 +193,7 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
                   value={args.activeDraft.name}
                   aria-label="Draft name"
                   onChange={(e) => args.renameDraft(args.activeDraftId, e.target.value)}
+                  onBlur={() => args.commitDraftName(args.activeDraftId)}
                 />
                 {args.canRemoveDraft ? (
                   <button
