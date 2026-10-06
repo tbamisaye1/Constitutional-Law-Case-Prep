@@ -14,6 +14,12 @@ import {
   removedOutlineIdsByDraft,
 } from './argumentsBoard'
 import { snapshotDocRevision } from './docRevisions'
+import { getWorkspaceId } from './workspace'
+
+/** When a workspace key exists, Postgres is the source of truth. Never invent seed. */
+function serverOwnedWorkspace() {
+  return Boolean(getWorkspaceId())
+}
 
 export const DOC_ROW_ID = 'main'
 
@@ -66,7 +72,13 @@ export const WORKSPACE_DOCS = {
     storageKey: 'case-prep-arguments-v1',
     event: 'case-prep-arguments-hydrated',
     loadLocal() {
-      return normalizeArgumentsBoard(readJson(this.storageKey, null))
+      const raw = readJson(this.storageKey, null)
+      if (!hasPersistedArgumentsSave(raw)) {
+        // Blank Main only for the in-memory editor. Do not treat this as a
+        // persisted row to upload (see workspaceDocRowsFromLocal).
+        return normalizeArgumentsBoard(null)
+      }
+      return normalizeArgumentsBoard(raw)
     },
     toRow(data) {
       const board = normalizeArgumentsBoard(data)
@@ -89,23 +101,24 @@ export const WORKSPACE_DOCS = {
         },
       }
     },
-    fromRow(row) {
+    fromRow(row, { forceRemote = false } = {}) {
       if (!row) return null
       if (!row.draftsBySide && !row.outlines) return null
       const rawLocal = readJson(this.storageKey, null)
-      // Cleared cookies / first visit: localStorage is empty, but
-      // normalizeArgumentsBoard(null) invents a full seed board. Merging that
-      // "local" seed with Postgres used to overwrite real notes on hydrate and
-      // then push the hybrid back. Trust the database when there is no save.
-      if (!hasPersistedArgumentsSave(rawLocal)) {
-        const remoteOnly = normalizeArgumentsBoard(row)
+      const remoteOnly = normalizeArgumentsBoard(row)
+      // Boot (forceRemote) or empty local cache: Postgres wins entirely.
+      // Keep only which section is open in this browser.
+      if (forceRemote || !hasPersistedArgumentsSave(rawLocal)) {
+        const localChrome = hasPersistedArgumentsSave(rawLocal)
+          ? normalizeArgumentsBoard(rawLocal)
+          : null
         return {
           ...remoteOnly,
-          activeSectionBySide: {},
-          activeFocusBySide: {},
+          activeSectionBySide: localChrome?.activeSectionBySide || {},
+          activeFocusBySide: localChrome?.activeFocusBySide || {},
         }
       }
-      const remote = normalizeArgumentsBoard(row)
+      const remote = remoteOnly
       const local = normalizeArgumentsBoard(rawLocal)
       // Prefer local outline shape when this browser already deleted seed prongs
       // that a stale remote sync still carries (same draft id, fewer prongs).
@@ -162,7 +175,9 @@ export const WORKSPACE_DOCS = {
     event: 'case-prep-facts-hydrated',
     loadLocal() {
       const saved = readJson(this.storageKey, null)
-      return { facts: Array.isArray(saved) ? saved : structuredClone(SEED_FACTS) }
+      if (Array.isArray(saved)) return { facts: saved }
+      // Synced workspace: wait for Postgres. Local-only demo may use seed.
+      return { facts: serverOwnedWorkspace() ? [] : structuredClone(SEED_FACTS) }
     },
     toRow(data) {
       return { id: DOC_ROW_ID, facts: data.facts || [] }
@@ -184,12 +199,22 @@ export const WORKSPACE_DOCS = {
       if (saved && typeof saved === 'object') {
         return {
           petitioner:
-            typeof saved.petitioner === 'string' ? saved.petitioner : OPENINGS_SEED.petitioner,
+            typeof saved.petitioner === 'string'
+              ? saved.petitioner
+              : serverOwnedWorkspace()
+                ? ''
+                : OPENINGS_SEED.petitioner,
           respondent:
-            typeof saved.respondent === 'string' ? saved.respondent : OPENINGS_SEED.respondent,
+            typeof saved.respondent === 'string'
+              ? saved.respondent
+              : serverOwnedWorkspace()
+                ? ''
+                : OPENINGS_SEED.respondent,
         }
       }
-      return { ...OPENINGS_SEED }
+      return serverOwnedWorkspace()
+        ? { petitioner: '', respondent: '' }
+        : { ...OPENINGS_SEED }
     },
     toRow(data) {
       return {
@@ -282,25 +307,35 @@ export function flushWorkspaceDocSaves() {
   }
 }
 
-export function hydrateWorkspaceDocFromRemote(kind, row) {
+export function hydrateWorkspaceDocFromRemote(kind, row, { forceRemote = false } = {}) {
   const spec = WORKSPACE_DOCS[kind]
   if (!spec) return false
   // A pull that lands while Arguments still has a debounced save would write
   // the older remote board over a prong the user just added or moved.
-  if (kind === 'arguments' && pendingSaves.arguments !== undefined) {
+  // Boot forceRemote still wins so a seed cache cannot block Postgres.
+  if (
+    kind === 'arguments' &&
+    pendingSaves.arguments !== undefined &&
+    !forceRemote
+  ) {
     if (typeof publishers[kind] === 'function') publishers[kind](pendingSaves.arguments)
     return false
   }
-  const data = spec.fromRow(row)
+  const data =
+    kind === 'arguments' ? spec.fromRow(row, { forceRemote }) : spec.fromRow(row)
   if (!data) return false
   const local = spec.loadLocal()
   if (kind === 'arguments' && typeof publishers[kind] === 'function') {
     const remoteBoard = normalizeArgumentsBoard(row)
-    if (!spec.same(data, remoteBoard) || remoteStillHasRemovedIds(remoteBoard, data)) {
+    if (
+      forceRemote ||
+      !spec.same(data, remoteBoard) ||
+      remoteStillHasRemovedIds(remoteBoard, data)
+    ) {
       publishers[kind](data)
     }
   }
-  if (spec.same(local, data)) return false
+  if (!forceRemote && spec.same(local, data)) return false
   snapshotDocRevision(kind, local, 'hydrate')
   const payload =
     kind === 'guide_edits' ? data.edits : kind === 'facts' ? data.facts : data
@@ -337,6 +372,20 @@ function remoteStillHasRemovedIds(remoteBoard, localBoard) {
 export function workspaceDocRowsFromLocal(kind) {
   const spec = WORKSPACE_DOCS[kind]
   if (!spec) return []
+  // Do not invent library_records rows from seed / blank defaults. An empty
+  // browser must pull Postgres first; only a real local save may upload.
+  if (kind === 'arguments') {
+    if (!hasPersistedArgumentsSave(readJson(spec.storageKey, null))) return []
+  } else if (kind === 'facts') {
+    if (!Array.isArray(readJson(spec.storageKey, null))) return []
+  } else if (kind === 'openings') {
+    const saved = readJson(spec.storageKey, null)
+    if (!saved || typeof saved !== 'object') return []
+  } else if (kind === 'guide_edits') {
+    const current = readJson(spec.storageKey, null)
+    const legacy = readJson('case-prep-guide-edits-v1', null)
+    if (!current && !legacy) return []
+  }
   return [spec.toRow(spec.loadLocal())]
 }
 

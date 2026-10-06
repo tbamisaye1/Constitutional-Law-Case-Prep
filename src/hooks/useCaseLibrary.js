@@ -27,7 +27,6 @@ import {
   collectChanges,
   emptySyncMeta,
   markDirty,
-  markSeedRowsDirty,
   metaKey,
   pendingCount,
 } from '../lib/sync'
@@ -106,6 +105,31 @@ function flattenFacts(seed) {
 }
 
 function emptyStore() {
+  // Synced workspace: start empty. The first /sync pull fills every collection
+  // from Postgres. Bundled seed must never stand in as "local work" to upload.
+  if (WORKSPACE_ID) {
+    return {
+      cases: [],
+      annotations: [],
+      notesByCase: {},
+      filesMeta: [],
+      opinions: [],
+      caseFacts: [],
+      cites: [],
+      timeline: [],
+      noteTabs: [],
+      articleTitles: [],
+      pdfBookmarks: [],
+      notebook: [],
+      argumentsBoard: [],
+      guideEdits: [],
+      factsBoard: [],
+      openings: [],
+      activeFileId: null,
+      pageByFile: {},
+      syncMeta: emptySyncMeta(),
+    }
+  }
   return {
     cases: seedCases(),
     annotations: [],
@@ -116,11 +140,8 @@ function emptyStore() {
     cites: SEED_CITES,
     timeline: [...SEED_DOCTRINE_TIMELINE, ...SEED_PROCEDURAL_TIMELINE, ...SEED_RECORD_TIMELINE],
     noteTabs: [],
-    // Custom shelf labels keyed by PDF filename (id === name).
     articleTitles: [],
-    // Reading bookmarks: { id, fileId, page, label, savedAt }
     pdfBookmarks: [],
-    // OneNote notebook snapshot (synced as library_records kind=notebook).
     notebook: notebookRowsFromLocal(),
     argumentsBoard: workspaceDocRowsFromLocal('arguments'),
     guideEdits: workspaceDocRowsFromLocal('guide_edits'),
@@ -128,8 +149,6 @@ function emptyStore() {
     openings: workspaceDocRowsFromLocal('openings'),
     activeFileId: null,
     pageByFile: {},
-    // Which rows have changed since the backend last accepted them, and how
-    // far through the server's timeline we have read. See lib/sync.js.
     syncMeta: emptySyncMeta(),
   }
 }
@@ -138,6 +157,34 @@ function load() {
   const parsed = readJson(KEY, null)
   if (!parsed || typeof parsed !== 'object') return emptyStore()
   const base = emptyStore()
+
+  // Synced workspace: localStorage is only a cache of the last API pull / save.
+  // Never fall back to bundled seed when a key is missing.
+  if (WORKSPACE_ID) {
+    return {
+      ...base,
+      cases: Array.isArray(parsed.cases) ? parsed.cases : [],
+      annotations: parsed.annotations || [],
+      notesByCase: parsed.notesByCase || {},
+      filesMeta: parsed.filesMeta || [],
+      opinions: Array.isArray(parsed.opinions) ? parsed.opinions : [],
+      caseFacts: Array.isArray(parsed.caseFacts) ? parsed.caseFacts : [],
+      cites: Array.isArray(parsed.cites) ? parsed.cites : [],
+      timeline: Array.isArray(parsed.timeline) ? parsed.timeline : [],
+      noteTabs: parsed.noteTabs || [],
+      articleTitles: Array.isArray(parsed.articleTitles) ? parsed.articleTitles : [],
+      pdfBookmarks: Array.isArray(parsed.pdfBookmarks) ? parsed.pdfBookmarks : [],
+      notebook: Array.isArray(parsed.notebook) ? parsed.notebook : [],
+      argumentsBoard: Array.isArray(parsed.argumentsBoard) ? parsed.argumentsBoard : [],
+      guideEdits: Array.isArray(parsed.guideEdits) ? parsed.guideEdits : [],
+      factsBoard: Array.isArray(parsed.factsBoard) ? parsed.factsBoard : [],
+      openings: Array.isArray(parsed.openings) ? parsed.openings : [],
+      activeFileId: parsed.activeFileId || null,
+      pageByFile: parsed.pageByFile || {},
+      syncMeta: parsed.syncMeta || emptySyncMeta(),
+    }
+  }
+
   return {
     ...base,
     cases: parsed.cases?.length ? parsed.cases : base.cases,
@@ -151,9 +198,6 @@ function load() {
     noteTabs: parsed.noteTabs || [],
     articleTitles: Array.isArray(parsed.articleTitles) ? parsed.articleTitles : [],
     pdfBookmarks: Array.isArray(parsed.pdfBookmarks) ? parsed.pdfBookmarks : [],
-    // Editors write case-prep-notebook-v3 first. Prefer that over the library
-    // mirror, which can lag (debounce / quota) and used to clobber new sections
-    // on the next sync hydrate.
     notebook: notebookRowsForLibraryLoad(parsed.notebook),
     argumentsBoard:
       Array.isArray(parsed.argumentsBoard) && parsed.argumentsBoard[0]
@@ -173,9 +217,6 @@ function load() {
         : workspaceDocRowsFromLocal('openings'),
     activeFileId: parsed.activeFileId || null,
     pageByFile: parsed.pageByFile || {},
-    // Absent for anyone who used the app before sync existed. Starting from a
-    // blank meta table makes every local row look new, which is what uploads
-    // their existing work on the first sync.
     syncMeta: parsed.syncMeta || base.syncMeta,
   }
 }
@@ -223,9 +264,11 @@ let memory = {
   workspaceReady: !WORKSPACE_ID,
 }
 
-// Dedicated notes key can be ahead of the library mirror after a crashed tab
-// or quota failure. Push that snapshot instead of letting sync hydrate wipe it.
-markStaleNotebookMirrorDirty(parsedLibraryForBoot)
+// Local-only browsers may push a notebook that raced the library mirror.
+// Synced workspaces wait for Postgres on boot instead.
+if (!WORKSPACE_ID) {
+  markStaleNotebookMirrorDirty(parsedLibraryForBoot)
+}
 
 /**
  * Editors call this (via notebookWorkspace) whenever the OneNote notebook changes.
@@ -268,23 +311,6 @@ function publishWorkspaceDocToSync(kind, data) {
 for (const kind of allWorkspaceDocKinds()) {
   registerWorkspaceDocPublisher(kind, (data) => publishWorkspaceDocToSync(kind, data))
 }
-
-function markUnsyncedDocDirty(kind, collection, rowId) {
-  if (!WORKSPACE_ID) return
-  if (!memory.store[collection]?.[0]) return
-  const key = metaKey('library_records', kind, rowId)
-  if (memory.store.syncMeta?.rows?.[key]) return
-  memory = {
-    ...memory,
-    store: {
-      ...memory.store,
-      syncMeta: markDirty(memory.store.syncMeta, [key], Date.now()),
-    },
-  }
-}
-
-// Do not mark seed rows dirty or scheduleSync here. bootstrapSync pulls first;
-// only then do we offer local-only rows. Early push was wiping Arguments.
 
 function emit() {
   for (const fn of listeners) fn()
@@ -467,7 +493,7 @@ const MERGE_BACKUP_KEY = 'case-prep-merge-backup-v1'
 // Bump the suffix when a one-shot server restore must run again after deploy.
 const RECOVER_NOTES_FLAG = 'case-prep-recover-notes-2026-10-05-askai'
 // Force Postgres arguments to win once after seed/localStorage wipe bugs.
-const RECOVER_ARGUMENTS_FLAG = 'case-prep-recover-args-2026-10-06-pitr-815'
+const RECOVER_ARGUMENTS_FLAG = 'case-prep-recover-args-2026-10-06-server-first'
 
 function pickMergedText(keepVal, dropVal) {
   const keep = String(keepVal || '').trim()
@@ -575,15 +601,20 @@ async function bootstrapSync() {
   bootstrapInFlight = true
 
   try {
+    // Drop any queued uploads before the first pull. Seed / stale cache must
+    // not race Postgres on a fresh tab, cookie clear, or hard refresh.
+    setSyncMeta({
+      ...(memory.store.syncMeta || emptySyncMeta()),
+      dirty: {},
+      cursor: 0,
+    })
+
     await recoverNotesFromServerOnce()
     await recoverArgumentsFromServerOnce()
 
-    // Always pull before any push so seed / empty localStorage cannot overwrite
-    // real argument notes that already live in Postgres.
+    // Pull-only. Nothing is pushed until after hydrate + dirty clear.
     const pulled = await exchange({}, {}, { keepalive: false })
     if (!pulled) {
-      // Stay on the boot screen. Retry bootstrap itself (not a bare forcePull)
-      // so hydrate-from-DB still runs before editors mount.
       window.clearTimeout(bootstrapRetryTimer)
       bootstrapRetryTimer = window.setTimeout(() => {
         void bootstrapSync()
@@ -591,45 +622,23 @@ async function bootstrapSync() {
       return
     }
 
-    // Prep docs: database is source of truth on boot. Rewrite local caches from
-    // the pulled rows and clear dirty flags so a seed board never pushes next.
+    // Rewrite every editor cache from the API response. forceRemote so a
+    // leftover seed arguments file cannot merge on top of Postgres.
     for (const kind of allWorkspaceDocKinds()) {
       const spec = WORKSPACE_DOCS[kind]
       const row = memory.store[spec.collection]?.[0]
-      if (row) hydrateWorkspaceDocFromRemote(kind, row)
+      if (row) hydrateWorkspaceDocFromRemote(kind, row, { forceRemote: true })
     }
-    {
-      const syncMeta = memory.store.syncMeta || emptySyncMeta()
-      const dirty = { ...(syncMeta.dirty || {}) }
-      for (const kind of allWorkspaceDocKinds()) {
-        const spec = WORKSPACE_DOCS[kind]
-        delete dirty[metaKey('library_records', spec.kind, DOC_ROW_ID)]
-      }
-      delete dirty[metaKey('library_records', 'notebook', NOTEBOOK_ROW_ID)]
-      setSyncMeta({ ...syncMeta, dirty })
-    }
+    const notebookRow = memory.store.notebook?.[0]
+    if (notebookRow) hydrateNotebookFromRemote(notebookRow)
 
-    // Notebook can legitimately be ahead after a crashed tab; arguments must not
-    // use the same path because empty localStorage normalizes to seed.
-    markStaleNotebookMirrorDirty(memory.store)
-
-    markUnsyncedDocDirty('notebook', 'notebook', NOTEBOOK_ROW_ID)
-    for (const kind of allWorkspaceDocKinds()) {
-      const spec = WORKSPACE_DOCS[kind]
-      markUnsyncedDocDirty(spec.kind, spec.collection, DOC_ROW_ID)
-    }
-
-    setSyncMeta(markSeedRowsDirty(memory.store, memory.store.syncMeta, Date.now()))
-    // markSeedRowsDirty can re-dirty arguments when the pull row was missing.
-    // If Postgres did send arguments, keep it clean so we do not push seed.
-    if (memory.store.argumentsBoard?.[0]) {
-      const syncMeta = memory.store.syncMeta || emptySyncMeta()
-      const dirty = { ...(syncMeta.dirty || {}) }
-      delete dirty[metaKey('library_records', 'arguments', DOC_ROW_ID)]
-      setSyncMeta({ ...syncMeta, dirty })
-    }
+    // Server-owned boot: no seed upload, no "unsynced local invent" push.
+    // Only edits the user makes after ready may mark dirty and upload.
+    setSyncMeta({
+      ...(memory.store.syncMeta || emptySyncMeta()),
+      dirty: {},
+    })
     markWorkspaceReady()
-    await runSync({ allowBeforeBootstrap: true })
   } finally {
     bootstrapInFlight = false
   }

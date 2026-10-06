@@ -8,7 +8,11 @@ vi.stubGlobal('localStorage', {
   clear: () => memory.clear(),
 })
 
-const { WORKSPACE_DOCS, hasPersistedArgumentsSave } = await import('./workspaceDocs')
+const {
+  WORKSPACE_DOCS,
+  hasPersistedArgumentsSave,
+  workspaceDocRowsFromLocal,
+} = await import('./workspaceDocs')
 
 describe('hasPersistedArgumentsSave', () => {
   it('is false for empty localStorage / seed-shaped absence', () => {
@@ -28,6 +32,19 @@ describe('hasPersistedArgumentsSave', () => {
         outlines: { petitioner: [{ id: 'p1', title: 'Opening' }] },
       })
     ).toBe(true)
+  })
+})
+
+describe('workspaceDocRowsFromLocal', () => {
+  beforeEach(() => {
+    memory.clear()
+  })
+
+  it('does not invent arguments / facts / openings rows with no local save', () => {
+    expect(workspaceDocRowsFromLocal('arguments')).toEqual([])
+    expect(workspaceDocRowsFromLocal('facts')).toEqual([])
+    expect(workspaceDocRowsFromLocal('openings')).toEqual([])
+    expect(workspaceDocRowsFromLocal('guide_edits')).toEqual([])
   })
 })
 
@@ -73,5 +90,38 @@ describe('arguments fromRow', () => {
     expect(board.draftsBySide.petitioner[0].sections[0].title).toBe('1) Lowest ebb')
     // Seed upgrade must not rewrite Postgres titles on a fresh browser.
     expect(board.draftsBySide.petitioner[0].sections[0].notes).toContain('Server section')
+  })
+
+  it('forceRemote ignores a leftover local seed board', () => {
+    memory.set(
+      'case-prep-arguments-v1',
+      JSON.stringify({
+        draftsBySide: {
+          petitioner: [
+            {
+              id: 'alt-q2-ladder',
+              notes: '<h2>Introduction</h2><p>We ask this court to reverse for 3 reasons.</p>',
+              sections: [],
+            },
+          ],
+          respondent: [{ id: 'respondent-main', notes: '', sections: [] }],
+        },
+      })
+    )
+    const remote = {
+      draftsBySide: {
+        petitioner: [
+          {
+            id: 'alt-q2-ladder',
+            notes: '<p>2nd Ebb considerations:</p>',
+            sections: [],
+          },
+        ],
+        respondent: [{ id: 'respondent-main', notes: '', sections: [] }],
+      },
+    }
+    const board = WORKSPACE_DOCS.arguments.fromRow(remote, { forceRemote: true })
+    expect(board.draftsBySide.petitioner[0].notes).toContain('2nd Ebb')
+    expect(board.draftsBySide.petitioner[0].notes).not.toContain('Introduction')
   })
 })
