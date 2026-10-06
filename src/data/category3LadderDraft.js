@@ -107,10 +107,10 @@ export function buildCategory3LadderDraft() {
           },
           {
             id: 'c3-s1-b',
-            title: 'b. Congress never granted this power, and its inaction cannot supply it',
+            title: 'b. Even if in 2nd ebb - Silence is not permission',
             notes: [
-              '<h2>b. Congress never granted this power, and its inaction cannot supply it</h2>',
-              '<p>They cannot point to a grant, so they point to 4 substitutes: a disclaimer, an affirmation, silence, and his own say-so. None is a grant.</p>',
+              '<h2>b. Even if in Category 2, silence is not permission</h2>',
+              '<p>They cannot point to a grant, so they point to 4 substitutes: a disclaimer, an affirmation, silence, and his own say-so. None is a grant. Keith says we cannot use Congress\\u2019 inaction as authority.</p>',
               '<ol>',
 
               '<li><strong>a. The framework we must use: Keith, a disclaimer is not a grant</strong>',
