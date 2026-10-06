@@ -320,9 +320,26 @@ export function preferLocalArgumentDeletions(remoteDraftsBySide, localDraftsBySi
           ),
         }, localDraft)
       }
-      // Remote is trimmed (server dropped seed prongs) — do not rehydrate them
-      // from a stale local seed copy. Keep remote structure; prefer richer notes.
+      // Remote has fewer nodes. Two cases look the same by count:
+      // (1) this tab added a prong that has not been pushed yet — keep local.
+      // (2) another device deleted seed prongs — take the trimmed remote.
+      // User-created ids (pr-…, p-<timestamp>) mean (1). Seed leftovers mean (2).
       if (remoteCount < localCount && outlineIsSubset(remoteDraft, localDraft)) {
+        const extras = extraOutlineIds(localDraft, remoteDraft)
+        if (extras.some(isUserCreatedOutlineId)) {
+          return mergeDraftNotesPreferRicher(
+            {
+              ...remoteDraft,
+              name: localDraft.name || remoteDraft.name,
+              sections: localDraft.sections,
+              seedVersion: Math.max(
+                Number(localDraft.seedVersion) || 0,
+                Number(remoteDraft.seedVersion) || 0
+              ),
+            },
+            localDraft
+          )
+        }
         return mergeDraftNotesPreferRicher(remoteDraft, localDraft)
       }
       // Same shape: keep remote structure, prefer whichever note body is richer.
@@ -388,6 +405,30 @@ function mergeDraftNotesPreferRicher(remoteDraft, localDraft) {
 function countOutlineNodes(draft) {
   const sections = draft?.sections || []
   return sections.reduce((n, s) => n + 1 + (s.prongs || []).length, 0)
+}
+
+function outlineIdList(draft) {
+  const ids = []
+  for (const section of draft?.sections || []) {
+    if (section?.id) ids.push(section.id)
+    for (const prong of section?.prongs || []) {
+      if (prong?.id) ids.push(prong.id)
+    }
+  }
+  return ids
+}
+
+function extraOutlineIds(localDraft, remoteDraft) {
+  const remote = new Set(outlineIdList(remoteDraft))
+  return outlineIdList(localDraft).filter((id) => !remote.has(id))
+}
+
+/** addProng uses pr-<time>; addSection uses p-<time> / r-<time>. Seed uses c3-* / p1. */
+function isUserCreatedOutlineId(id) {
+  const value = String(id || '')
+  if (value.startsWith('pr-')) return true
+  if (/^[pr]-\d{12,}/.test(value)) return true
+  return false
 }
 
 function outlineIsSubset(localDraft, remoteDraft) {

@@ -511,6 +511,7 @@ function ArgsBoard({
                           aria-label={`Drag prong ${sectionIdx + 1}.${prongIdx + 1}`}
                           onClick={(e) => e.stopPropagation()}
                           onDragStart={(e) => {
+                            e.stopPropagation()
                             e.dataTransfer.effectAllowed = 'move'
                             e.dataTransfer.setData('text/plain', prong.id)
                             setDragging({

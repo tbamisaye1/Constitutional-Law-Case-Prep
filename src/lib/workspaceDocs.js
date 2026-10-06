@@ -242,6 +242,9 @@ export function flushWorkspaceDocSaves() {
 export function hydrateWorkspaceDocFromRemote(kind, row) {
   const spec = WORKSPACE_DOCS[kind]
   if (!spec) return false
+  // A pull that lands while Arguments still has a debounced save would write
+  // the older remote board over a prong the user just added or moved.
+  if (kind === 'arguments' && pendingSaves.arguments !== undefined) return false
   const data = spec.fromRow(row)
   if (!data) return false
   const local = spec.loadLocal()
