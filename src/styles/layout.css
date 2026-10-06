@@ -1446,8 +1446,72 @@
 
 .note-prose ul,
 .note-prose ol {
-  padding-left: 1.3em;
+  padding-left: 1.6em;
   margin: 0 0 0.85em;
+  list-style-position: outside;
+}
+
+/* Nested markers so Tab nesting reads as 1. → a. → i. without typing labels. */
+.note-prose ul {
+  list-style-type: disc;
+}
+
+.note-prose ul ul {
+  list-style-type: circle;
+}
+
+.note-prose ul ul ul {
+  list-style-type: square;
+}
+
+.note-prose ol {
+  list-style-type: decimal;
+}
+
+.note-prose ol ol {
+  list-style-type: lower-alpha;
+}
+
+.note-prose ol ol ol {
+  list-style-type: lower-roman;
+}
+
+.note-prose ol ol ol ol {
+  list-style-type: decimal;
+}
+
+.note-prose ol[type='1'] {
+  list-style-type: decimal;
+}
+
+.note-prose ol[type='a'] {
+  list-style-type: lower-alpha;
+}
+
+.note-prose ol[type='A'] {
+  list-style-type: upper-alpha;
+}
+
+.note-prose ol[type='i'] {
+  list-style-type: lower-roman;
+}
+
+.note-prose ol[type='I'] {
+  list-style-type: upper-roman;
+}
+
+.note-prose li {
+  margin: 0.2em 0;
+}
+
+.note-prose li > p {
+  margin: 0;
+}
+
+.note-prose li > ul,
+.note-prose li > ol {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
 }
 
 .note-prose blockquote {

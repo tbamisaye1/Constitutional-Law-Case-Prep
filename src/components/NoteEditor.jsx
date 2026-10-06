@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useReducer, useRef } from 'react'
 import {
   Bold,
   Italic,
@@ -14,10 +14,17 @@ import {
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
+import { BlockIndent } from '../extensions/blockIndent'
+import {
+  indentSelection,
+  outdentSelection,
+  toggleOrCycleOrderedList,
+} from '../lib/noteEditorIndent'
 
 /**
  * TipTap note surface (https://github.com/ueberdosis/tiptap).
- * Tab / Shift+Tab sink and lift list items (OneNote-style indents).
+ * Tab / Shift+Tab nest lists, start a list, or indent the block (OneNote-style).
+ * Numbered-list button cycles 1. → a. → i. while already in an ordered list.
  *
  * immediatelyRender: false is required for React 19 Strict Mode so the editor
  * does not mount twice and write an empty doc over saved notes.
@@ -29,13 +36,16 @@ export function NoteEditor({ html, onChange, editable = true }) {
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const skipping = useRef(true)
+  const editorRef = useRef(null)
+  const [, bumpToolbar] = useReducer((n) => n + 1, 0)
 
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
       StarterKit,
+      BlockIndent,
       Placeholder.configure({
-        placeholder: 'Write like OneNote: holdings, nested bullets (Tab to indent)…',
+        placeholder: 'Write like OneNote: Tab nests lists, or indents the line…',
       }),
     ],
     content: html || '<p></p>',
@@ -43,13 +53,27 @@ export function NoteEditor({ html, onChange, editable = true }) {
     onUpdate: ({ editor: ed }) => {
       if (skipping.current) return
       onChangeRef.current?.(ed.getHTML())
+      bumpToolbar()
     },
+    onSelectionUpdate: () => bumpToolbar(),
     editorProps: {
       attributes: {
         class: 'note-prose',
       },
+      handleKeyDown: (_view, event) => {
+        if (event.key !== 'Tab') return false
+        const ed = editorRef.current
+        if (!ed || ed.isDestroyed) return false
+        // Always consume Tab so focus stays in the note. At the indent bound
+        // the command is a no-op, which is better than jumping to the next control.
+        if (event.shiftKey) outdentSelection(ed)
+        else indentSelection(ed)
+        return true
+      },
     },
   })
+
+  editorRef.current = editor
 
   useEffect(() => {
     if (!editor) return undefined
@@ -61,13 +85,13 @@ export function NoteEditor({ html, onChange, editable = true }) {
       // used to write "<p></p>" over real notes for the previous case.
       if (!skipping.current && !editor.isDestroyed) {
         try {
-          const html = editor.getHTML()
-          const plain = html
+          const nextHtml = editor.getHTML()
+          const plain = nextHtml
             .replace(/<[^>]+>/g, ' ')
             .replace(/&nbsp;/g, ' ')
             .replace(/\s+/g, ' ')
             .trim()
-          if (plain.length > 0) onChangeRef.current?.(html)
+          if (plain.length > 0) onChangeRef.current?.(nextHtml)
         } catch {
           /* ignore */
         }
@@ -107,24 +131,11 @@ export function NoteEditor({ html, onChange, editable = true }) {
     }
   }, [html, editor])
 
-  useEffect(() => {
-    if (!editor) return undefined
-    const onKey = (event) => {
-      if (event.key !== 'Tab') return
-      if (!editor.isFocused) return
-      event.preventDefault()
-      if (event.shiftKey) {
-        editor.chain().focus().liftListItem('listItem').run()
-      } else {
-        editor.chain().focus().sinkListItem('listItem').run()
-      }
-    }
-    const dom = editor.view.dom
-    dom.addEventListener('keydown', onKey)
-    return () => dom.removeEventListener('keydown', onKey)
-  }, [editor])
-
   if (!editor) return null
+
+  const orderedType = editor.isActive('orderedList')
+    ? editor.getAttributes('orderedList').type || '1'
+    : null
 
   return (
     <div className="note-editor">
@@ -151,29 +162,27 @@ export function NoteEditor({ html, onChange, editable = true }) {
           <Heading2 size={16} />
         </ToolBtn>
         <ToolBtn
-          label="Bullet list"
+          label="Bullet list (-)"
           active={editor.isActive('bulletList')}
           onClick={() => editor.chain().focus().toggleBulletList().run()}
         >
           <List size={16} />
         </ToolBtn>
         <ToolBtn
-          label="Numbered list"
+          label={
+            orderedType
+              ? `Numbered list (now ${orderedType}. — click to cycle 1/a/i)`
+              : 'Numbered list (1. / a. / i.)'
+          }
           active={editor.isActive('orderedList')}
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          onClick={() => toggleOrCycleOrderedList(editor)}
         >
           <ListOrdered size={16} />
         </ToolBtn>
-        <ToolBtn
-          label="Indent"
-          onClick={() => editor.chain().focus().sinkListItem('listItem').run()}
-        >
+        <ToolBtn label="Indent" onClick={() => indentSelection(editor)}>
           <IndentIncrease size={16} />
         </ToolBtn>
-        <ToolBtn
-          label="Outdent"
-          onClick={() => editor.chain().focus().liftListItem('listItem').run()}
-        >
+        <ToolBtn label="Outdent" onClick={() => outdentSelection(editor)}>
           <IndentDecrease size={16} />
         </ToolBtn>
         <ToolBtn
