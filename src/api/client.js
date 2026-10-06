@@ -286,6 +286,46 @@ export async function getSyncStatus() {
   return res.json();
 }
 
+/** List durable Postgres backups for this workspace (no payload bodies). */
+export async function listWorkspaceBackups() {
+  const res = await fetch(`${BASE}/sync/backups`, { headers: workspaceHeaders() });
+  if (!res.ok) throw new Error(await errorDetail(res, `list backups failed: ${res.status}`));
+  return res.json();
+}
+
+/** Snapshot the live workspace into Postgres. Survives hard refresh. */
+export async function createWorkspaceBackup(label = "Manual backup") {
+  const res = await fetch(`${BASE}/sync/backups`, {
+    method: "POST",
+    headers: workspaceHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ label }),
+  });
+  if (!res.ok) throw new Error(await errorDetail(res, `create backup failed: ${res.status}`));
+  return res.json();
+}
+
+/**
+ * Download a backup JSON file to the user's machine.
+ * This is the competition safety net: file on disk + row in Postgres.
+ */
+export async function downloadWorkspaceBackup(backupId) {
+  const res = await fetch(`${BASE}/sync/backups/${backupId}/download`, {
+    headers: workspaceHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorDetail(res, `download backup failed: ${res.status}`));
+  const body = await res.json();
+  const blob = new Blob([JSON.stringify(body, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `case-prep-backup-${backupId}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  return body;
+}
+
 /**
  * Store a PDF's bytes on the backend.
  *

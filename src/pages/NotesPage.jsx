@@ -4,6 +4,8 @@ import { Maximize2, Minimize2 } from 'lucide-react'
 import { NoteEditor } from '../components/NoteEditor'
 import { SectionTree } from '../components/notebook/SectionTree'
 import { PageList } from '../components/notebook/PageList'
+import { SyncBanner } from '../components/SyncBanner'
+import { useCaseLibrary } from '../hooks/useCaseLibrary'
 import { useNotebook } from '../hooks/useNotebook'
 import { NOTEBOOK_META } from '../data/notebookSeed'
 import { findPage } from '../lib/pageTree'
@@ -30,6 +32,7 @@ function readExpanded() {
  */
 export function NotesPage() {
   const nb = useNotebook()
+  const lib = useCaseLibrary()
   const [params] = useSearchParams()
   const [expanded, setExpanded] = useState(readExpanded)
   const sectionName = findSectionName(nb.tree, nb.sectionId)
@@ -75,10 +78,20 @@ export function NotesPage() {
             <p className="lede">
               {NOTEBOOK_META.title}: section groups → sections → pages. Use Add subpage (or the
               corner icon on a page) to nest under the current page; drag to reorder. Nested bullets
-              use Tab / Shift+Tab. Saves in this browser and syncs to your workspace on the server.
+              use Tab / Shift+Tab. The database is the durable copy; hard refresh reloads from there.
+              Use Backup now before competition for a JSON file on your machine too.
             </p>
           </div>
         </header>
+      ) : null}
+
+      {!expanded ? (
+        <SyncBanner
+          sync={lib.sync}
+          saveError={lib.saveError}
+          lastSavedAt={lib.lastSavedAt}
+          onSyncNow={lib.syncNow}
+        />
       ) : null}
 
       <div className={expanded ? 'onenote-shell is-expanded' : 'onenote-shell'}>

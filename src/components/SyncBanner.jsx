@@ -1,17 +1,16 @@
 import { useState } from 'react'
+import {
+  createWorkspaceBackup,
+  downloadWorkspaceBackup,
+  listWorkspaceBackups,
+} from '../api/client'
 import { isWorkspacePinned, setWorkspaceId } from '../lib/workspace'
 
 /**
  * Where the work on screen is currently saved.
  *
- * This replaced a hard-coded line that always claimed nothing reached the
- * backend. It is worth showing plainly: notes on a moot record are the sort of
- * thing you need to trust, and "saved in this browser" and "saved for every
- * device" are very different promises.
- *
- * Instant Case PDFs only reappear on another browser when that browser uses
- * the same workspace key. Production pins one via VITE_WORKSPACE_ID. Local /
- * unpinned builds expose copy + link controls so a laptop and an iPad can share.
+ * Hard refresh must never sound like the only copy is in the browser. When
+ * sync is healthy, the database is the durable store; localStorage is a cache.
  */
 
 function clock(timestamp) {
@@ -23,30 +22,33 @@ function describe(sync) {
     return {
       tone: 'warn',
       text:
-        'Saved in this browser only. This browser blocks storage keys, so nothing reaches the backend.',
+        'Database sync is off in this browser (storage key blocked). Notes will not survive a clear of site data until sync works.',
     }
   }
 
   if (sync.status === 'syncing') {
-    return { tone: 'info', text: 'Saving to the backend…' }
+    return { tone: 'info', text: 'Saving to the database…' }
   }
 
   if (sync.status === 'error') {
     return {
       tone: 'warn',
-      text: `Saved in this browser. The backend is unreachable, retrying. ${sync.error}`,
+      text: `Local cache updated; database unreachable (retrying). ${sync.error}`,
     }
   }
 
   if (sync.pending > 0) {
     const label = sync.pending === 1 ? '1 change' : `${sync.pending} changes`
-    return { tone: 'info', text: `Saved in this browser. ${label} still to send.` }
+    return {
+      tone: 'info',
+      text: `Local cache updated. ${label} still uploading to the database.`,
+    }
   }
 
   const when = sync.lastSyncedAt ? ` Last sync ${clock(sync.lastSyncedAt)}.` : ''
   return {
     tone: 'ok',
-    text: `Saved in this browser and on the backend (notes, arguments, guide, facts, PDFs).${when}`,
+    text: `On the database (survives hard refresh): notes, arguments, guide, facts, openings, annotations, PDFs.${when}`,
   }
 }
 
@@ -63,6 +65,7 @@ export function SyncBanner({
   const [open, setOpen] = useState(false)
   const [paste, setPaste] = useState('')
   const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
 
   async function copyKey() {
     if (!sync.workspaceId) return
@@ -83,6 +86,47 @@ export function SyncBanner({
     window.setTimeout(() => window.location.reload(), 400)
   }
 
+  async function backupNow() {
+    if (busy || sync.status === 'off') return
+    setBusy(true)
+    setNote('')
+    try {
+      const created = await createWorkspaceBackup(
+        `Manual ${new Date().toISOString().slice(0, 16)}`
+      )
+      await downloadWorkspaceBackup(created.id)
+      setNote(
+        `Backup #${created.id} saved in Postgres and downloaded. Hard refresh cannot erase that file.`
+      )
+      setOpen(true)
+    } catch (error) {
+      setNote(error?.message || 'Backup failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function downloadLatest() {
+    if (busy || sync.status === 'off') return
+    setBusy(true)
+    setNote('')
+    try {
+      const { backups } = await listWorkspaceBackups()
+      if (!backups?.length) {
+        const created = await createWorkspaceBackup('First backup')
+        await downloadWorkspaceBackup(created.id)
+        setNote(`No prior backups. Created and downloaded #${created.id}.`)
+        return
+      }
+      await downloadWorkspaceBackup(backups[0].id)
+      setNote(`Downloaded backup #${backups[0].id} (${backups[0].label}).`)
+    } catch (error) {
+      setNote(error?.message || 'Download failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <>
       {saveError ? (
@@ -97,12 +141,22 @@ export function SyncBanner({
       ) : null}
       <p className={`save-banner mono sync-${tone}`}>
         {text}
-        {lastSavedAt ? ` Local write ${clock(lastSavedAt)}.` : ''}
-        {pinned ? ' Instant Case is shared across devices on this site.' : ''}
+        {lastSavedAt ? ` Local cache write ${clock(lastSavedAt)}.` : ''}
+        {pinned ? ' Shared workspace pinned for this site.' : ''}
         {sync.status === 'error' || sync.pending > 0 ? (
           <button type="button" className="anno-jump" onClick={onSyncNow}>
             Retry now
           </button>
+        ) : null}
+        {sync.workspaceId && sync.status !== 'off' ? (
+          <>
+            <button type="button" className="anno-jump" disabled={busy} onClick={backupNow}>
+              {busy ? 'Backing up…' : 'Backup now'}
+            </button>
+            <button type="button" className="anno-jump" disabled={busy} onClick={downloadLatest}>
+              Download backup
+            </button>
+          </>
         ) : null}
         {sync.workspaceId ? (
           <button type="button" className="anno-jump" onClick={() => setOpen((v) => !v)}>
@@ -114,8 +168,8 @@ export function SyncBanner({
         <div className="workspace-link-panel">
           <p>
             {pinned
-              ? 'This build uses one shared workspace for every browser. Notes, arguments, guide edits, facts, openings, and Instant Case PDFs should match after a refresh on any device that opens this site.'
-              : 'Each browser keeps its own workspace key unless you link them. Copy this key into the other device (phone / laptop), then reload — that is how the same notes and PDFs appear everywhere.'}
+              ? 'This build uses one shared workspace. After a hard refresh, the app reloads from the database for notes, arguments, guide, facts, openings, and Instant Case PDFs. Use Backup now before competition for a JSON file on your laptop plus a durable Postgres snapshot.'
+              : 'Each browser keeps its own workspace key unless you link them. Copy this key into the other device, then reload. Use Backup now so a JSON copy exists outside the browser.'}
           </p>
           <p className="mono workspace-key">{sync.workspaceId}</p>
           <div className="workspace-link-actions">
@@ -139,6 +193,7 @@ export function SyncBanner({
           {note ? <p className="workspace-link-note">{note}</p> : null}
         </div>
       ) : null}
+      {!open && note ? <p className="workspace-link-note save-banner mono">{note}</p> : null}
     </>
   )
 }

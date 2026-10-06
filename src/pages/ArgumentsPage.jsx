@@ -10,7 +10,9 @@ import {
 } from 'lucide-react'
 import { UiTabs, UiTabsContent, UiTabsList, UiTabsTrigger } from '../components/ui/Tabs'
 import { NoteEditor } from '../components/NoteEditor'
+import { SyncBanner } from '../components/SyncBanner'
 import { useArguments } from '../hooks/useArguments'
+import { useCaseLibrary } from '../hooks/useCaseLibrary'
 
 /**
  * Outline titles that wrap when the column is narrow. Enter commits (no
@@ -94,6 +96,7 @@ function readExpanded() {
  */
 export function ArgumentsPage() {
   const args = useArguments()
+  const lib = useCaseLibrary()
   const [expanded, setExpanded] = useState(readExpanded)
 
   useEffect(() => {
@@ -125,7 +128,7 @@ export function ArgumentsPage() {
             <p className="lede">
               Keep a Main argument and as many alternate drafts as you want. Switch drafts above the
               outline, focus a section or prong to edit it, or open Full argument to read everything
-              joined. Edits save in this browser.
+              joined. The database is the durable copy; hard refresh reloads from there.
             </p>
           </div>
           <div className="args-head-actions">
@@ -147,6 +150,15 @@ export function ArgumentsPage() {
             </button>
           </div>
         </header>
+      ) : null}
+
+      {!expanded ? (
+        <SyncBanner
+          sync={lib.sync}
+          saveError={lib.saveError}
+          lastSavedAt={lib.lastSavedAt}
+          onSyncNow={lib.syncNow}
+        />
       ) : null}
 
       <UiTabs value={args.side} onValueChange={args.setSide}>
