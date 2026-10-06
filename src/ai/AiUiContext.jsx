@@ -312,11 +312,6 @@ export function AiUiProvider({ children }) {
         const status = groundingStatusFromReply(data.grounding_status, data.reply)
         const replyText = data.reply || ''
         const evidence = mergeEvidence(notes, data.evidence)
-        const nextMemory = appendAskAiTurn(
-          appendAskAiTurn(memory, { role: 'user', content: user_prompt }),
-          { role: 'assistant', content: replyText }
-        )
-        persistMemory(nextMemory)
         const usedTier = data.model_tier === 'advanced' ? 'advanced' : modelTier
         const groundingNotes = [
           data.grounding_notes,
@@ -328,36 +323,45 @@ export function AiUiProvider({ children }) {
         ]
           .filter(Boolean)
           .join(' ')
-        persistReply(
-          {
-            grounding_status: status,
-            grounding_source: data.grounding_source || groundingSource,
-            model_tier: usedTier,
-            text: replyText,
-            grounding_notes: groundingNotes,
-            evidence,
-            claims_verified: data.claims_verified,
-            claims_total: data.claims_total,
-            notes_used: notes.length,
-          },
-          user_prompt
+        const nextReply = {
+          grounding_status: status,
+          grounding_source: data.grounding_source || groundingSource,
+          model_tier: usedTier,
+          text: replyText,
+          grounding_notes: groundingNotes,
+          evidence,
+          claims_verified: data.claims_verified,
+          claims_total: data.claims_total,
+          notes_used: notes.length,
+        }
+        persistMemory(
+          appendAskAiTurn(
+            appendAskAiTurn(memory, { role: 'user', content: user_prompt }),
+            { role: 'assistant', content: replyText, reply: nextReply }
+          )
         )
+        persistReply(nextReply, user_prompt)
       } catch (err) {
         // Still surface local note hits when the API fails.
         const evidence = mergeEvidence(notes, [])
-        persistReply(
-          {
-            grounding_status: evidence.length ? 'partial' : 'no_evidence',
-            grounding_source: groundingSource,
-            text: formatAskAiFailure(err, groundingSource),
-            grounding_notes: notes.length
-              ? `Matched ${notes.length} local note/annotation chunk(s) even though Ask AI failed.`
-              : '',
-            evidence,
-            notes_used: notes.length,
-          },
-          user_prompt
+        const failText = formatAskAiFailure(err, groundingSource)
+        const failReply = {
+          grounding_status: evidence.length ? 'partial' : 'no_evidence',
+          grounding_source: groundingSource,
+          text: failText,
+          grounding_notes: notes.length
+            ? `Matched ${notes.length} local note/annotation chunk(s) even though Ask AI failed.`
+            : '',
+          evidence,
+          notes_used: notes.length,
+        }
+        persistMemory(
+          appendAskAiTurn(
+            appendAskAiTurn(memory, { role: 'user', content: user_prompt }),
+            { role: 'assistant', content: failText, reply: failReply }
+          )
         )
+        persistReply(failReply, user_prompt)
       } finally {
         setLoading(false)
       }

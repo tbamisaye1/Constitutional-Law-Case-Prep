@@ -10,6 +10,7 @@ import {
   readAskAiMemory,
   resolveAskAiLastView,
   writeAskAiLastView,
+  writeAskAiMemory,
 } from './askAiMemory'
 
 function makeStorage() {
@@ -108,8 +109,58 @@ describe('askAiMemory', () => {
     expect(view.prompt).toBe('What is Hamdi?')
     expect(view.reply.text).toContain('enemy combatant')
     expect(view.reply.restored_from_memory).toBe(true)
+    expect(view.reply.evidence).toEqual([])
 
     expect(resolveAskAiLastView(turns).reply.text).toContain('enemy combatant')
+  })
+
+  it('restores evidence when reopening a past assistant turn', () => {
+    const turns = appendAskAiTurn(
+      appendAskAiTurn([], { role: 'user', content: 'What did Keith hold?' }),
+      {
+        role: 'assistant',
+        content: 'Keith treated the disclaimer as not a grant of power.',
+        reply: {
+          grounding_status: 'grounded',
+          grounding_source: 'documents',
+          text: 'Keith treated the disclaimer as not a grant of power.',
+          grounding_notes: 'Matched 1 note/annotation chunk(s) in this browser.',
+          evidence: [
+            {
+              id: 'note-local-0',
+              source: 'Keith (Annotation · p.12)',
+              page: 12,
+              source_type: 'annotation',
+              preview: 'disclaimer is not a grant',
+              notes_path: '/library?case=keith&page=12',
+            },
+            {
+              id: 'e2',
+              source: 'United_States_v_US_District_Court.pdf',
+              page: 4,
+              source_type: 'corpus',
+              preview: 'merely a disclaimer of congressional intent',
+            },
+          ],
+          claims_verified: 2,
+          claims_total: 2,
+          notes_used: 1,
+        },
+      }
+    )
+    writeAskAiMemory(turns)
+    const stored = readAskAiMemory()
+    expect(stored[1].reply.evidence).toHaveLength(2)
+
+    const view = lastViewFromMemory(stored, 1)
+    expect(view.prompt).toBe('What did Keith hold?')
+    expect(view.reply.evidence.map((e) => e.source)).toEqual([
+      'Keith (Annotation · p.12)',
+      'United_States_v_US_District_Court.pdf',
+    ])
+    expect(view.reply.evidence[0].notes_path).toContain('keith')
+    expect(view.reply.claims_verified).toBe(2)
+    expect(view.reply.grounding_notes).toContain('Matched 1')
   })
 
   it('migrates sessionStorage memory into localStorage', () => {
