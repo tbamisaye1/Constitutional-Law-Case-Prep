@@ -624,10 +624,10 @@ function ArgsBoard({
             {isJoined
               ? 'Every section and prong in this draft, joined in outline order. Click Edit to focus a piece.'
               : args.focus?.type === 'side'
-                ? 'Scratch for the whole draft: citations, reminders, why this structure exists.'
+                ? 'Notes for the whole draft.'
                 : args.focus?.type === 'section'
-                  ? 'Scratch for this section only. Switch pieces on the right, or use the arrows next to Exit.'
-                  : 'Scratch for this prong only. Switch pieces on the right, or use the arrows next to Exit.'}
+                  ? 'Notes for this section only. Use the list above to jump pieces.'
+                  : 'Notes for this prong only. Check the label above so you know which piece you are editing.'}
           </p>
           {!expanded && !isJoined ? (
             <ScratchJumpList
@@ -794,7 +794,7 @@ function ScratchJumpList({ args, onWhole, onSection, onProng }) {
   return (
     <div className="args-scratch-jump" role="navigation" aria-label="Jump to a piece’s scratch notes">
       {items.map((item) => {
-        const preview = notePreview(item.html, 90)
+        const preview = notePreview(item.html, 64)
         return (
           <button
             key={item.key}

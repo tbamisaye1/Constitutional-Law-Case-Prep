@@ -979,7 +979,7 @@
 }
 
 .args-split {
-  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   height: 100%;
@@ -991,7 +991,7 @@
 }
 
 .args-split.is-expanded {
-  grid-template-columns: minmax(0, 1fr) 240px;
+  grid-template-columns: minmax(0, 1fr) 220px;
   flex: 1;
   min-height: 0;
   height: 100%;
@@ -1006,13 +1006,13 @@
   flex: 1;
   height: 100%;
   overflow: auto;
-  padding: 10px 14px 0;
+  padding: 10px 20px 0;
   background: var(--paper-2);
 }
 
 .args-notes-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 8px;
@@ -1032,16 +1032,20 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
   text-overflow: ellipsis;
-  font-size: 10px;
-  letter-spacing: 0.16em;
+  font-size: 11px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-3);
+  line-height: 1.35;
 }
 
 .args-workspace.is-expanded .args-notes {
-  padding: 14px 28px 0;
+  padding: 14px 36px 0;
   max-width: none;
   margin: 0;
   width: 100%;
@@ -1050,9 +1054,10 @@
 }
 
 .args-notes .note-editor {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   height: auto;
   overflow: visible;
 }
@@ -1061,8 +1066,8 @@
 .args-notes .note-prose {
   height: auto;
   overflow: visible;
-  min-height: calc(100vh - 260px);
-  padding-bottom: 50vh;
+  min-height: calc(100vh - 200px);
+  padding-bottom: 40vh;
 }
 
 .args-workspace.is-expanded .note-editor {
@@ -1071,7 +1076,7 @@
 }
 
 .args-workspace.is-expanded .note-prose {
-  min-height: calc(100vh - 220px);
+  min-height: calc(100vh - 160px);
 }
 
 .args-expand-nav {
@@ -1367,19 +1372,21 @@
 
 .args-scratch-jump {
   flex-shrink: 0;
-  max-height: 168px;
+  max-height: 88px;
   overflow: auto;
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   border: 1px solid var(--rule-soft);
   background: var(--paper);
 }
 
 .args-scratch-jump-item {
   display: grid;
-  gap: 2px;
+  grid-template-columns: minmax(72px, 0.28fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
   width: 100%;
   margin: 0;
-  padding: 6px 8px;
+  padding: 4px 8px;
   border: 0;
   border-bottom: 1px solid var(--rule-soft);
   background: transparent;
