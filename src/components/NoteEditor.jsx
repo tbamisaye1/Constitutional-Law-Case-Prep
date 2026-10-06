@@ -14,6 +14,8 @@ import {
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
+import { TextStyle } from '@tiptap/extension-text-style'
+import { FontSize } from '@tiptap/extension-text-style/font-size'
 import { AlphaListInput } from '../extensions/alphaListInput'
 import { BlockIndent } from '../extensions/blockIndent'
 import { ListItemWithBlocks } from '../extensions/listItemWithBlocks'
@@ -23,11 +25,18 @@ import {
   outdentSelection,
   toggleOrCycleOrderedList,
 } from '../lib/noteEditorIndent'
+import {
+  NOTE_FONT_SIZES,
+  applyFontSizeToAll,
+  applyFontSizeToSelection,
+  currentFontSize,
+} from '../lib/noteFontSize'
 
 /**
  * TipTap note surface (https://github.com/ueberdosis/tiptap).
  * Tab / Shift+Tab nest lists, start a list, or indent the block (OneNote-style).
  * Numbered-list button cycles 1. → a. → i. while already in an ordered list.
+ * Font size applies to the selection (or current block), or to the whole note.
  *
  * immediatelyRender: false is required for React 19 Strict Mode so the editor
  * does not mount twice and write an empty doc over saved notes.
@@ -50,6 +59,8 @@ export function NoteEditor({ html, onChange, editable = true }) {
         listItem: false,
       }),
       ListItemWithBlocks,
+      TextStyle,
+      FontSize,
       BlockIndent,
       AlphaListInput,
       Placeholder.configure({
@@ -152,6 +163,7 @@ export function NoteEditor({ html, onChange, editable = true }) {
   const orderedType = editor.isActive('orderedList')
     ? editor.getAttributes('orderedList').type || '1'
     : null
+  const fontSize = currentFontSize(editor)
 
   return (
     <div className="note-editor">
@@ -170,6 +182,31 @@ export function NoteEditor({ html, onChange, editable = true }) {
         >
           <Italic size={16} />
         </ToolBtn>
+        <label className="note-font-size">
+          <span className="note-font-size-label mono">Size</span>
+          <select
+            aria-label="Font size for selection or current block"
+            title="Font size for the selection (or current block if nothing is selected)"
+            value={fontSize}
+            onChange={(event) => applyFontSizeToSelection(editor, event.target.value)}
+          >
+            {NOTE_FONT_SIZES.map((opt) => (
+              <option key={opt.label} value={opt.value}>
+                {opt.label}
+                {opt.value ? ` (${opt.value})` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="note-tool note-font-all"
+          title="Apply the selected size to the whole note"
+          aria-label="Apply font size to whole note"
+          onClick={() => applyFontSizeToAll(editor, fontSize)}
+        >
+          All
+        </button>
         <ToolBtn
           label="Heading"
           active={editor.isActive('heading', { level: 2 })}
