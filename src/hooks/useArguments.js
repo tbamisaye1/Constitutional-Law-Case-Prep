@@ -35,6 +35,8 @@ function updateActiveDraft(draftsBySide, side, draftId, updater) {
  * Each draft has whole-argument notes + sections with nested prongs.
  */
 export function useArguments() {
+  // Shell only mounts this after workspaceReady, so localStorage already holds
+  // the Postgres hydrate (not a pre-pull seed flash).
   const initial = useMemo(() => loadState(), [])
   const [side, setSide] = useState('petitioner')
   const [draftsBySide, setDraftsBySide] = useState(initial.draftsBySide)
