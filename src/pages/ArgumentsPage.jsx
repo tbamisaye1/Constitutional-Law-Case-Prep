@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   ChevronDown,
   ChevronUp,
@@ -11,6 +11,39 @@ import {
 import { UiTabs, UiTabsContent, UiTabsList, UiTabsTrigger } from '../components/ui/Tabs'
 import { NoteEditor } from '../components/NoteEditor'
 import { useArguments } from '../hooks/useArguments'
+
+/**
+ * Outline titles that wrap when the column is narrow. Enter commits (no
+ * newline in the title); the box grows with the wrapped text.
+ */
+function OutlineTitleField({ className, value, onChange, onFocus, 'aria-label': ariaLabel }) {
+  const ref = useRef(null)
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = '0px'
+    el.style.height = `${el.scrollHeight}px`
+  }, [value])
+
+  return (
+    <textarea
+      ref={ref}
+      className={className ? `${className} args-title-field` : 'args-input args-title-field'}
+      value={value}
+      rows={1}
+      aria-label={ariaLabel}
+      onChange={onChange}
+      onFocus={onFocus}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault()
+          e.currentTarget.blur()
+        }
+      }}
+    />
+  )
+}
 
 function OutlineMoveButtons({ canUp, canDown, onUp, onDown, label }) {
   return (
@@ -291,7 +324,7 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
                     <GripVertical size={14} aria-hidden />
                   </span>
                   <span className="mono args-num">{sectionIdx + 1}</span>
-                  <input
+                  <OutlineTitleField
                     className="args-input args-section-input"
                     value={section.title}
                     aria-label={`Section ${sectionIdx + 1} title`}
@@ -395,7 +428,7 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
                         <span className="mono args-num">
                           {sectionIdx + 1}.{prongIdx + 1}
                         </span>
-                        <input
+                        <OutlineTitleField
                           className="args-input"
                           value={prong.title}
                           aria-label={`Prong ${sectionIdx + 1}.${prongIdx + 1} title`}
