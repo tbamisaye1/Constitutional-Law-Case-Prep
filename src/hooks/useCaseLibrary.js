@@ -41,12 +41,14 @@ import {
   flushNotebookSnapshotSave,
   registerNotebookSyncPublisher,
 } from '../lib/notebookWorkspace'
+import { preferLocalArgumentDeletions } from '../lib/argumentsBoard'
 import {
   allWorkspaceDocKinds,
   DOC_ROW_ID,
   flushWorkspaceDocSaves,
   hydrateWorkspaceDocFromRemote,
   registerWorkspaceDocPublisher,
+  saveWorkspaceDoc,
   WORKSPACE_DOCS,
   workspaceDocRowsFromLocal,
 } from '../lib/workspaceDocs'
@@ -274,8 +276,9 @@ function publishWorkspaceDocToSync(kind, data) {
     (s) => ({ ...s, [spec.collection]: [nextRow] }),
     [metaKey('library_records', spec.kind, DOC_ROW_ID)]
   )
-  // Arguments / facts / openings must hit Postgres on every edit, not after 1.2s.
-  if (syncBootstrapDone) scheduleSync(WORKSPACE_DOC_SYNC_MS)
+  if (syncBootstrapDone) {
+    scheduleSync(kind === 'arguments' ? 0 : WORKSPACE_DOC_SYNC_MS)
+  }
 }
 
 for (const kind of allWorkspaceDocKinds()) {
@@ -540,6 +543,7 @@ async function recoverArgumentsFromServerOnce() {
   if (typeof localStorage === 'undefined') return
   if (localStorage.getItem(RECOVER_ARGUMENTS_FLAG) === '1') return
 
+  const localBefore = WORKSPACE_DOCS.arguments.loadLocal()
   const argsKey = metaKey('library_records', 'arguments', DOC_ROW_ID)
   const syncMeta = memory.store.syncMeta || emptySyncMeta()
   const dirty = { ...(syncMeta.dirty || {}) }
@@ -550,9 +554,20 @@ async function recoverArgumentsFromServerOnce() {
   const ok = await exchange({}, {})
   if (ok) {
     localStorage.setItem(RECOVER_ARGUMENTS_FLAG, '1')
-    // Dedicated editor key must match Postgres after hydrate.
     const row = memory.store.argumentsBoard?.[0]
     if (row) hydrateWorkspaceDocFromRemote('arguments', row)
+    // Outline trash in this browser still wins over a stale Postgres copy.
+    const localAfter = WORKSPACE_DOCS.arguments.loadLocal()
+    const draftsBySide = preferLocalArgumentDeletions(
+      localAfter.draftsBySide,
+      localBefore.draftsBySide
+    )
+    if (
+      JSON.stringify(draftsBySide) !== JSON.stringify(localAfter.draftsBySide)
+    ) {
+      const merged = { ...localAfter, draftsBySide }
+      saveWorkspaceDoc('arguments', merged, { immediate: true })
+    }
   }
   return ok
 }

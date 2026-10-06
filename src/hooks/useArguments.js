@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { onPageHide, readJson } from '../lib/persist'
 import { joinArgumentOutlineBlocks } from '../lib/argumentNotes'
-import { saveWorkspaceDoc, WORKSPACE_DOCS } from '../lib/workspaceDocs'
 import {
   CATEGORY3_LADDER_DRAFT_ID,
   moveArrayItem,
@@ -11,6 +10,7 @@ import {
   newId,
   rememberRemovedOutlineIds,
 } from '../lib/argumentsBoard'
+import { saveWorkspaceDoc, stageWorkspaceDocLocal, WORKSPACE_DOCS } from '../lib/workspaceDocs'
 
 export { normalizeSections, normalizeArgumentsBoard }
 
@@ -270,15 +270,17 @@ export function useArguments() {
       setDraftsBySide((prev) => {
         const nextDrafts = updateActiveDraft(prev, side, activeDraftId, updater)
         if (persistNow) {
-          saveWorkspaceDoc(
-            'arguments',
-            {
-              draftsBySide: nextDrafts,
-              activeDraftBySide,
-              activeSectionBySide,
-              activeFocusBySide,
-            },
-            { immediate: true }
+          const snapshot = {
+            draftsBySide: nextDrafts,
+            activeDraftBySide,
+            activeSectionBySide,
+            activeFocusBySide,
+          }
+          // localStorage + pull-lock now; Postgres after this setState finishes
+          // so the library store update is not nested inside Arguments setState.
+          stageWorkspaceDocLocal('arguments', snapshot)
+          queueMicrotask(() =>
+            saveWorkspaceDoc('arguments', snapshot, { immediate: true })
           )
         }
         return nextDrafts

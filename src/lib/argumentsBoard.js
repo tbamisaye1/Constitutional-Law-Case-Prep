@@ -166,6 +166,34 @@ export function applyRemovedOutlineIds(draft) {
   }
 }
 
+export function removedOutlineIdsByDraft(draftsBySide) {
+  const map = {}
+  for (const side of ['petitioner', 'respondent']) {
+    for (const draft of draftsBySide?.[side] || []) {
+      if (!draft?.id) continue
+      const ids = uniqueIds(draft.removedOutlineIds)
+      if (ids.length) map[draft.id] = ids
+    }
+  }
+  return map
+}
+
+function applyBoardRemovedIds(draftsBySide, saved) {
+  const extra =
+    saved?.removedOutlineIdsByDraft && typeof saved.removedOutlineIdsByDraft === 'object'
+      ? saved.removedOutlineIdsByDraft
+      : {}
+  const next = { ...draftsBySide }
+  for (const side of ['petitioner', 'respondent']) {
+    next[side] = (next[side] || []).map((draft) => {
+      const more = extra[draft.id]
+      if (!Array.isArray(more) || !more.length) return applyRemovedOutlineIds(draft)
+      return rememberRemovedOutlineIds(draft, more)
+    })
+  }
+  return next
+}
+
 /**
  * Prefer the stored note body when the user (or an older seed they edited)
  * already has real content that differs from the new seed. Empty stored notes
@@ -587,9 +615,12 @@ export function normalizeArgumentsBoard(saved) {
     petitioner: withCategory3Ladder(draftsBySide.petitioner),
   }
 
+  draftsBySide = applyBoardRemovedIds(draftsBySide, empty ? null : saved)
+
   return {
     draftsBySide,
     activeDraftBySide,
+    removedOutlineIdsByDraft: removedOutlineIdsByDraft(draftsBySide),
     activeSectionBySide: {
       petitioner: empty ? null : saved.activeSectionBySide?.petitioner || null,
       respondent: empty ? null : saved.activeSectionBySide?.respondent || null,

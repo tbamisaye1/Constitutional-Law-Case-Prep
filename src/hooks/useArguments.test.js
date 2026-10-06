@@ -178,6 +178,27 @@ describe('normalizeArgumentsBoard', () => {
     expect(next.sections.some((s) => s.title === 'Opening theme')).toBe(false)
   })
 
+  it('keeps Opening theme deleted when only the board-level tombstone map is present', () => {
+    const board = normalizeArgumentsBoard(null)
+    const withMap = {
+      ...board,
+      draftsBySide: {
+        ...board.draftsBySide,
+        petitioner: board.draftsBySide.petitioner.map((d) =>
+          d.id === CATEGORY3_LADDER_DRAFT_ID
+            ? { ...d, seedVersion: 0 }
+            : d
+        ),
+      },
+      removedOutlineIdsByDraft: { [CATEGORY3_LADDER_DRAFT_ID]: ['c3-s0'] },
+    }
+    const refreshed = normalizeArgumentsBoard(withMap)
+    const next = refreshed.draftsBySide.petitioner.find(
+      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
+    )
+    expect(next.sections.map((s) => s.id)).not.toContain('c3-s0')
+  })
+
   it('keeps a ladder draft that is already on the current seed version', () => {
     const board = normalizeArgumentsBoard(null)
     const ladder = board.draftsBySide.petitioner.find(

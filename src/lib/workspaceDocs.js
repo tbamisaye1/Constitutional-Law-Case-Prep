@@ -11,6 +11,7 @@ import { SEED_FACTS } from '../data/factsSeed'
 import {
   normalizeArgumentsBoard,
   preferLocalArgumentDeletions,
+  removedOutlineIdsByDraft,
 } from './argumentsBoard'
 import { snapshotDocRevision } from './docRevisions'
 
@@ -61,6 +62,7 @@ export const WORKSPACE_DOCS = {
         id: DOC_ROW_ID,
         draftsBySide: board.draftsBySide,
         activeDraftBySide: board.activeDraftBySide,
+        removedOutlineIdsByDraft: removedOutlineIdsByDraft(board.draftsBySide),
         // activeSectionBySide / activeFocusBySide stay browser-local. Syncing
         // them made devices fight over which prong was open (jumping back to
         // 3.2 while you clicked elsewhere).
@@ -194,19 +196,35 @@ export function registerWorkspaceDocPublisher(kind, fn) {
   publishers[kind] = fn
 }
 
-function writeWorkspaceDocNow(kind, data) {
+function payloadForKind(kind, data) {
+  if (kind === 'guide_edits') return data.edits
+  if (kind === 'facts') return data.facts
+  return data
+}
+
+function writeWorkspaceDocLocal(kind, data) {
   const spec = WORKSPACE_DOCS[kind]
   if (!spec) return
-  const payload =
-    kind === 'guide_edits'
-      ? data.edits
-      : kind === 'facts'
-        ? data.facts
-        : data
-  // Snapshot what is about to be replaced so a bad sync/seed cannot erase work.
+  const payload = payloadForKind(kind, data)
   snapshotDocRevision(kind, spec.loadLocal(), 'save')
   writeJson(spec.storageKey, payload)
+}
+
+function writeWorkspaceDocNow(kind, data) {
+  writeWorkspaceDocLocal(kind, data)
   if (typeof publishers[kind] === 'function') publishers[kind](data)
+}
+
+/**
+ * Write the dedicated localStorage key and hold the pull lock without notifying
+ * React sync subscribers. Call this inside a setState updater (trash a section)
+ * so a nested library setState cannot drop the Postgres push.
+ */
+export function stageWorkspaceDocLocal(kind, data) {
+  if (!WORKSPACE_DOCS[kind]) return
+  pendingSaves[kind] = data
+  globalThis.clearTimeout(saveTimers[kind])
+  writeWorkspaceDocLocal(kind, data)
 }
 
 /**
@@ -244,10 +262,19 @@ export function hydrateWorkspaceDocFromRemote(kind, row) {
   if (!spec) return false
   // A pull that lands while Arguments still has a debounced save would write
   // the older remote board over a prong the user just added or moved.
-  if (kind === 'arguments' && pendingSaves.arguments !== undefined) return false
+  if (kind === 'arguments' && pendingSaves.arguments !== undefined) {
+    if (typeof publishers[kind] === 'function') publishers[kind](pendingSaves.arguments)
+    return false
+  }
   const data = spec.fromRow(row)
   if (!data) return false
   const local = spec.loadLocal()
+  if (kind === 'arguments' && typeof publishers[kind] === 'function') {
+    const remoteBoard = normalizeArgumentsBoard(row)
+    if (!spec.same(data, remoteBoard) || remoteStillHasRemovedIds(remoteBoard, data)) {
+      publishers[kind](data)
+    }
+  }
   if (spec.same(local, data)) return false
   snapshotDocRevision(kind, local, 'hydrate')
   const payload =
@@ -258,16 +285,28 @@ export function hydrateWorkspaceDocFromRemote(kind, row) {
   } catch {
     /* tests */
   }
-  // If we kept local deletions the remote still had, push the trimmed board
-  // so Postgres (and other devices) stop resurrecting those prongs.
-  if (
-    kind === 'arguments' &&
-    typeof publishers[kind] === 'function' &&
-    !spec.same(data, normalizeArgumentsBoard(row))
-  ) {
-    publishers[kind](data)
-  }
   return true
+}
+
+function remoteStillHasRemovedIds(remoteBoard, localBoard) {
+  for (const side of ['petitioner', 'respondent']) {
+    const remoteById = Object.fromEntries(
+      (remoteBoard?.draftsBySide?.[side] || []).map((d) => [d.id, d])
+    )
+    for (const local of localBoard?.draftsBySide?.[side] || []) {
+      const removed = new Set(local.removedOutlineIds || [])
+      if (!removed.size) continue
+      const remote = remoteById[local.id]
+      if (!remote) continue
+      for (const section of remote.sections || []) {
+        if (removed.has(section.id)) return true
+        for (const prong of section.prongs || []) {
+          if (removed.has(prong.id)) return true
+        }
+      }
+    }
+  }
+  return false
 }
 
 export function workspaceDocRowsFromLocal(kind) {
