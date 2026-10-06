@@ -152,8 +152,8 @@ export function useArguments() {
       applyingRemote.current = true
       setDraftsBySide(normalized.draftsBySide)
       setActiveDraftBySide(normalized.activeDraftBySide)
-      setActiveSectionBySide(normalized.activeSectionBySide)
-      setActiveFocusBySide(normalized.activeFocusBySide)
+      // Keep outline focus local. Sync was re-applying an older activeFocus
+      // (e.g. prong 3.2) on every pull and yanking the editor back mid-click.
     }
     window.addEventListener(HYDRATE_EVENT, onHydrate)
     return () => window.removeEventListener(HYDRATE_EVENT, onHydrate)

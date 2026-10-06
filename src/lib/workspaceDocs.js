@@ -58,8 +58,9 @@ export const WORKSPACE_DOCS = {
         id: DOC_ROW_ID,
         draftsBySide: board.draftsBySide,
         activeDraftBySide: board.activeDraftBySide,
-        activeSectionBySide: board.activeSectionBySide,
-        activeFocusBySide: board.activeFocusBySide,
+        // activeSectionBySide / activeFocusBySide stay browser-local. Syncing
+        // them made devices fight over which prong was open (jumping back to
+        // 3.2 while you clicked elsewhere).
         // Keep legacy mirrors so older clients / Ask AI still see Main.
         outlines: {
           petitioner: board.draftsBySide.petitioner?.[0]?.sections || [],
@@ -74,9 +75,26 @@ export const WORKSPACE_DOCS = {
     fromRow(row) {
       if (!row) return null
       if (!row.draftsBySide && !row.outlines) return null
-      return normalizeArgumentsBoard(row)
+      const remote = normalizeArgumentsBoard(row)
+      const local = normalizeArgumentsBoard(readJson(this.storageKey, null))
+      // Remote drafts/notes win; which section/prong is open stays on this device.
+      return {
+        ...remote,
+        activeSectionBySide: local.activeSectionBySide,
+        activeFocusBySide: local.activeFocusBySide,
+      }
     },
-    same: jsonSame,
+    same(a, b) {
+      // Ignore which section/prong is open when comparing sync payloads.
+      const strip = (board) => {
+        const n = normalizeArgumentsBoard(board)
+        return {
+          draftsBySide: n.draftsBySide,
+          activeDraftBySide: n.activeDraftBySide,
+        }
+      }
+      return jsonSame(strip(a), strip(b))
+    },
   },
 
   guide_edits: {
