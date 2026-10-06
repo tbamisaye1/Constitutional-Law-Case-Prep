@@ -934,8 +934,52 @@
   margin-top: 8px;
 }
 
+/* Fill the viewport like Notes so the outline is not capped at 70vh with a
+   dead white band under the list while the notes column stretches taller. */
+.main:has(.args-workspace) {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 58px);
+  padding-bottom: 24px;
+}
+
+.args-workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.args-workspace > .workspace-head,
+.args-workspace > .save-banner,
+.args-workspace > .workspace-link-note {
+  flex-shrink: 0;
+}
+
+.args-workspace > .ui-tabs {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.args-workspace .ui-tabs-list {
+  flex-shrink: 0;
+}
+
+.args-workspace .ui-tabs-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .args-split {
   grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  align-items: stretch;
 }
 
 .args-split.is-expanded {
@@ -948,6 +992,8 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  height: 100%;
+  overflow: auto;
   padding: 10px 14px 20px;
   background: var(--paper-2);
 }
@@ -1113,7 +1159,9 @@
   border-right: 1px solid var(--rule);
   background: var(--paper);
   overflow: auto;
-  max-height: 70vh;
+  min-height: 0;
+  height: 100%;
+  max-height: none;
 }
 
 .args-empty {
@@ -1420,18 +1468,6 @@
   word-break: break-word;
   line-height: 1.35;
   field-sizing: content;
-}
-
-.args-num {
-  padding-top: 10px;
-}
-
-.args-grip {
-  margin-top: 6px;
-}
-
-.args-moves {
-  padding-top: 4px;
 }
 
 .args-input:focus {
@@ -1951,13 +1987,32 @@
 
   .notes-list,
   .library-list,
-  .args-outline,
   .onenote-tree,
   .onenote-pages {
     border-right: none;
     border-bottom: 1px solid var(--rule);
     max-height: 280px;
     height: 280px;
+  }
+
+  .args-outline {
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+    max-height: min(42vh, 320px);
+    height: auto;
+  }
+
+  .main:has(.args-workspace) {
+    min-height: 0;
+    padding-bottom: 100px;
+  }
+
+  .args-workspace > .ui-tabs,
+  .args-workspace .ui-tabs-content,
+  .args-split {
+    flex: none;
+    height: auto;
+    min-height: 0;
   }
 
   .onenote-shell {
