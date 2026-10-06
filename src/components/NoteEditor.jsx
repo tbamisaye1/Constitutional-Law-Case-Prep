@@ -20,6 +20,7 @@ import { AlphaListInput } from '../extensions/alphaListInput'
 import { BlockIndent } from '../extensions/blockIndent'
 import { ListItemWithBlocks } from '../extensions/listItemWithBlocks'
 import {
+  deleteEmptyListItem,
   exitBlockquoteOnEnter,
   indentSelection,
   outdentSelection,
@@ -86,6 +87,18 @@ export function NoteEditor({ html, onChange, editable = true }) {
         // Empty line inside a quote: Enter exits the quote and stays on the
         // same list item so the next Enter can continue 3. 4. …
         if (event.key === 'Enter' && !event.shiftKey && exitBlockquoteOnEnter(ed)) {
+          return true
+        }
+
+        // Empty 3. under A.: delete that sub-indent only. TipTap's default
+        // Backspace lifts it into a blank top-level item between A. and B.
+        if (
+          (event.key === 'Backspace' || event.key === 'Delete') &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          deleteEmptyListItem(ed)
+        ) {
           return true
         }
 

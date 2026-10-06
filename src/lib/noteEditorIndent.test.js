@@ -1,11 +1,85 @@
 import { describe, expect, it, vi } from 'vitest'
+import { getSchema } from '@tiptap/core'
+import StarterKit from '@tiptap/starter-kit'
+import { EditorState, TextSelection } from '@tiptap/pm/state'
 import {
+  deleteEmptyListItem,
   exitBlockquoteOnEnter,
   indentSelection,
+  isEmptyListItemNode,
   nestedAttrsForParent,
   outdentSelection,
   toggleOrCycleOrderedList,
 } from './noteEditorIndent'
+import { ListItemWithBlocks } from '../extensions/listItemWithBlocks'
+
+const noteSchema = getSchema([
+  StarterKit.configure({ listItem: false }),
+  ListItemWithBlocks,
+])
+
+function p(text) {
+  return noteSchema.node('paragraph', null, text ? [noteSchema.text(text)] : [])
+}
+function li(...blocks) {
+  return noteSchema.node('listItem', null, blocks)
+}
+function ol(attrs, ...items) {
+  return noteSchema.node('orderedList', attrs || {}, items)
+}
+
+function paragraphsOf(doc) {
+  const out = []
+  doc.descendants((node) => {
+    if (node.type.name === 'paragraph') out.push(node.textContent)
+  })
+  return out
+}
+
+function emptyParagraphPos(doc) {
+  let found = null
+  doc.descendants((node, pos) => {
+    if (node.type.name === 'paragraph' && node.content.size === 0) found = pos + 1
+  })
+  return found
+}
+
+/** Thin TipTap-shaped wrapper around a live ProseMirror state. */
+function liveEditor(doc, cursorPos) {
+  let state = EditorState.create({
+    doc,
+    selection: TextSelection.create(doc, cursorPos),
+  })
+  const editor = {
+    isDestroyed: false,
+    get state() {
+      return state
+    },
+    chain() {
+      const api = {
+        focus: () => api,
+        command: (fn) => {
+          api._fn = fn
+          return api
+        },
+        run: () => {
+          let ok = false
+          const result = api._fn({
+            tr: state.tr,
+            state,
+            dispatch: (tr) => {
+              state = state.apply(tr)
+              ok = true
+            },
+          })
+          return result !== false && ok
+        },
+      }
+      return api
+    },
+  }
+  return editor
+}
 
 function mockEditor({
   canSink = false,
@@ -209,5 +283,59 @@ describe('toggleOrCycleOrderedList', () => {
     const third = mockEditor({ inOrdered: true, orderedType: 'i' })
     toggleOrCycleOrderedList(third)
     expect(third._chain.updateAttributes).toHaveBeenCalledWith('orderedList', { type: null })
+  })
+})
+
+describe('deleteEmptyListItem', () => {
+  it('recognizes a blank list item node', () => {
+    expect(isEmptyListItemNode(li(p('')))).toBe(true)
+    expect(isEmptyListItemNode(li(p('kept')))).toBe(false)
+  })
+
+  it('removes a blank nested 3. without promoting it between A. and B.', () => {
+    const doc = noteSchema.node('doc', null, [
+      ol(
+        { type: 'A' },
+        li(
+          p('Hamdi rejected'),
+          ol(null, li(p('in 1971')), li(p('This was not')), li(p('')))
+        ),
+        li(p('The Hamdi rejection'), ol(null, li(p('Congress repeal'))))
+      ),
+    ])
+    const editor = liveEditor(doc, emptyParagraphPos(doc))
+    expect(deleteEmptyListItem(editor)).toBe(true)
+    expect(paragraphsOf(editor.state.doc)).toEqual([
+      'Hamdi rejected',
+      'in 1971',
+      'This was not',
+      'The Hamdi rejection',
+      'Congress repeal',
+    ])
+    // Still one outer list with two top-level items (A then B).
+    expect(editor.state.doc.firstChild.childCount).toBe(2)
+  })
+
+  it('drops a sole blank nested list under A. and keeps B. intact', () => {
+    const doc = noteSchema.node('doc', null, [
+      ol({ type: 'A' }, li(p('Hamdi'), ol(null, li(p('')))), li(p('B text'))),
+    ])
+    const editor = liveEditor(doc, emptyParagraphPos(doc))
+    expect(deleteEmptyListItem(editor)).toBe(true)
+    expect(paragraphsOf(editor.state.doc)).toEqual(['Hamdi', 'B text'])
+    expect(editor.state.doc.firstChild.childCount).toBe(2)
+  })
+
+  it('does not delete a list item that still has text', () => {
+    const doc = noteSchema.node('doc', null, [
+      ol(null, li(p('kept')), li(p('also'))),
+    ])
+    let pos = 1
+    doc.descendants((node, p) => {
+      if (node.type.name === 'paragraph' && node.textContent === 'kept') pos = p + 1
+    })
+    const editor = liveEditor(doc, pos)
+    expect(deleteEmptyListItem(editor)).toBe(false)
+    expect(paragraphsOf(editor.state.doc)).toEqual(['kept', 'also'])
   })
 })

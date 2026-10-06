@@ -7,7 +7,13 @@
  *
  * Quotes inside a list: Shift+Tab / Enter on an empty quoted line lifts out of
  * the quote first so the numbered cycle continues instead of starting a new 1.
+ *
+ * Backspace on an empty sub-indent deletes that list item (or the whole nested
+ * list when it was the only child) instead of TipTap's default lift, which
+ * promotes a blank line between A. and B.
  */
+
+import { TextSelection } from '@tiptap/pm/state'
 
 const ORDERED_TYPES = [null, 'a', 'i']
 
@@ -80,6 +86,111 @@ export function isEmptyTextblockSelection(editor) {
   if (!selection?.empty) return false
   const parent = selection.$from?.parent
   return Boolean(parent?.isTextblock && parent.content.size === 0)
+}
+
+/** List item with no visible text (blank 3. under A. is the usual case). */
+export function isEmptyListItemNode(node) {
+  if (!node || node.type?.name !== 'listItem') return false
+  return !String(node.textContent || '').trim()
+}
+
+function endOfLastTextblock(doc, nodePos, node) {
+  let best = null
+  node.descendants((child, rel) => {
+    if (child.isTextblock) {
+      const abs = nodePos + 1 + rel
+      best = abs + child.content.size
+    }
+  })
+  if (best != null) return best
+  return nodePos + node.nodeSize - 1
+}
+
+/**
+ * Backspace on an empty list line deletes that sub-indent only.
+ * TipTap's default lifts the blank item into the outer A./B. sequence.
+ */
+export function deleteEmptyListItem(editor) {
+  if (!editor || editor.isDestroyed) return false
+  const { state } = editor
+  const selection = state?.selection
+  if (!selection?.empty) return false
+
+  const $from = selection.$from
+  if (!$from?.parent?.isTextblock) return false
+
+  let itemDepth = null
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    if ($from.node(depth).type.name === 'listItem') {
+      itemDepth = depth
+      break
+    }
+  }
+  if (itemDepth == null) return false
+
+  const itemNode = $from.node(itemDepth)
+  if (!isEmptyListItemNode(itemNode)) return false
+
+  const listDepth = itemDepth - 1
+  if (listDepth < 1) return false
+  const listNode = $from.node(listDepth)
+  if (listNode.type.name !== 'orderedList' && listNode.type.name !== 'bulletList') {
+    return false
+  }
+
+  const itemPos = $from.before(itemDepth)
+  const indexInList = $from.index(listDepth)
+
+  return editor
+    .chain()
+    .focus()
+    .command(({ tr, dispatch }) => {
+      let deleteFrom
+      let deleteTo
+      let preferPos = null
+
+      if (listNode.childCount === 1) {
+        // Blank sole child of a nest: drop the whole nested list (keep A./B.).
+        deleteFrom = $from.before(listDepth)
+        deleteTo = deleteFrom + listNode.nodeSize
+        const parentDepth = listDepth - 1
+        if (parentDepth >= 0) {
+          const parent = $from.node(parentDepth)
+          const listIndex = $from.index(parentDepth)
+          if (listIndex > 0) {
+            const prev = parent.child(listIndex - 1)
+            const prevPos = deleteFrom - prev.nodeSize
+            preferPos = endOfLastTextblock(tr.doc, prevPos, prev)
+          }
+        }
+      } else {
+        deleteFrom = itemPos
+        deleteTo = itemPos + itemNode.nodeSize
+        if (indexInList > 0) {
+          const prev = listNode.child(indexInList - 1)
+          const prevPos = itemPos - prev.nodeSize
+          preferPos = endOfLastTextblock(tr.doc, prevPos, prev)
+        }
+      }
+
+      tr.delete(deleteFrom, deleteTo)
+
+      try {
+        if (preferPos != null) {
+          const mapped = tr.mapping.map(preferPos, -1)
+          tr.setSelection(TextSelection.near(tr.doc.resolve(mapped), -1))
+        } else {
+          const mapped = tr.mapping.map(deleteFrom, 1)
+          tr.setSelection(TextSelection.near(tr.doc.resolve(mapped), 1))
+        }
+      } catch {
+        /* selection fallback: leave whatever delete left */
+      }
+
+      if (dispatch) dispatch(tr.scrollIntoView())
+      return true
+    })
+    .run()
 }
 
 /**
