@@ -58,6 +58,8 @@ export function getPinnedWorkspaceId() {
  * blocked). Callers treat null as "no sync" and keep working against IndexedDB.
  */
 export function getWorkspaceId() {
+  const sandbox = getSandboxWorkspaceId()
+  if (sandbox) return sandbox
   const pinned = getPinnedWorkspaceId()
   if (pinned) return pinned
 
@@ -98,5 +100,37 @@ export function setWorkspaceId(candidate) {
 }
 
 export function isWorkspacePinned() {
-  return Boolean(getPinnedWorkspaceId())
+  return Boolean(getPinnedWorkspaceId()) && !getSandboxWorkspaceId()
+}
+
+const SANDBOX_KEY = 'case-prep-workspace-sandbox'
+
+/**
+ * Preview / local builds only: `?workspace=<uuid>` points this origin at a
+ * different workspace (e.g. a copy made with the MCP copy_workspace tool) so a
+ * branch can be tested against real-shaped data without touching the pinned
+ * production workspace. `?workspace=clear` removes it.
+ *
+ * Disabled on the production host. Every localStorage cache in this app is
+ * global to the origin, so switching workspaces on the production origin would
+ * mix two workspaces' caches; preview hosts have their own origin.
+ */
+export function sandboxAllowed() {
+  if (import.meta.env.VITE_ALLOW_WORKSPACE_OVERRIDE === '1') return true
+  if (typeof location === 'undefined') return false
+  const host = location.hostname || ''
+  return host === 'localhost' || host === '127.0.0.1' || host.includes('-git-')
+}
+
+export function getSandboxWorkspaceId() {
+  if (!sandboxAllowed()) return null
+  try {
+    const param = new URLSearchParams(location.search).get('workspace')
+    if (param === 'clear') localStorage.removeItem(SANDBOX_KEY)
+    else if (param && UUID_PATTERN.test(param)) localStorage.setItem(SANDBOX_KEY, param)
+    const saved = localStorage.getItem(SANDBOX_KEY)
+    return saved && UUID_PATTERN.test(saved) ? saved : null
+  } catch {
+    return null
+  }
 }

@@ -122,6 +122,8 @@ function normalizeDraft(raw, side, index = 0) {
   // merge and restore Opening theme / 3.3 / 4.3.
   const seedVersion = Number(raw.seedVersion)
   if (Number.isFinite(seedVersion)) draft.seedVersion = seedVersion
+  // Free-form side notes for this draft (Arguments page scratch pane).
+  if (typeof raw.scratch === 'string') draft.scratch = raw.scratch
   if (Array.isArray(raw.removedOutlineIds)) {
     draft.removedOutlineIds = uniqueIds(raw.removedOutlineIds)
   }

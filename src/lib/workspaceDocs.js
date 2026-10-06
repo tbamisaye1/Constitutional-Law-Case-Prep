@@ -8,11 +8,8 @@
 
 import { readJson, writeJson } from './persist'
 import { SEED_FACTS } from '../data/factsSeed'
-import {
-  normalizeArgumentsBoard,
-  preferLocalArgumentDeletions,
-  removedOutlineIdsByDraft,
-} from './argumentsBoard'
+import { normalizeArgumentsBoard, removedOutlineIdsByDraft } from './argumentsBoard'
+import { boardContent, mergeArgumentsBoards } from './argumentsMerge'
 import { snapshotDocRevision } from './docRevisions'
 import { getWorkspaceId } from './workspace'
 
@@ -22,6 +19,33 @@ function serverOwnedWorkspace() {
 }
 
 export const DOC_ROW_ID = 'main'
+
+/**
+ * Last Arguments board this browser knows the server had: set on every pull
+ * that lands and on every acknowledged push. It is the "base" of the three-way
+ * merge, which is what lets a pull tell "this tab edited prong 1.2" apart from
+ * "this tab is holding an old copy of prong 1.2".
+ */
+export const ARGUMENTS_BASE_KEY = 'case-prep-arguments-base-v1'
+
+export function rememberArgumentsBase(row) {
+  if (!row || (!row.draftsBySide && !row.outlines)) return
+  writeJson(ARGUMENTS_BASE_KEY, boardContent(normalizeArgumentsBoard(row)))
+}
+
+export function readArgumentsBase() {
+  const raw = readJson(ARGUMENTS_BASE_KEY, null)
+  if (!raw || !raw.draftsBySide) return null
+  return normalizeArgumentsBoard(raw)
+}
+
+export function forgetArgumentsBase() {
+  try {
+    localStorage.removeItem(ARGUMENTS_BASE_KEY)
+  } catch {
+    /* ignore */
+  }
+}
 
 /**
  * True when localStorage holds a real arguments save, not "missing key".
@@ -120,15 +144,15 @@ export const WORKSPACE_DOCS = {
       }
       const remote = remoteOnly
       const local = normalizeArgumentsBoard(rawLocal)
-      // Prefer local outline shape when this browser already deleted seed prongs
-      // that a stale remote sync still carries (same draft id, fewer prongs).
-      const draftsBySide = preferLocalArgumentDeletions(
-        remote.draftsBySide,
-        local.draftsBySide
-      )
+      // Three-way merge against the last server board this browser saw. With
+      // no base (first run after this change, cleared storage) the server wins:
+      // never guess by note length, that is what pushed stale text back.
+      const base = readArgumentsBase()
+      const { board: merged } = mergeArgumentsBoards(base, local, remote)
       return {
         ...remote,
-        draftsBySide,
+        draftsBySide: merged.draftsBySide,
+        activeDraftBySide: merged.activeDraftBySide,
         activeSectionBySide: local.activeSectionBySide,
         activeFocusBySide: local.activeFocusBySide,
       }
@@ -310,6 +334,14 @@ export function saveWorkspaceDoc(kind, data, { immediate = false, sync = true } 
   }, SAVE_DEBOUNCE_MS)
 }
 
+/** Drop debounced editor saves without writing them (Reload from database). */
+export function discardWorkspaceDocSaves() {
+  for (const kind of Object.keys(pendingSaves)) {
+    globalThis.clearTimeout(saveTimers[kind])
+    delete pendingSaves[kind]
+  }
+}
+
 /** Flush any debounced editor saves (tab hide / tests). */
 export function flushWorkspaceDocSaves() {
   for (const kind of Object.keys(pendingSaves)) {
@@ -342,6 +374,8 @@ export function hydrateWorkspaceDocFromRemote(kind, row, { forceRemote = false }
   const data =
     kind === 'arguments' ? spec.fromRow(row, { forceRemote }) : spec.fromRow(row)
   if (!data) return false
+  // The pulled row is now the newest server state this browser has seen.
+  if (kind === 'arguments') rememberArgumentsBase(row)
   const local = spec.loadLocal()
   if (kind === 'arguments' && typeof publishers[kind] === 'function') {
     const remoteBoard = normalizeArgumentsBoard(row)

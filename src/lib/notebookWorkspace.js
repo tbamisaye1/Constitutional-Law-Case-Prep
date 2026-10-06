@@ -112,14 +112,20 @@ export function notebookSnapshotsEqual(a, b) {
  * sync meta. We merge with the dedicated local key so a smaller remote notebook
  * cannot erase sections that still have pages here (the Background wipe).
  */
-export function hydrateNotebookFromRemote(row) {
+/** Drop a debounced notebook save without writing it (Reload from database). */
+export function discardNotebookSnapshotSave() {
+  globalThis.clearTimeout(notebookSaveTimer)
+  pendingNotebookSave = null
+}
+
+export function hydrateNotebookFromRemote(row, { forceRemote = false } = {}) {
   if (!row?.tree || !row?.pagesBySection) return false
   const current = readJson(NOTEBOOK_STORAGE_KEY, null)
   if (notebookSnapshotsEqual(current, row)) return false
 
   const remote = { tree: row.tree, pagesBySection: row.pagesBySection }
   const merged =
-    current?.tree && current?.pagesBySection
+    !forceRemote && current?.tree && current?.pagesBySection
       ? mergeNotebookSnapshots(remote, current)
       : remote
 

@@ -94,6 +94,30 @@ export function SyncBanner({
     }
   }
 
+  async function reloadFromDb() {
+    if (busy || sync.status === 'off') return
+    if (sync.pending > 0) {
+      const ok = window.confirm(
+        `${sync.pending === 1 ? '1 change on this device has' : `${sync.pending} changes on this device have`} not reached the database yet.\n\nReload from database discards ${sync.pending === 1 ? 'it' : 'them'} and shows exactly what Postgres holds. Continue?`
+      )
+      if (!ok) return
+    }
+    setBusy(true)
+    setNote('')
+    try {
+      const result = await lib.reloadFromDatabase()
+      setNote(
+        result.ok
+          ? `Reloaded from the database at ${clock(Date.now())}. This device now matches Postgres.`
+          : 'Could not reach the database. Nothing on this device was changed.'
+      )
+    } catch (error) {
+      setNote(error?.message || 'Reload failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function downloadLatest() {
     if (busy || sync.status === 'off') return
     setBusy(true)
@@ -156,6 +180,15 @@ export function SyncBanner({
           ) : null}
           {sync.workspaceId && sync.status !== 'off' ? (
             <>
+              <button
+                type="button"
+                className="anno-jump"
+                disabled={busy}
+                onClick={reloadFromDb}
+                title="Discard this device's copy and show exactly what the database holds"
+              >
+                Reload from database
+              </button>
               <button type="button" className="anno-jump" disabled={busy} onClick={backupNow}>
                 {busy ? 'Backing up…' : 'Backup now'}
               </button>

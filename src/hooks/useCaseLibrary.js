@@ -31,6 +31,7 @@ import {
   pendingCount,
 } from '../lib/sync'
 import { getWorkspaceId } from '../lib/workspace'
+import { suppressEditorFlush } from '../lib/editorFlush'
 import {
   hydrateNotebookFromRemote,
   notebookRowsForLibraryLoad,
@@ -38,13 +39,17 @@ import {
   notebookSnapshotsEqual,
   NOTEBOOK_ROW_ID,
   flushNotebookSnapshotSave,
+  discardNotebookSnapshotSave,
   registerNotebookSyncPublisher,
 } from '../lib/notebookWorkspace'
 import {
   allWorkspaceDocKinds,
   DOC_ROW_ID,
   flushWorkspaceDocSaves,
+  discardWorkspaceDocSaves,
   hydrateWorkspaceDocFromRemote,
+  forgetArgumentsBase,
+  rememberArgumentsBase,
   registerWorkspaceDocPublisher,
   WORKSPACE_DOCS,
   workspaceDocRowsFromLocal,
@@ -488,6 +493,9 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
       // send Arguments, so they cannot refresh this timestamp.
       if (!stillDirty && (wroteLibrary || pulledArgs)) {
         argumentsAckedAt = Date.now()
+        // The server now holds this board (or a newer one we just pulled):
+        // it becomes the base for the next three-way merge.
+        rememberArgumentsBase(applied.store.argumentsBoard?.[0])
       }
     } else if (
       (response.changes?.library_records || []).some(
@@ -658,6 +666,14 @@ function markWorkspaceReady() {
   emit()
 }
 
+/** Meta keys of the single-row docs Postgres owns (Arguments, notebook, …). */
+function isWorkspaceDocMetaKey(key) {
+  if (key === metaKey('library_records', 'notebook', NOTEBOOK_ROW_ID)) return true
+  return allWorkspaceDocKinds().some(
+    (kind) => key === metaKey('library_records', WORKSPACE_DOCS[kind].kind, DOC_ROW_ID)
+  )
+}
+
 /**
  * First sync after a page load: read the workspace, then offer local rows.
  *
@@ -683,8 +699,18 @@ async function bootstrapSync() {
   try {
     // Drop any queued uploads before the first pull. Seed / stale cache must
     // not race Postgres on a fresh tab, cookie clear, or hard refresh.
+    // Also forget this browser's version stamps for the synced docs. A local
+    // edit stamps Date.now(), which is newer than the server row, so without
+    // this the boot pull skipped the server board and "forceRemote" hydrated
+    // the stale local mirror instead (browser showed text Postgres no longer had).
+    const bootMeta = memory.store.syncMeta || emptySyncMeta()
+    const bootRows = { ...(bootMeta.rows || {}) }
+    for (const key of Object.keys(bootRows)) {
+      if (isWorkspaceDocMetaKey(key)) delete bootRows[key]
+    }
     setSyncMeta({
-      ...(memory.store.syncMeta || emptySyncMeta()),
+      ...bootMeta,
+      rows: bootRows,
       dirty: {},
       cursor: 0,
     })
@@ -722,6 +748,51 @@ async function bootstrapSync() {
   } finally {
     bootstrapInFlight = false
   }
+}
+
+/** Fired after Reload from database so open editors remount on fresh content. */
+export const RELOADED_FROM_DATABASE_EVENT = 'case-prep-reloaded-from-db'
+
+/**
+ * Throw away this browser's copy of every synced doc and take Postgres as-is.
+ *
+ * For "this browser shows something different from the database": unsynced
+ * local edits are dropped (each doc's previous local copy is still kept in its
+ * revision history), the merge base is reset, and every editor remounts.
+ *
+ * @returns {Promise<{ok: boolean, dropped: number}>}
+ */
+export async function reloadFromDatabase() {
+  if (memory.syncStatus === 'off') return { ok: false, dropped: 0 }
+  // Let an in-flight exchange land first so its echo cannot overwrite the reload.
+  for (let i = 0; syncInFlight && i < 100; i += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 100))
+  }
+  window.clearTimeout(syncTimer)
+  const dropped = pendingCount(memory.store.syncMeta)
+  discardWorkspaceDocSaves()
+  discardNotebookSnapshotSave()
+  forgetArgumentsBase()
+  // rows: {} makes every pulled row "newer" than what this browser holds.
+  setSyncMeta({ ...emptySyncMeta() })
+  const ok = await exchange({}, {})
+  if (!ok) return { ok: false, dropped }
+  for (const kind of allWorkspaceDocKinds()) {
+    const spec = WORKSPACE_DOCS[kind]
+    const row = memory.store[spec.collection]?.[0]
+    if (row) hydrateWorkspaceDocFromRemote(kind, row, { forceRemote: true })
+  }
+  const notebookRow = memory.store.notebook?.[0]
+  if (notebookRow) hydrateNotebookFromRemote(notebookRow, { forceRemote: true })
+  setSyncMeta({ ...(memory.store.syncMeta || emptySyncMeta()), dirty: {} })
+  // Unmounting editors must not flush their stale documents back.
+  suppressEditorFlush()
+  try {
+    window.dispatchEvent(new CustomEvent(RELOADED_FROM_DATABASE_EVENT))
+  } catch {
+    /* tests */
+  }
+  return { ok: true, dropped }
 }
 
 /** Manual retry from the boot screen when the first pull failed. */
@@ -2011,6 +2082,7 @@ export function useCaseLibrary() {
       return runSync({ forcePull: true })
     },
     retryWorkspaceBootstrap,
+    reloadFromDatabase,
     recoverFromServer: () => {
       try {
         localStorage.removeItem(RECOVER_NOTES_FLAG)
