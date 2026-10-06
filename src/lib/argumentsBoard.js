@@ -146,52 +146,139 @@ export function preferStoredNotes(storedNotes, freshNotes) {
 }
 
 /**
- * Upgrade a seeded ladder without wiping titles/notes the user already changed.
- * New sections and prongs from the seed still appear; matching ids keep local
- * wording when it diverges from the new seed.
+ * Upgrade a seeded ladder without wiping titles/notes the user already changed,
+ * and without resurrecting sections/prongs the user deleted.
+ *
+ * Older merge walked the seed and re-inserted every seed prong (2.3 / 3.3 kept
+ * coming back after trash). Stored outline wins for structure. Seed only fills
+ * empty notes and can append brand-new section ids the stored draft never had.
  */
 export function mergeLadderSeedDraft(stored, fresh) {
   if (!stored || typeof stored !== 'object') return fresh
-  const storedSections = Object.fromEntries(
-    (stored.sections || []).map((section) => [section.id, section])
+  const storedSectionsList = Array.isArray(stored.sections) ? stored.sections : []
+  // Corrupt / wiped board: take the full seed rather than locking in emptiness.
+  if (!storedSectionsList.length) {
+    return {
+      ...fresh,
+      name: stored.name || fresh.name,
+      notes: preferStoredNotes(stored.notes, fresh.notes),
+    }
+  }
+
+  const freshSections = Object.fromEntries(
+    (fresh.sections || []).map((section) => [section.id, section])
   )
-  const sections = (fresh.sections || []).map((freshSection) => {
-    const storedSection = storedSections[freshSection.id]
-    if (!storedSection) return freshSection
-    const storedProngs = Object.fromEntries(
-      (storedSection.prongs || []).map((prong) => [prong.id, prong])
+
+  const sections = storedSectionsList.map((storedSection) => {
+    const freshSection = freshSections[storedSection.id]
+    if (!freshSection) return storedSection
+    const freshProngs = Object.fromEntries(
+      (freshSection.prongs || []).map((prong) => [prong.id, prong])
     )
     return {
-      ...freshSection,
+      ...storedSection,
       title:
         typeof storedSection.title === 'string' &&
         storedSection.title.trim() &&
         storedSection.title !== freshSection.title
           ? storedSection.title
-          : freshSection.title,
+          : freshSection.title || storedSection.title,
       notes: preferStoredNotes(storedSection.notes, freshSection.notes),
-      prongs: (freshSection.prongs || []).map((freshProng) => {
-        const storedProng = storedProngs[freshProng.id]
-        if (!storedProng) return freshProng
+      // Only prongs still on the board. Missing seed prongs stay deleted.
+      prongs: (storedSection.prongs || []).map((storedProng) => {
+        const freshProng = freshProngs[storedProng.id]
+        if (!freshProng) return storedProng
         return {
-          ...freshProng,
+          ...storedProng,
           title:
             typeof storedProng.title === 'string' &&
             storedProng.title.trim() &&
             storedProng.title !== freshProng.title
               ? storedProng.title
-              : freshProng.title,
+              : freshProng.title || storedProng.title,
           notes: preferStoredNotes(storedProng.notes, freshProng.notes),
         }
       }),
     }
   })
+
+  // Brand-new seed sections only (never re-add a section the user removed).
+  const storedSectionIds = new Set(storedSectionsList.map((section) => section.id))
+  for (const freshSection of fresh.sections || []) {
+    if (!storedSectionIds.has(freshSection.id)) sections.push(freshSection)
+  }
+
   return {
     ...fresh,
     name: stored.name || fresh.name,
     notes: preferStoredNotes(stored.notes, fresh.notes),
     sections,
   }
+}
+
+/**
+ * When a stale sync still has seed prongs this browser already deleted, keep
+ * the local outline for that draft (same id, fewer prongs/sections).
+ */
+export function preferLocalArgumentDeletions(remoteDraftsBySide, localDraftsBySide) {
+  if (!remoteDraftsBySide || !localDraftsBySide) return remoteDraftsBySide
+  const next = { ...remoteDraftsBySide }
+  for (const side of ['petitioner', 'respondent']) {
+    const remoteList = Array.isArray(remoteDraftsBySide[side]) ? remoteDraftsBySide[side] : []
+    const localList = Array.isArray(localDraftsBySide[side]) ? localDraftsBySide[side] : []
+    if (!localList.length) {
+      next[side] = remoteList
+      continue
+    }
+    const localById = Object.fromEntries(localList.map((d) => [d.id, d]))
+    next[side] = remoteList.map((remoteDraft) => {
+      const localDraft = localById[remoteDraft.id]
+      if (!localDraft) return remoteDraft
+      const remoteCount = countOutlineNodes(remoteDraft)
+      const localCount = countOutlineNodes(localDraft)
+      // Local is a strict subset (deletions) — keep local structure, prefer its notes.
+      if (localCount < remoteCount && outlineIsSubset(localDraft, remoteDraft)) {
+        return {
+          ...remoteDraft,
+          name: localDraft.name || remoteDraft.name,
+          notes: preferStoredNotes(localDraft.notes, remoteDraft.notes),
+          sections: localDraft.sections,
+          seedVersion: Math.max(
+            Number(localDraft.seedVersion) || 0,
+            Number(remoteDraft.seedVersion) || 0
+          ),
+        }
+      }
+      return remoteDraft
+    })
+    // Keep local-only drafts the remote never saw.
+    for (const localDraft of localList) {
+      if (!remoteList.some((d) => d.id === localDraft.id)) {
+        next[side] = [...next[side], localDraft]
+      }
+    }
+  }
+  return next
+}
+
+function countOutlineNodes(draft) {
+  const sections = draft?.sections || []
+  return sections.reduce((n, s) => n + 1 + (s.prongs || []).length, 0)
+}
+
+function outlineIsSubset(localDraft, remoteDraft) {
+  const remoteSections = Object.fromEntries(
+    (remoteDraft.sections || []).map((s) => [s.id, s])
+  )
+  for (const section of localDraft.sections || []) {
+    const remoteSection = remoteSections[section.id]
+    if (!remoteSection) return false
+    const remoteProngIds = new Set((remoteSection.prongs || []).map((p) => p.id))
+    for (const prong of section.prongs || []) {
+      if (!remoteProngIds.has(prong.id)) return false
+    }
+  }
+  return true
 }
 
 /**

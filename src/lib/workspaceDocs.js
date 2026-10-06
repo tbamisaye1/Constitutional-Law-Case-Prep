@@ -8,7 +8,10 @@
 
 import { readJson, writeJson } from './persist'
 import { SEED_FACTS } from '../data/factsSeed'
-import { normalizeArgumentsBoard } from './argumentsBoard'
+import {
+  normalizeArgumentsBoard,
+  preferLocalArgumentDeletions,
+} from './argumentsBoard'
 import { snapshotDocRevision } from './docRevisions'
 
 export const DOC_ROW_ID = 'main'
@@ -77,9 +80,15 @@ export const WORKSPACE_DOCS = {
       if (!row.draftsBySide && !row.outlines) return null
       const remote = normalizeArgumentsBoard(row)
       const local = normalizeArgumentsBoard(readJson(this.storageKey, null))
-      // Remote drafts/notes win; which section/prong is open stays on this device.
+      // Prefer local outline shape when this browser already deleted seed prongs
+      // that a stale remote sync still carries (same draft id, fewer prongs).
+      const draftsBySide = preferLocalArgumentDeletions(
+        remote.draftsBySide,
+        local.draftsBySide
+      )
       return {
         ...remote,
+        draftsBySide,
         activeSectionBySide: local.activeSectionBySide,
         activeFocusBySide: local.activeFocusBySide,
       }
@@ -207,6 +216,15 @@ export function hydrateWorkspaceDocFromRemote(kind, row) {
     window.dispatchEvent(new CustomEvent(spec.event, { detail: data }))
   } catch {
     /* tests */
+  }
+  // If we kept local deletions the remote still had, push the trimmed board
+  // so Postgres (and other devices) stop resurrecting those prongs.
+  if (
+    kind === 'arguments' &&
+    typeof publishers[kind] === 'function' &&
+    !spec.same(data, normalizeArgumentsBoard(row))
+  ) {
+    publishers[kind](data)
   }
   return true
 }

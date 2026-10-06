@@ -127,6 +127,27 @@ describe('normalizeArgumentsBoard', () => {
     expect(kept.notes).toContain('my rewritten Youngstown prong')
   })
 
+  it('does not resurrect seed prongs the user deleted when the seed version bumps', () => {
+    const board = normalizeArgumentsBoard(null)
+    const ladder = board.draftsBySide.petitioner.find(
+      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
+    )
+    const section1 = ladder.sections.find((s) => s.id === 'c3-s1')
+    const section2 = ladder.sections.find((s) => s.id === 'c3-s2')
+    section1.prongs = section1.prongs.filter((p) => p.id !== 'c3-s1-c')
+    section2.prongs = section2.prongs.filter((p) => p.id !== 'c3-s2-c')
+    ladder.seedVersion = 0
+
+    const refreshed = normalizeArgumentsBoard(board)
+    const next = refreshed.draftsBySide.petitioner.find(
+      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
+    )
+    const prongIds = next.sections.flatMap((s) => (s.prongs || []).map((p) => p.id))
+    expect(prongIds).not.toContain('c3-s1-c')
+    expect(prongIds).not.toContain('c3-s2-c')
+    expect(next.seedVersion).toBe(CATEGORY3_LADDER_SEED_VERSION)
+  })
+
   it('keeps a ladder draft that is already on the current seed version', () => {
     const board = normalizeArgumentsBoard(null)
     const ladder = board.draftsBySide.petitioner.find(

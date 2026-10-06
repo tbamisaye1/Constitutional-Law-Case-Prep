@@ -199,6 +199,33 @@ let memory = {
 // or quota failure. Push that snapshot instead of letting sync hydrate wipe it.
 markStaleNotebookMirrorDirty(parsedLibraryForBoot)
 
+function markStaleArgumentsMirrorDirty(parsed) {
+  if (!WORKSPACE_ID) return
+  if (!parsed || typeof parsed !== 'object') return
+  const mirrored = Array.isArray(parsed.argumentsBoard) ? parsed.argumentsBoard[0] : null
+  const dedicated = workspaceDocRowsFromLocal('arguments')[0]
+  if (!dedicated?.draftsBySide) return
+  const strip = (row) =>
+    row
+      ? {
+          draftsBySide: row.draftsBySide,
+          activeDraftBySide: row.activeDraftBySide,
+        }
+      : null
+  if (JSON.stringify(strip(mirrored)) === JSON.stringify(strip(dedicated))) return
+  const key = metaKey('library_records', 'arguments', DOC_ROW_ID)
+  memory = {
+    ...memory,
+    store: {
+      ...memory.store,
+      argumentsBoard: [dedicated],
+      syncMeta: markDirty(memory.store.syncMeta, [key], Date.now()),
+    },
+  }
+}
+
+markStaleArgumentsMirrorDirty(parsedLibraryForBoot)
+
 /**
  * Editors call this (via notebookWorkspace) whenever the OneNote notebook changes.
  * Mirrors the snapshot into the sync store and schedules a Postgres push.
