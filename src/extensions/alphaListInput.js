@@ -80,8 +80,8 @@ function createLetterListRule({ find, upper }) {
 }
 
 /**
- * Typing "1. " inside a bullet list should flip that level to numbered,
- * not leave "1." as text under a dot.
+ * Typing "1. " flips only the current indent level to numbered.
+ * The parent A./B./C. list is left alone (nearest wrapping list only).
  */
 function createDecimalOverrideRule() {
   return new InputRule({
@@ -93,13 +93,11 @@ function createDecimalOverrideRule() {
       const wrapping = findWrappingList(state.doc.resolve(range.from))
       // Outside a list, StarterKit's own 1. rule handles wrapping.
       if (!wrapping) return null
-      // Already a plain numbered list continuing correctly — let default join work.
-      if (
+
+      const alreadyDecimal =
         wrapping.node.type === orderedList &&
         (!wrapping.node.attrs.type || wrapping.node.attrs.type === '1')
-      ) {
-        return null
-      }
+      if (alreadyDecimal) return null
 
       const tr = state.tr
       tr.delete(range.from, range.to)

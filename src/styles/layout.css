@@ -1451,7 +1451,11 @@
   list-style-position: outside;
 }
 
-/* Nested markers so Tab nesting reads as 1. → a. → i. without typing labels. */
+/*
+ * List markers: the HTML type attribute always wins. Do not force nested
+ * ol → lower-alpha by depth — that made "1." under an A. list still paint as
+ * "a." and left typed "1." as plain text beside it.
+ */
 .note-prose ul {
   list-style-type: disc;
 }
@@ -1465,18 +1469,6 @@
 }
 
 .note-prose ol {
-  list-style-type: decimal;
-}
-
-.note-prose ol ol {
-  list-style-type: lower-alpha;
-}
-
-.note-prose ol ol ol {
-  list-style-type: lower-roman;
-}
-
-.note-prose ol ol ol ol {
   list-style-type: decimal;
 }
 

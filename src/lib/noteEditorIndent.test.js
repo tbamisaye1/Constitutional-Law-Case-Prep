@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   indentSelection,
+  nestedAttrsForParent,
   outdentSelection,
   toggleOrCycleOrderedList,
 } from './noteEditorIndent'
@@ -91,6 +92,30 @@ describe('outdentSelection', () => {
     const editor = mockEditor({ canLift: false, outdentOk: true })
     expect(outdentSelection(editor)).toBe(true)
     expect(editor._chain.outdentBlocks).toHaveBeenCalled()
+  })
+})
+
+describe('nestedAttrsForParent', () => {
+  it('puts numbers under an A./a. parent so the outer alphabet keeps going', () => {
+    expect(
+      nestedAttrsForParent({ type: { name: 'orderedList' }, attrs: { type: 'A' } })
+    ).toEqual({ type: null, start: 1 })
+    expect(
+      nestedAttrsForParent({ type: { name: 'orderedList' }, attrs: { type: 'a' } })
+    ).toEqual({ type: null, start: 1 })
+  })
+
+  it('puts letters under a numbered parent', () => {
+    expect(
+      nestedAttrsForParent({ type: { name: 'orderedList' }, attrs: { type: null } })
+    ).toEqual({ type: 'a', start: 1 })
+  })
+
+  it('puts numbers under a bullet parent', () => {
+    expect(nestedAttrsForParent({ type: { name: 'bulletList' }, attrs: {} })).toEqual({
+      type: null,
+      start: 1,
+    })
   })
 })
 
