@@ -1513,6 +1513,15 @@
   color: var(--ink-2);
 }
 
+/* Quotes nested under a bullet / 1. / a. keep the list marker and indent. */
+.note-prose li > blockquote {
+  margin: 0.35em 0;
+}
+
+.note-prose li > blockquote > p {
+  margin: 0;
+}
+
 .note-prose p.is-editor-empty:first-child::before {
   color: var(--ink-3);
   content: attr(data-placeholder);

@@ -16,6 +16,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { AlphaListInput } from '../extensions/alphaListInput'
 import { BlockIndent } from '../extensions/blockIndent'
+import { ListItemWithBlocks } from '../extensions/listItemWithBlocks'
 import {
   indentSelection,
   outdentSelection,
@@ -43,7 +44,11 @@ export function NoteEditor({ html, onChange, editable = true }) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        // Replace default listItem so quotes can wrap a line inside an indent.
+        listItem: false,
+      }),
+      ListItemWithBlocks,
       BlockIndent,
       AlphaListInput,
       Placeholder.configure({
