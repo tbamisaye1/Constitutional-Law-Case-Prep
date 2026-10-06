@@ -584,6 +584,7 @@ function ArgsBoard({
               <span className="mono args-notes-label">{args.focusLabel}</span>
             )}
             <div className="args-notes-head-actions">
+              {expanded ? <ExpandPieceStepper args={args} /> : null}
               {!expanded ? (
                 <button
                   type="button"
@@ -624,8 +625,8 @@ function ArgsBoard({
               : args.focus?.type === 'side'
                 ? 'Scratch for the whole draft: citations, reminders, why this structure exists.'
                 : args.focus?.type === 'section'
-                  ? 'Scratch for this section only. Click another row on the left to switch pieces.'
-                  : 'Scratch for this prong only. Citations and logic for later-you live here.'}
+                  ? 'Scratch for this section only. Switch pieces on the right, or use the arrows next to Exit.'
+                  : 'Scratch for this prong only. Switch pieces on the right, or use the arrows next to Exit.'}
           </p>
           {!expanded && !isJoined ? (
             <ScratchJumpList
@@ -646,7 +647,117 @@ function ArgsBoard({
           )}
         </div>
       ) : null}
+
+      {expanded ? <ArgsExpandNav args={args} /> : null}
     </div>
+  )
+}
+
+function pieceNavItems(args) {
+  const items = [
+    {
+      key: 'joined',
+      kind: 'joined',
+      label: 'Full argument (joined)',
+      indent: false,
+      active: args.focus?.type === 'joined',
+      onSelect: args.focusJoinedArgument,
+    },
+    {
+      key: 'whole',
+      kind: 'side',
+      label: 'Whole draft',
+      indent: false,
+      active: args.focus?.type === 'side',
+      onSelect: args.focusWholeArgument,
+    },
+  ]
+  ;(args.sections || []).forEach((section, sectionIdx) => {
+    items.push({
+      key: `s-${section.id}`,
+      kind: 'section',
+      label: `${sectionIdx + 1}. ${section.title || 'Section'}`,
+      indent: false,
+      active: args.focus?.type === 'section' && args.focus.sectionId === section.id,
+      onSelect: () => args.selectSection(section.id),
+    })
+    ;(section.prongs || []).forEach((prong, prongIdx) => {
+      items.push({
+        key: `p-${prong.id}`,
+        kind: 'prong',
+        label: `${sectionIdx + 1}.${prongIdx + 1} ${prong.title || 'Prong'}`,
+        indent: true,
+        active: args.focus?.type === 'prong' && args.focus.prongId === prong.id,
+        onSelect: () => args.selectProng(section.id, prong.id),
+      })
+    })
+  })
+  return items
+}
+
+function ExpandPieceStepper({ args }) {
+  const items = pieceNavItems(args).filter((item) => item.kind !== 'joined')
+  const index = Math.max(
+    0,
+    items.findIndex((item) => item.active)
+  )
+  const prev = items[index - 1]
+  const next = items[index + 1]
+  return (
+    <div className="args-expand-stepper">
+      <button
+        type="button"
+        className="icon-btn soft"
+        aria-label="Previous piece"
+        title="Previous section or prong"
+        disabled={!prev}
+        onClick={() => prev?.onSelect()}
+      >
+        <ChevronUp size={15} />
+      </button>
+      <button
+        type="button"
+        className="icon-btn soft"
+        aria-label="Next piece"
+        title="Next section or prong"
+        disabled={!next}
+        onClick={() => next?.onSelect()}
+      >
+        <ChevronDown size={15} />
+      </button>
+    </div>
+  )
+}
+
+function ArgsExpandNav({ args }) {
+  const items = pieceNavItems(args)
+  const activeRef = useRef(null)
+
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [args.focus?.type, args.focus?.sectionId, args.focus?.prongId])
+
+  return (
+    <nav className="args-expand-nav" aria-label="Switch section or prong">
+      <div className="mono args-expand-nav-label">Pieces</div>
+      {items.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          ref={item.active ? activeRef : null}
+          className={[
+            'args-expand-nav-item',
+            item.active ? 'on' : '',
+            item.indent ? 'is-prong' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          onClick={item.onSelect}
+        >
+          {item.label}
+        </button>
+      ))}
+    </nav>
   )
 }
 
