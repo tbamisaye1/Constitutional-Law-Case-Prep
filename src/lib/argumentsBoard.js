@@ -132,10 +132,71 @@ function normalizeDraft(raw, side, index = 0) {
 }
 
 /**
+ * Prefer the stored note body when the user (or an older seed they edited)
+ * already has real content that differs from the new seed. Empty stored notes
+ * take the fresh seed text.
+ */
+export function preferStoredNotes(storedNotes, freshNotes) {
+  const stored = typeof storedNotes === 'string' ? storedNotes : ''
+  const fresh = typeof freshNotes === 'string' ? freshNotes : ''
+  if (!stored.trim()) return fresh
+  if (stored === fresh) return fresh
+  return stored
+}
+
+/**
+ * Upgrade a seeded ladder without wiping titles/notes the user already changed.
+ * New sections and prongs from the seed still appear; matching ids keep local
+ * wording when it diverges from the new seed.
+ */
+export function mergeLadderSeedDraft(stored, fresh) {
+  if (!stored || typeof stored !== 'object') return fresh
+  const storedSections = Object.fromEntries(
+    (stored.sections || []).map((section) => [section.id, section])
+  )
+  const sections = (fresh.sections || []).map((freshSection) => {
+    const storedSection = storedSections[freshSection.id]
+    if (!storedSection) return freshSection
+    const storedProngs = Object.fromEntries(
+      (storedSection.prongs || []).map((prong) => [prong.id, prong])
+    )
+    return {
+      ...freshSection,
+      title:
+        typeof storedSection.title === 'string' &&
+        storedSection.title.trim() &&
+        storedSection.title !== freshSection.title
+          ? storedSection.title
+          : freshSection.title,
+      notes: preferStoredNotes(storedSection.notes, freshSection.notes),
+      prongs: (freshSection.prongs || []).map((freshProng) => {
+        const storedProng = storedProngs[freshProng.id]
+        if (!storedProng) return freshProng
+        return {
+          ...freshProng,
+          title:
+            typeof storedProng.title === 'string' &&
+            storedProng.title.trim() &&
+            storedProng.title !== freshProng.title
+              ? storedProng.title
+              : freshProng.title,
+          notes: preferStoredNotes(storedProng.notes, freshProng.notes),
+        }
+      }),
+    }
+  })
+  return {
+    ...fresh,
+    name: stored.name || fresh.name,
+    notes: preferStoredNotes(stored.notes, fresh.notes),
+    sections,
+  }
+}
+
+/**
  * Append the seeded Category 3 ladder draft when it is missing, and refresh it
- * when the stored copy predates the current seed text. The refresh exists
- * because the first seeded version was written in shorthand that was hard to
- * read without the guide open, so stored copies need the clearer rewrite.
+ * when the stored copy predates the current seed text. Matching prong/section
+ * notes the user already edited are kept (see mergeLadderSeedDraft).
  */
 function withCategory3Ladder(petitionerDrafts) {
   const index = petitionerDrafts.findIndex((d) => d.id === CATEGORY3_LADDER_DRAFT_ID)
@@ -144,7 +205,7 @@ function withCategory3Ladder(petitionerDrafts) {
   const storedVersion = Number.isFinite(stored.seedVersion) ? stored.seedVersion : 0
   if (storedVersion >= CATEGORY3_LADDER_SEED_VERSION) return petitionerDrafts
   const next = [...petitionerDrafts]
-  next[index] = { ...buildCategory3LadderDraft(), name: stored.name }
+  next[index] = mergeLadderSeedDraft(stored, buildCategory3LadderDraft())
   return next
 }
 

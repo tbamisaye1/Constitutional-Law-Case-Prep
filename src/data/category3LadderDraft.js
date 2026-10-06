@@ -11,7 +11,7 @@
  */
 
 export const CATEGORY3_LADDER_DRAFT_ID = 'alt-q2-ladder'
-export const CATEGORY3_LADDER_SEED_VERSION = 4
+export const CATEGORY3_LADDER_SEED_VERSION = 5
 
 export function buildCategory3LadderDraft() {
   return {
@@ -74,35 +74,16 @@ export function buildCategory3LadderDraft() {
           '<p>=&gt; Detention is plainly not beyond Congress\u2019s reach. It legislated on it in 2011 (NDAA) and again in 2025 (ATA).</p>',
         ].join(''),
         prongs: [
-          {
+                    {
             id: 'c3-s1-a',
-            title: 'a. Under Youngstown, President falls into lowest ebb',
+            title: 'a. Jackson\u2019s method, not just his labels',
             notes: [
-              '<h2>Walk the three steps he walked</h2>',
-              '<ol>',
-              '<li>Category 1 out: the government conceded Congress never authorized the seizure</li>',
-              '<li>Category 2 out: Congress had not "left seizure of private property an open field". It had enacted three labour-emergency mechanisms and Truman used none',
-              '<ul><li><strong>The quote to use:</strong> in "choosing a different and inconsistent way of his own", the President "cannot claim that it is necessitated or invited by failure of Congress to legislate"</li></ul></li>',
-              '<li>=&gt; Category 3, and the seizure failed</li>',
-              '</ol>',
-              '<p>Do the same three steps with our statutes. Then the category is a conclusion we earned, not a label we asserted.</p>',
-              '<h2>Three Jackson passages that do work here</h2>',
-              '<ul>',
-              '<li><strong>Force turned inward.</strong> "Widest latitude" for command of national force "turned against the outside world", no such indulgence when turned inward. Arrested at home, arraigned in federal court =&gt; inward</li>',
-              '<li><strong>Only delegated powers.</strong> The executive "possesses only delegated powers"; the Vesting Clause is not "a grant in bulk of all conceivable executive power". This answers the half of their case that cites no statute at all (R. 12)</li>',
-              '<li><strong>Commander in Chief</strong> = "cryptic words"; nothing "more sinister and alarming" than a President who could "vastly enlarge his mastery over the internal affairs of the country". No "monopoly of war powers"</li>',
-              '</ul>',
-              '<h2>Best quote in the record</h2>',
-              '<p>At the EO signing: inherent foreign affairs and war powers allow him to act "beyond any specific law or statutory framework" (R. 3\u20134).</p>',
-              '<p>=&gt; That is Category 3 described by the man claiming the power. He is not saying Congress authorized this.</p>',
-              '<h2>Kill "sole organ" before they say it</h2>',
-              '<ul>',
-              '<li>Majority relies on Curtiss-Wright, 299 U.S. 304 (1936): "sole organ", "plenary and exclusive" (R. 12)</li>',
-              '<li>Answer = Youngstown FN2 (Jackson), which addressed that case directly: it involved "not the question of the President\u2019s power to act without congressional authority, but the right to act under and in accord with an Act of Congress", and much of it was dictum</li>',
-              '<li>=&gt; the answer comes from inside the case they picked</li>',
-              '</ul>',
-              '<h2>What they say back</h2>',
-              '<p>The neutrality clauses (NDAA \u00a7\u00a7 1021(d), 1021(e); ATA \u00a7 4(c)) say nothing limits or expands existing presidential authority =&gt; Category 2 at worst. That is a real argument. It is why prong b exists.</p>',
+              "<h2>The claim in one sentence</h2><p>Where Congress has legislated in an area and declined to give the President the specific power he is claiming, he is acting at his lowest ebb, and the Court should scrutinise the claim with caution rather than presume it is valid.</p>",
+              "<h2>Argue Jackson’s method, not just his labels</h2><p>This is the part most people skip, and it is the part that beats the government’s Category 1 framing. Jackson did not simply announce a category. He worked through them in order, and you should do the same.</p><ul><li><strong>Step one.</strong> Category 1 did not apply, because the government conceded Congress had never authorized the steel seizure. All the broad statements about presidential power backed by Congress therefore could not help Truman.</li><li><strong>Step two.</strong> Category 2 did not apply either. Congress had not, in Jackson’s words, left seizure of private property an open field. It had enacted three separate statutory mechanisms for labour emergencies, and Truman used none of them. His line is the one to quote: in choosing a different and inconsistent way of his own, the President cannot claim that it is necessitated or invited by failure of Congress to legislate.</li><li><strong>Step three.</strong> That left Category 3, and the seizure could only survive if steel mill seizures were beyond Congress’s control, which they were not.</li></ul><p>Walk the Court through those same three steps with your statutes in place of Truman’s, and the category stops feeling like a label you are asserting and starts feeling like a conclusion you earned.</p>",
+              "<h2>Three Jackson passages that do real work here</h2><ul><li><strong>Force turned inward.</strong> Jackson said he would indulge the widest latitude of interpretation to support the President’s command of the instruments of national force when they are turned against the outside world, but that when that force is turned inward, it deserves no such indulgence. Bronner was arrested at his own house by civilian agents and arraigned in a federal court. This is force turned inward.</li><li><strong>Only delegated powers.</strong> He also said the executive branch, like the federal government as a whole, possesses only delegated powers, and he rejected reading the Vesting Clause as a grant in bulk of all conceivable executive power. This is your answer to the half of the government’s case that does not rely on any statute at all, which the Fourteenth Circuit took up at <strong>R. 12.</strong></li><li><strong>Commander in Chief.</strong> He called those words cryptic and said nothing would seem more sinister and alarming than a President who could vastly enlarge his mastery over the internal affairs of the country. He added that the President has no monopoly of war powers.</li></ul>",
+              "<h2>Your single best quote from the record</h2><p>At the signing ceremony for the executive order, the President said that in an evolving national security threat, inherent foreign affairs and war powers allow him to act beyond any specific law or statutory framework. <strong>R. 3 to 4.</strong></p><p>That sentence is Category 3 described by the person claiming the power. He is not saying Congress authorized this. He is saying he can act regardless of what Congress did.</p>",
+              "<h2>Kill the sole organ argument before they make it</h2><p>The Fourteenth Circuit majority relies on United States v. Curtiss-Wright Export Corp., 299 U.S. 304 (1936), for the phrase describing the President as the sole organ of the nation in foreign relations, and for the words plenary and exclusive. <strong>R. 12.</strong></p><p>Your answer is footnote 2 of Jackson’s Youngstown concurrence, which addressed that case directly. Curtiss-Wright involved not the question of the President’s power to act without congressional authority, but his right to act under and in accord with an Act of Congress, and much of the opinion was dictum, meaning language not necessary to the decision. The answer comes from inside the very case the government picked.</p>",
+              "<h2>What they will say back</h2><p>The government will point to the neutrality clauses, which are National Defense Authorization Act sections 1021(d) and 1021(e) and Anti-Terrorist Act section 4(c). Each says in substance that nothing in the provision limits or expands existing presidential authority. Their argument is that those clauses keep the field open, so this is Category 2 at worst, not Category 3.</p><p>Take that seriously, because it is a genuine argument and it is the reason the next prong exists.</p>",
             ].join(''),
           },
           {

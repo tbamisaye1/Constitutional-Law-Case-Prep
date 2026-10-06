@@ -85,12 +85,15 @@ describe('normalizeArgumentsBoard', () => {
     expect(ladderCount).toBe(1)
   })
 
-  it('replaces a seeded ladder draft saved before the current seed version', () => {
+  it('restores missing ladder structure on seed upgrade but keeps local note edits', () => {
     const stale = normalizeArgumentsBoard(null)
     const staleLadder = stale.draftsBySide.petitioner.find(
       (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
     )
     staleLadder.notes = '<p>old cryptic shorthand</p>'
+    const firstProng = staleLadder.sections[1].prongs[0]
+    firstProng.title = 'a. Jackson’s method, not just his labels'
+    firstProng.notes = '<p>my rewritten Youngstown prong</p>'
     staleLadder.sections = []
     delete staleLadder.seedVersion
 
@@ -99,8 +102,29 @@ describe('normalizeArgumentsBoard', () => {
       (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
     )
     expect(ladder.seedVersion).toBe(CATEGORY3_LADDER_SEED_VERSION)
-    expect(ladder.notes).not.toContain('old cryptic shorthand')
+    // Draft-level notes the user already had are not wiped by a seed bump.
+    expect(ladder.notes).toContain('old cryptic shorthand')
     expect(ladder.sections.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('keeps a rewritten prong when the seed version bumps', () => {
+    const stale = normalizeArgumentsBoard(null)
+    const staleLadder = stale.draftsBySide.petitioner.find(
+      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
+    )
+    const prong = staleLadder.sections.find((s) => s.id === 'c3-s1').prongs[0]
+    prong.title = 'a. Jackson’s method, not just his labels'
+    prong.notes = '<p>my rewritten Youngstown prong</p>'
+    staleLadder.seedVersion = 0
+
+    const refreshed = normalizeArgumentsBoard(stale)
+    const ladder = refreshed.draftsBySide.petitioner.find(
+      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
+    )
+    const kept = ladder.sections.find((s) => s.id === 'c3-s1').prongs[0]
+    expect(ladder.seedVersion).toBe(CATEGORY3_LADDER_SEED_VERSION)
+    expect(kept.title).toBe('a. Jackson’s method, not just his labels')
+    expect(kept.notes).toContain('my rewritten Youngstown prong')
   })
 
   it('keeps a ladder draft that is already on the current seed version', () => {
