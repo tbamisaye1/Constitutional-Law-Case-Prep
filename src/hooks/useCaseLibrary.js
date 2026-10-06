@@ -473,7 +473,7 @@ const MERGE_BACKUP_KEY = 'case-prep-merge-backup-v1'
 // Bump the suffix when a one-shot server restore must run again after deploy.
 const RECOVER_NOTES_FLAG = 'case-prep-recover-notes-2026-10-05-askai'
 // After seed wiped manual ladder notes: force Postgres arguments to win once.
-const RECOVER_ARGUMENTS_FLAG = 'case-prep-recover-args-2026-10-06-manual'
+const RECOVER_ARGUMENTS_FLAG = 'case-prep-recover-args-2026-10-06-manual-v2'
 
 function pickMergedText(keepVal, dropVal) {
   const keep = String(keepVal || '').trim()
