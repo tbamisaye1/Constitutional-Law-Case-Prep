@@ -393,7 +393,7 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
     await hydrateBlobs()
     return true
   } catch (error) {
-    console.warn('Sync failed; still saved in this browser', error)
+    console.warn('Sync failed; local cache kept, database unreachable', error)
     memory = {
       ...memory,
       syncStatus: 'error',
@@ -613,14 +613,14 @@ async function uploadFileBytes(meta, blob) {
       } catch (proxyError) {
         console.warn(`Could not upload ${meta.name}`, proxyError)
         setMemory({
-          saveError: `${meta.name} is saved in this browser but not on the backend. ${proxyError?.message || ''}`.trim(),
+          saveError: `${meta.name} is in this browser's cache but NOT yet on the database. Retry upload or the PDF can vanish after a hard refresh. ${proxyError?.message || ''}`.trim(),
         })
         return
       }
     }
     console.warn(`Could not upload ${meta.name}`, directError)
     setMemory({
-      saveError: `${meta.name} is saved in this browser but not on the backend. ${directError?.message || ''}`.trim(),
+      saveError: `${meta.name} is in this browser's cache but NOT yet on the database. Retry upload or the PDF can vanish after a hard refresh. ${directError?.message || ''}`.trim(),
     })
   }
 }
@@ -756,10 +756,39 @@ async function indexPendingAskAiFiles() {
   }
 }
 
-hydrateBlobs()
+/**
+ * Push any PDF that is only in IndexedDB up to Vercel Blob.
+ *
+ * Large opinions (Youngstown / Milligan / Hamdi) used to stay browser-only when
+ * the first upload failed. Hard refresh then made them disappear. Retry until
+ * the row is marked stored, then force a sync so other devices see the bytes.
+ */
+async function uploadPendingServerFiles() {
+  if (memory.syncStatus === 'off') return
+  let uploaded = 0
+  for (const meta of memory.store.filesMeta) {
+    if (meta.stored) continue
+    const blob = memory.blobs[meta.id]
+    if (!blob) continue
+    const typed =
+      blob.type === 'application/pdf' ? blob : blob.slice(0, blob.size, 'application/pdf')
+    await uploadFileBytes(meta, typed)
+    const next = memory.store.filesMeta.find((f) => f.id === meta.id)
+    if (next?.stored) uploaded += 1
+  }
+  if (uploaded > 0) scheduleSync(0, { forcePull: true })
+}
+
+hydrateBlobs().then(() => {
+  void uploadPendingServerFiles()
+})
 
 if (typeof window !== 'undefined') {
-  bootstrapSync()
+  bootstrapSync().then(() => {
+    // After pull, stored flags may flip true (bytes already on Blob). Re-hydrate
+    // downloads them; uploadPending catches anything still only local.
+    void hydrateBlobs().then(() => uploadPendingServerFiles())
+  })
 
   onPageHide(() => {
     window.clearTimeout(persistTimer)

@@ -297,10 +297,10 @@ export function applyChanges(store, syncMeta, changes) {
             size: row.size,
             contentType: row.contentType,
             // Tells the reader it can fetch bytes from the backend when this
-            // browser has no IndexedDB copy of the PDF. Prefer the pull value;
-            // keep a local true if an older server echo omitted `stored`.
-            stored:
-              row.stored != null ? Boolean(row.stored) : Boolean(previous?.stored),
+            // Once either side has Blob bytes, keep stored=true. A stale echo
+            // with stored:false must not put Youngstown/Milligan back to
+            // browser-only after a successful upload.
+            stored: Boolean(row.stored) || Boolean(previous?.stored),
           }),
     }
     note(key, row)

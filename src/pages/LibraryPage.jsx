@@ -10,6 +10,7 @@ import { DoctrineTimeline } from '../components/library/DoctrineTimeline'
 import { MatterTagBar } from '../components/library/MatterTagBar'
 import { PdfViewer } from '../components/library/PdfViewer'
 import { AnnotationPanel } from '../components/library/AnnotationPanel'
+import { SyncBanner } from '../components/SyncBanner'
 import { useCaseLibrary } from '../hooks/useCaseLibrary'
 import { downloadIngestFile } from '../api/client'
 import { isBootstrapOyezSource } from '../lib/openEvidencePdf'
@@ -266,6 +267,8 @@ export function LibraryPage() {
       </>
     ) : undefined
 
+  const unsyncedPdfs = lib.filesMeta.filter((f) => !f.stored)
+
   return (
     <section className={`workspace library-room editorial-room ${deepDive ? 'is-dive' : ''}`}>
       {!deepDive ? (
@@ -273,8 +276,8 @@ export function LibraryPage() {
           <div>
             <h1>Case library</h1>
             <p className="lede">
-              Pick a case to deep-dive. Flag what is core, useful, background, or a trap. You write
-              and organise; the system holds it.
+              Pick a case to deep-dive. Flag what is core, useful, background, or a trap. Opinion PDFs
+              and write-ups live on the database after upload; hard refresh reloads from there.
             </p>
           </div>
           <div className="head-actions">
@@ -284,6 +287,27 @@ export function LibraryPage() {
           </div>
         </header>
       ) : null}
+
+      <SyncBanner
+        sync={lib.sync}
+        saveError={
+          lib.saveError ||
+          (unsyncedPdfs.length
+            ? `${unsyncedPdfs.length} PDF(s) still only in this browser's cache (not on the database yet): ${unsyncedPdfs
+                .map((f) => f.name)
+                .slice(0, 3)
+                .join(', ')}${unsyncedPdfs.length > 3 ? '…' : ''}. Open each case and use Retry upload, or re-attach the file.`
+            : '')
+        }
+        lastSavedAt={lib.lastSavedAt}
+        onSyncNow={lib.syncNow}
+        onRetrySaveError={
+          unsyncedPdfs[0]
+            ? () => lib.retryAskAiIndex?.(unsyncedPdfs[0].id)
+            : undefined
+        }
+        retrySaveLabel="Retry PDF upload"
+      />
 
       {!deepDive ? (
         <div className="facts-toolbar library-toolbar editorial-toolbar">
