@@ -14,6 +14,7 @@ import {
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
+import { AlphaListInput } from '../extensions/alphaListInput'
 import { BlockIndent } from '../extensions/blockIndent'
 import {
   indentSelection,
@@ -44,8 +45,9 @@ export function NoteEditor({ html, onChange, editable = true }) {
     extensions: [
       StarterKit,
       BlockIndent,
+      AlphaListInput,
       Placeholder.configure({
-        placeholder: 'Write like OneNote: Tab nests lists, or indents the line…',
+        placeholder: 'Write like OneNote: "a. " for letters, "1. " for numbers, Tab to nest…',
       }),
     ],
     content: html || '<p></p>',
