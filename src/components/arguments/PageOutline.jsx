@@ -1,12 +1,19 @@
 import { useState } from 'react'
 import { GripVertical, Plus, Trash2 } from 'lucide-react'
 
+const DRAG_TITLE = {
+  section: 'Drag to move this section and everything under it',
+  prong: 'Drag to move this prong and its sub-points',
+  point: 'Drag to move this sub-point',
+}
+
 /**
  * Left column of the page view: drafts, then the outline generated from the
- * page's section / prong headings. Click jumps, drag reorders (a section moves
- * with its prongs), hover shows add / delete.
+ * page's section / prong / point headings. Click jumps, drag reorders (a
+ * heading moves with everything under it; only drops that keep the structure
+ * intact are offered), hover shows add / delete.
  */
-export function PageOutline({ args, outline, activeId, onJump, onMove, onAdd, onDelete }) {
+export function PageOutline({ args, outline, activeId, onJump, onMove, canMove, onAdd, onDelete }) {
   const [dragId, setDragId] = useState(null)
   const [overId, setOverId] = useState(null)
 
@@ -69,7 +76,8 @@ export function PageOutline({ args, outline, activeId, onJump, onMove, onAdd, on
       {outline.length === 0 ? (
         <p className="argpage-outline-empty">
           No sections yet. In the page, type <kbd>/section</kbd> then a space, or press{' '}
-          <kbd>⌘⌥1</kbd>.
+          <kbd>⌘⌥1</kbd>. Prongs: <kbd>/prong</kbd> (<kbd>⌘⌥2</kbd>). Sub-points:{' '}
+          <kbd>/point</kbd> (<kbd>⌘⌥3</kbd>).
         </p>
       ) : null}
       <ol className="argpage-outline-list">
@@ -86,7 +94,8 @@ export function PageOutline({ args, outline, activeId, onJump, onMove, onAdd, on
               .filter(Boolean)
               .join(' ')}
             onDragOver={(e) => {
-              if (!dragId) return
+              if (!dragId || dragId === item.id) return
+              if (canMove && !canMove(dragId, item.id)) return
               e.preventDefault()
               e.dataTransfer.dropEffect = 'move'
               setOverId(item.id)
@@ -100,7 +109,7 @@ export function PageOutline({ args, outline, activeId, onJump, onMove, onAdd, on
             <span
               className="argpage-grip"
               draggable
-              title={item.kind === 'section' ? 'Drag to move this section and its prongs' : 'Drag to move this prong'}
+              title={DRAG_TITLE[item.kind]}
               onDragStart={(e) => {
                 e.dataTransfer.effectAllowed = 'move'
                 e.dataTransfer.setData('text/plain', item.id)
@@ -131,10 +140,21 @@ export function PageOutline({ args, outline, activeId, onJump, onMove, onAdd, on
                   <Plus size={13} />
                 </button>
               ) : null}
+              {item.kind === 'prong' ? (
+                <button
+                  type="button"
+                  className="icon-btn soft"
+                  title="Add a sub-point at the end of this prong"
+                  aria-label="Add sub-point"
+                  onClick={() => onAdd('point', item.id)}
+                >
+                  <Plus size={13} />
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="icon-btn danger"
-                title={item.kind === 'section' ? 'Delete section' : 'Delete prong'}
+                title={{ section: 'Delete section', prong: 'Delete prong', point: 'Delete sub-point' }[item.kind]}
                 aria-label="Delete"
                 onClick={() => onDelete(item.id)}
               >
@@ -147,6 +167,7 @@ export function PageOutline({ args, outline, activeId, onJump, onMove, onAdd, on
           <li
             className={overId === '__end' ? 'argpage-outline-end is-drop-target' : 'argpage-outline-end'}
             onDragOver={(e) => {
+              if (canMove && !canMove(dragId, null)) return
               e.preventDefault()
               setOverId('__end')
             }}

@@ -10,7 +10,7 @@
  * HTML serialization injected by the caller so it can be tested without a DOM.
  */
 
-import { OUTLINE_NODE, newOutlineId } from './outlineIds'
+import { OUTLINE_NODE, classifyOutline, newOutlineId, outlineRank } from './outlineIds'
 
 function escapeText(text) {
   return String(text ?? '')
@@ -76,19 +76,30 @@ export function pageJsonToDraftParts(docJson, serialize) {
     current.target.notes = html(current.nodes)
   }
 
+  // Same promotion rule the editor plugin enforces (see classifyOutline).
+  const kinds = classifyOutline(top.filter((n) => n.type === OUTLINE_NODE).map((n) => n.attrs || {}))
+  let headingIndex = 0
+
   for (const node of top) {
     if (node.type !== OUTLINE_NODE) {
       ;(current ? current.nodes : intro).push(node)
       continue
     }
-    flush()
     const attrs = node.attrs || {}
-    let kind = attrs.kind === 'prong' ? 'prong' : 'section'
-    // Same rule the editor plugin enforces: no prong before the first section.
-    if (kind === 'prong' && !sections.length) kind = 'section'
+    const { kind } = kinds[headingIndex]
+    headingIndex += 1
     let id = typeof attrs.id === 'string' && attrs.id ? attrs.id : ''
     if (!id || seen.has(id)) id = newOutlineId(kind)
     seen.add(id)
+
+    // A point is content of its prong: it stays in the prong's notes HTML,
+    // carrying its (de-duplicated) id so folds and the outline stay stable.
+    if (kind === 'point') {
+      current.nodes.push({ ...node, attrs: { ...attrs, kind, id } })
+      continue
+    }
+
+    flush()
     const title = nodeText(node)
     if (kind === 'section') {
       const section = { id, title, notes: '', prongs: [] }
@@ -146,32 +157,24 @@ export function draftPageKey(draft) {
  */
 export function outlineFromPage(docJson) {
   const top = Array.isArray(docJson?.content) ? docJson.content : []
-  const items = []
-  let s = 0
-  let p = 0
+  const headings = []
   top.forEach((node, index) => {
-    if (node.type !== OUTLINE_NODE) return
-    const kind = node.attrs?.kind === 'prong' && s > 0 ? 'prong' : 'section'
-    if (kind === 'section') {
-      s += 1
-      p = 0
-    } else {
-      p += 1
-    }
-    items.push({
-      id: node.attrs?.id || `idx-${index}`,
-      kind,
-      index,
-      number: kind === 'section' ? `${s}` : `${s}.${p}`,
-      title: nodeText(node),
-    })
+    if (node.type === OUTLINE_NODE) headings.push({ node, index })
   })
-  return items
+  const classified = classifyOutline(headings.map((h) => h.node.attrs || {}))
+  return headings.map(({ node, index }, i) => ({
+    id: node.attrs?.id || `idx-${index}`,
+    kind: classified[i].kind,
+    index,
+    number: classified[i].number,
+    title: nodeText(node),
+  }))
 }
 
 /**
  * Range of top-level indexes a heading owns: itself plus everything until the
- * next heading of the same or higher rank (a section owns its prongs).
+ * next heading of the same or higher rank (a section owns its prongs, a prong
+ * owns its points, a point owns its notes).
  *
  * @param {Array<{type:string, kind?:string}>} kinds top-level nodes, simplified
  * @returns {[number, number]} [start, end) or null
@@ -179,20 +182,45 @@ export function outlineFromPage(docJson) {
 export function blockRange(kinds, index) {
   const node = kinds[index]
   if (!node || node.type !== OUTLINE_NODE) return null
-  const rank = node.kind === 'prong' ? 1 : 0
+  const rank = outlineRank(node.kind)
   let end = index + 1
   while (end < kinds.length) {
     const n = kinds[end]
-    if (n.type === OUTLINE_NODE && (n.kind === 'prong' ? 1 : 0) <= rank) break
+    if (n.type === OUTLINE_NODE && outlineRank(n.kind) <= rank) break
     end += 1
   }
   return [index, end]
 }
 
 /**
+ * For the headings in `order`, their effective kind and parent (the original
+ * index of the nearest heading above with a lower rank, or -1).
+ */
+function structure(kinds, order) {
+  const heads = order.filter((i) => kinds[i].type === OUTLINE_NODE)
+  const classified = classifyOutline(heads.map((i) => kinds[i]))
+  const out = new Map()
+  const stack = [] // [{ rank, index }]
+  heads.forEach((index, i) => {
+    const { kind } = classified[i]
+    const rank = outlineRank(kind)
+    while (stack.length && stack[stack.length - 1].rank >= rank) stack.pop()
+    out.set(index, { kind, parent: stack.length ? stack[stack.length - 1].index : -1 })
+    stack.push({ rank, index })
+  })
+  return out
+}
+
+/**
  * Move the block owned by the heading at `from` so it starts where the heading
  * at `before` starts (or to the end when `before` is null). Returns the new
  * order as a list of original indexes, or null for a no-op / invalid move.
+ *
+ * Only the moved heading may change parent. A move is refused when it would
+ * change what any heading is or who owns it, e.g. dropping a section between
+ * two prongs (it would steal the later ones) or a point above the first prong
+ * of a section (it would become a prong). The outline only offers drops that
+ * pass this check (see canMoveBlock).
  */
 export function moveBlockOrder(kinds, from, before) {
   const range = blockRange(kinds, from)
@@ -206,7 +234,21 @@ export function moveBlockOrder(kinds, from, before) {
   const at = before == null ? rest.length : rest.indexOf(before)
   if (at === -1) return null
   const order = [...rest.slice(0, at), ...moving, ...rest.slice(at)]
-  return order.every((v, i) => v === i) ? null : order
+  if (order.every((v, i) => v === i)) return null
+
+  const was = structure(kinds, kinds.map((_, i) => i))
+  const now = structure(kinds, order)
+  for (const [index, after] of now) {
+    const prior = was.get(index)
+    if (after.kind !== prior.kind) return null
+    if (index !== from && after.parent !== prior.parent) return null
+  }
+  return order
+}
+
+/** True when moveBlockOrder would accept the move (used to offer drop zones). */
+export function canMoveBlock(kinds, from, before) {
+  return moveBlockOrder(kinds, from, before) != null
 }
 
 /**

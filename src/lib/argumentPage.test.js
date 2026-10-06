@@ -197,6 +197,16 @@ describe('outlineFixes', () => {
     expect(fixes[2].id).toMatch(/^pr-/)
   })
 
+  it('promotes a point with no prong above it and gives points pt- ids', () => {
+    const fixes = outlineFixes([
+      { pos: 0, kind: 'section', id: 's' },
+      { pos: 3, kind: 'point', id: 'x' },
+      { pos: 6, kind: 'point', id: null },
+    ])
+    expect(fixes[0]).toEqual({ pos: 3, kind: 'prong' })
+    expect(fixes[1].id).toMatch(/^pt-/)
+  })
+
   it('leaves a valid outline alone', () => {
     expect(
       outlineFixes([
@@ -249,5 +259,83 @@ describe('restoreUntouched', () => {
     }
     const out = restoreUntouched(parts, normalized, raw)
     expect(out.sections[1]).toEqual({ id: 's2', title: 'Two', notes: '<p>n</p>', prongs: [] })
+  })
+})
+
+describe('sub-points (1.1.1)', () => {
+  const page = doc(
+    H('section', 's1', 'Lowest ebb'),
+    H('prong', 'p1', 'a. Category 3'),
+    P('intro'),
+    H('point', 'q1', 'Why we are in Category 3'),
+    P('jackson'),
+    H('point', 'q2', 'Why it fails in Category 3'),
+    P('no exclusive power'),
+    H('prong', 'p2', 'b. Silence'),
+    H('section', 's2', 'Statutes'),
+    H('prong', 'p3', 'a. ATA')
+  )
+  const kinds = page.content.map((n) => ({ type: n.type, kind: n.attrs?.kind }))
+
+  it('keeps points inside their prong notes, so storage shape is unchanged', () => {
+    const keep = (nodes) =>
+      nodes
+        .map((n) =>
+          n.type === 'outlineHeading'
+            ? `<h1 data-outline="${n.attrs.kind}" data-id="${n.attrs.id}">${n.content[0].text}</h1>`
+            : `<p>${(n.content || []).map((c) => c.text).join('')}</p>`
+        )
+        .join('')
+    const parts = pageJsonToDraftParts(page, keep)
+    expect(parts.sections[0].prongs.map((p) => p.id)).toEqual(['p1', 'p2'])
+    expect(parts.sections[0].prongs[0].notes).toBe(
+      '<p>intro</p><h1 data-outline="point" data-id="q1">Why we are in Category 3</h1><p>jackson</p>' +
+        '<h1 data-outline="point" data-id="q2">Why it fails in Category 3</h1><p>no exclusive power</p>'
+    )
+    // Round trip: page HTML from storage contains the points again.
+    const html = draftToPageHtml({ notes: '', sections: parts.sections })
+    expect(html).toContain('data-outline="point" data-id="q2"')
+  })
+
+  it('numbers points under their prong', () => {
+    expect(outlineFromPage(page).map((i) => `${i.number} ${i.kind}`)).toEqual([
+      '1 section',
+      '1.1 prong',
+      '1.1.1 point',
+      '1.1.2 point',
+      '1.2 prong',
+      '2 section',
+      '2.1 prong',
+    ])
+  })
+
+  it('a prong owns its points; a point owns only its notes', () => {
+    expect(blockRange(kinds, 1)).toEqual([1, 7])
+    expect(blockRange(kinds, 3)).toEqual([3, 5])
+    expect(blockRange(kinds, 5)).toEqual([5, 7])
+  })
+
+  it('moves a point within and across prongs', () => {
+    // q2 above q1
+    expect(moveBlockOrder(kinds, 5, 3)).toEqual([0, 1, 2, 5, 6, 3, 4, 7, 8, 9])
+    // q1 to the end of the page = under prong p3
+    expect(moveBlockOrder(kinds, 3, null)).toEqual([0, 1, 2, 5, 6, 7, 8, 9, 3, 4])
+  })
+
+  it('refuses moves that would change structure', () => {
+    // A prong dropped between two points would steal q2.
+    expect(moveBlockOrder(kinds, 7, 5)).toBeNull()
+    // A section dropped before prong p2 would steal it.
+    expect(moveBlockOrder(kinds, 8, 7)).toBeNull()
+    // A point dropped above the first prong of a section would become a prong.
+    expect(moveBlockOrder(kinds, 3, 9)).toBeNull()
+  })
+
+  it('promotes a point with no prong above it in its section', () => {
+    const parts = pageJsonToDraftParts(
+      doc(H('section', 's1', 'One'), H('point', 'q0', 'stray'), P('x')),
+      serialize
+    )
+    expect(parts.sections[0].prongs).toEqual([{ id: 'q0', title: 'stray', notes: '<p>x</p>' }])
   })
 })

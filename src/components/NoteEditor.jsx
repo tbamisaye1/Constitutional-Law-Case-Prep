@@ -1,4 +1,5 @@
 import { useEffect, useReducer, useRef } from 'react'
+import { OutlineHeading } from '../extensions/outlineHeading'
 import {
   Bold,
   Italic,
@@ -39,7 +40,15 @@ import { editorFlushSuppressed } from '../lib/editorFlush'
  * Kept in one place so Tab-nesting, quotes-in-lists and a./1. lists behave the
  * same wherever the user is typing.
  */
-export function baseNoteExtensions({ placeholder } = {}) {
+/**
+ * @param {object} [options]
+ * @param {string} [options.placeholder]
+ * @param {boolean} [options.outlineStructure] true only for the Arguments page
+ *   editor (sections / prongs / points are editable structure there). Every
+ *   other note editor still parses outline headings, so a prong's sub-points
+ *   survive being edited in the Outline view.
+ */
+export function baseNoteExtensions({ placeholder, outlineStructure = false } = {}) {
   return [
     StarterKit.configure({
       // Replace default listItem so quotes can wrap a line inside an indent.
@@ -50,6 +59,7 @@ export function baseNoteExtensions({ placeholder } = {}) {
     FontSize,
     BlockIndent,
     AlphaListInput,
+    OutlineHeading.configure({ structure: outlineStructure }),
     Placeholder.configure({
       placeholder:
         placeholder || 'Write like OneNote: "a. " for letters, "1. " for numbers, Tab to nest…',

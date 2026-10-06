@@ -16,10 +16,13 @@ import { createDocument, getHTMLFromFragment } from '@tiptap/core'
 import { Fragment } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
 import { baseNoteExtensions, handleNoteKeyDown } from '../NoteEditor'
-import { OutlineHeading, OUTLINE_NODE } from '../../extensions/outlineHeading'
+import { OUTLINE_NODE } from '../../extensions/outlineHeading'
+import { classifyOutline } from '../../lib/outlineIds'
 import { OutlineFold, foldKey } from '../../extensions/outlineFold'
 import {
   applyPageToDraft,
+  blockRange,
+  canMoveBlock,
   draftPageKey,
   draftToPageHtml,
   moveBlockOrder,
@@ -63,30 +66,29 @@ function serializeWith(schema) {
 
 /** Top-level headings with their positions, read straight from the doc. */
 export function readOutline(doc) {
-  const items = []
-  let s = 0
-  let p = 0
+  const heads = []
   let index = 0
   doc.forEach((node, offset) => {
-    if (node.type.name === OUTLINE_NODE) {
-      const kind = node.attrs.kind === 'prong' && s > 0 ? 'prong' : 'section'
-      if (kind === 'section') {
-        s += 1
-        p = 0
-      } else p += 1
-      items.push({
-        id: node.attrs.id,
-        kind,
-        index,
-        pos: offset,
-        end: offset + node.nodeSize,
-        number: kind === 'section' ? `${s}` : `${s}.${p}`,
-        title: node.textContent,
-      })
-    }
+    if (node.type.name === OUTLINE_NODE) heads.push({ node, offset, index })
     index += 1
   })
-  return items
+  const classified = classifyOutline(heads.map((h) => h.node.attrs))
+  return heads.map(({ node, offset, index: i }, n) => ({
+    id: node.attrs.id,
+    kind: classified[n].kind,
+    index: i,
+    pos: offset,
+    end: offset + node.nodeSize,
+    number: classified[n].number,
+    title: node.textContent,
+  }))
+}
+
+/** Top-level nodes reduced to what blockRange / moveBlockOrder need. */
+function docKinds(doc) {
+  const nodes = []
+  doc.forEach((n) => nodes.push(n))
+  return { nodes, kinds: nodes.map((n) => ({ type: n.type.name, kind: n.attrs?.kind })) }
 }
 
 /** Where the cursor sits, as "heading id + offset into that block". */
@@ -208,10 +210,10 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
     immediatelyRender: false,
     extensions: [
       ...baseNoteExtensions({
+        outlineStructure: true,
         placeholder:
-          'Write the argument. Type "/section " or ⌘⌥1 for a section, "/prong " or ⌘⌥2 for a prong.',
+          'Write the argument. "/section " (⌘⌥1) for a section, "/prong " (⌘⌥2) for a prong, "/point " (⌘⌥3) for a sub-point.',
       }),
-      OutlineHeading,
       OutlineFold.configure({
         initial: initialFolds,
         onChange: (ids) => writeFolds(draftId, ids),
@@ -238,13 +240,11 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
           event.preventDefault()
           return sendSelectionToScratch()
         }
-        // Tab on a heading: section ⇄ prong, like demoting a OneNote title.
+        // Tab on a heading demotes it (section → prong → point), ⇧Tab
+        // promotes it, like indenting a OneNote title.
         if (event.key === 'Tab' && ed.state.selection.$from.parent.type.name === OUTLINE_NODE) {
           event.preventDefault()
-          const kind = ed.state.selection.$from.parent.attrs.kind
-          if ((event.shiftKey && kind === 'prong') || (!event.shiftKey && kind === 'section')) {
-            ed.commands.toggleOutlineKind()
-          }
+          ed.commands.shiftOutlineLevel(event.shiftKey ? -1 : 1)
           return true
         }
         return handleNoteKeyDown(ed, event)
@@ -380,9 +380,7 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
     const ed = editorRef.current
     if (!ed) return
     const doc = ed.state.doc
-    const nodes = []
-    doc.forEach((n) => nodes.push(n))
-    const kinds = nodes.map((n) => ({ type: n.type.name, kind: n.attrs?.kind }))
+    const { nodes, kinds } = docKinds(doc)
     const items = readOutline(doc)
     const from = items.find((i) => i.id === fromId)
     const before = beforeId ? items.find((i) => i.id === beforeId) : null
@@ -394,6 +392,17 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
     jumpTo(fromId)
   }, [jumpTo])
 
+  /** Would dropping `fromId` before `beforeId` (null = end) be a valid move? */
+  const canMove = useCallback((fromId, beforeId) => {
+    const ed = editorRef.current
+    if (!ed) return false
+    const items = readOutline(ed.state.doc)
+    const from = items.find((i) => i.id === fromId)
+    const before = beforeId ? items.find((i) => i.id === beforeId) : null
+    if (!from || (beforeId && !before)) return false
+    return canMoveBlock(docKinds(ed.state.doc).kinds, from.index, before ? before.index : null)
+  }, [])
+
   const insertHeading = useCallback((kind, afterId = null) => {
     const ed = editorRef.current
     if (!ed) return
@@ -401,19 +410,11 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
     const items = readOutline(doc)
     let at = doc.content.size
     if (afterId) {
-      const nodes = []
-      doc.forEach((n) => nodes.push(n))
-      const kinds = nodes.map((n) => ({ type: n.type.name, kind: n.attrs?.kind }))
+      const { nodes, kinds } = docKinds(doc)
       const owner = items.find((i) => i.id === afterId)
       if (owner) {
         // End of the owner's whole block (a section's last prong included).
-        let end = owner.index + 1
-        const rank = owner.kind === 'prong' ? 1 : 0
-        while (end < kinds.length) {
-          const k = kinds[end]
-          if (k.type === OUTLINE_NODE && (k.kind === 'prong' ? 1 : 0) <= rank) break
-          end += 1
-        }
+        const [, end] = blockRange(kinds, owner.index)
         at = 0
         for (let i = 0; i < end; i += 1) at += nodes[i].nodeSize
       }
@@ -432,24 +433,20 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
     const ed = editorRef.current
     if (!ed) return
     const doc = ed.state.doc
-    const nodes = []
-    doc.forEach((n) => nodes.push(n))
     const items = readOutline(doc)
     const item = items.find((i) => i.id === id)
     if (!item) return
-    const kinds = nodes.map((n) => ({ type: n.type.name, kind: n.attrs?.kind }))
-    let end = item.index + 1
-    const rank = item.kind === 'prong' ? 1 : 0
-    while (end < kinds.length) {
-      const k = kinds[end]
-      if (k.type === OUTLINE_NODE && (k.kind === 'prong' ? 1 : 0) <= rank) break
-      end += 1
-    }
+    const { nodes, kinds } = docKinds(doc)
+    const [, end] = blockRange(kinds, item.index)
     let from = 0
     for (let i = 0; i < item.index; i += 1) from += nodes[i].nodeSize
     let to = from
     for (let i = item.index; i < end; i += 1) to += nodes[i].nodeSize
-    const what = item.kind === 'section' ? 'this section and everything under it' : 'this prong and its notes'
+    const what = {
+      section: 'this section and everything under it',
+      prong: 'this prong, its sub-points and notes',
+      point: 'this sub-point and its notes',
+    }[item.kind]
     if (!window.confirm(`Delete ${what}? (Undo with ⌘Z.)`)) return
     ed.chain().focus().deleteRange({ from, to }).run()
   }, [])
@@ -476,6 +473,7 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
           activeId={activeId}
           onJump={jumpTo}
           onMove={moveBlock}
+          canMove={canMove}
           onAdd={insertHeading}
           onDelete={deleteBlock}
         />
@@ -527,6 +525,14 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
             onClick={() => editor.chain().focus().setOutlineHeading('prong').run()}
           >
             Prong
+          </button>
+          <button
+            type="button"
+            className={headingKind === 'point' ? 'note-tool argpage-struct on' : 'note-tool argpage-struct'}
+            title="Make this line a sub-point under the prong above (⌘⌥3, or type /point ). Tab / ⇧Tab on a heading moves it down / up a level."
+            onClick={() => editor.chain().focus().setOutlineHeading('point').run()}
+          >
+            Point
           </button>
           {inHeading ? (
             <button

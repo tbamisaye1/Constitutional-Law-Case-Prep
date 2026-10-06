@@ -1,5 +1,5 @@
 /**
- * Section / prong headings inside the one-page Arguments editor.
+ * Section / prong / point headings inside the one-page Arguments editor.
  *
  * They are their own node type, not h1/h2, because the notes under a prong
  * already use ordinary h2/h3 headings ("## Framework") and those must stay
@@ -9,16 +9,33 @@
  *
  *   <h1 data-outline="section" data-id="c3-s1">Lowest ebb</h1>
  *   <h1 data-outline="prong"   data-id="c3-s1-a">a. Under Youngstown…</h1>
+ *   <h1 data-outline="point"   data-id="pt-…">Why we are in Category 3</h1>
+ *
+ * Points (1.1.1) are stored inside their prong's notes (see lib/outlineIds).
  *
  * Invariants kept by the plugin on every transaction (paste, undo, drag):
  *   - every heading has an id, and no two headings share one
- *   - a prong never comes before the first section (it is promoted)
+ *   - nothing floats without a parent: a prong before any section, or a
+ *     point before any prong in its section, is promoted one level
+ *
+ * Option `structure` (default true) turns on the editing behaviour: invariant
+ * plugin, shortcuts, "/section" input rules, and reading a bare <h1> as a
+ * point (how MCP / markdown "# Title" inside a prong arrives). With
+ * structure: false the node only parses and re-renders outline headings, so
+ * the other note editors (the Outline view) keep a prong's points intact
+ * instead of flattening them into ordinary headings.
  */
 
 import { Node, mergeAttributes, textblockTypeInputRule } from '@tiptap/core'
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 
-import { OUTLINE_NODE, newOutlineId, outlineFixes } from '../lib/outlineIds'
+import {
+  OUTLINE_KINDS,
+  OUTLINE_NODE,
+  newOutlineId,
+  normalizeKind,
+  outlineFixes,
+} from '../lib/outlineIds'
 
 export { OUTLINE_NODE, newOutlineId, outlineFixes }
 
@@ -40,11 +57,18 @@ export const OutlineHeading = Node.create({
   content: 'inline*',
   defining: true,
 
+  addOptions() {
+    return { structure: true }
+  },
+
   addAttributes() {
     return {
       kind: {
         default: 'section',
-        parseHTML: (el) => (el.getAttribute('data-outline') === 'prong' ? 'prong' : 'section'),
+        // A bare <h1> only reaches this node through the structure-mode rule
+        // below, and there it means a sub-point.
+        parseHTML: (el) =>
+          el.hasAttribute('data-outline') ? normalizeKind(el.getAttribute('data-outline')) : 'point',
         renderHTML: (attrs) => ({ 'data-outline': attrs.kind }),
       },
       id: {
@@ -57,7 +81,9 @@ export const OutlineHeading = Node.create({
 
   parseHTML() {
     // Beats StarterKit's heading rule for h1 so structure is never demoted.
-    return [{ tag: 'h1[data-outline]', priority: 1000 }]
+    const rules = [{ tag: 'h1[data-outline]', priority: 1000 }]
+    if (this.options.structure) rules.push({ tag: 'h1', priority: 900 })
+    return rules
   },
 
   renderHTML({ node, HTMLAttributes }) {
@@ -76,17 +102,19 @@ export const OutlineHeading = Node.create({
         (kind = 'section') =>
         ({ commands }) =>
           commands.setNode(this.name, { kind, id: newOutlineId(kind) }),
-      toggleOutlineKind:
-        () =>
+      /** Move the heading under the cursor one level: +1 demotes, -1 promotes. */
+      shiftOutlineLevel:
+        (step) =>
         ({ state, tr, dispatch }) => {
           const { $from } = state.selection
           const node = $from.parent
           if (node.type.name !== this.name) return false
+          const level = OUTLINE_KINDS.indexOf(normalizeKind(node.attrs.kind)) + step
+          if (level < 0 || level >= OUTLINE_KINDS.length) return false
           if (dispatch) {
-            const pos = $from.before($from.depth)
-            tr.setNodeMarkup(pos, undefined, {
+            tr.setNodeMarkup($from.before($from.depth), undefined, {
               ...node.attrs,
-              kind: node.attrs.kind === 'prong' ? 'section' : 'prong',
+              kind: OUTLINE_KINDS[level],
             })
           }
           return true
@@ -99,9 +127,11 @@ export const OutlineHeading = Node.create({
   },
 
   addKeyboardShortcuts() {
+    if (!this.options.structure) return {}
     return {
       'Mod-Alt-1': () => this.editor.commands.setOutlineHeading('section'),
       'Mod-Alt-2': () => this.editor.commands.setOutlineHeading('prong'),
+      'Mod-Alt-3': () => this.editor.commands.setOutlineHeading('point'),
       // Backspace at the very start of a heading turns it back into text
       // (OneNote "demote") instead of gluing its title onto the line above.
       Backspace: () => {
@@ -132,6 +162,7 @@ export const OutlineHeading = Node.create({
   },
 
   addInputRules() {
+    if (!this.options.structure) return []
     return [
       textblockTypeInputRule({
         find: /^\/(?:section|sec|s)\s$/,
@@ -143,10 +174,16 @@ export const OutlineHeading = Node.create({
         type: this.type,
         getAttributes: () => ({ kind: 'prong', id: newOutlineId('prong') }),
       }),
+      textblockTypeInputRule({
+        find: /^\/(?:point|sub)\s$/,
+        type: this.type,
+        getAttributes: () => ({ kind: 'point', id: newOutlineId('point') }),
+      }),
     ]
   },
 
   addProseMirrorPlugins() {
+    if (!this.options.structure) return []
     return [
       new Plugin({
         key: invariantsKey,

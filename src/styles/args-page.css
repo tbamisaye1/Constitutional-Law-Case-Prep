@@ -101,6 +101,15 @@
   padding-left: 14px;
 }
 
+.argpage-outline-item.is-point {
+  padding-left: 30px;
+}
+
+.argpage-outline-item.is-point .argpage-outline-jump {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
 .argpage-outline-item.on {
   border-left-color: var(--gold);
   background: var(--gold-soft);
@@ -279,6 +288,13 @@
   border-left: 3px solid var(--gold);
 }
 
+.arg-page-prose h1.outline-heading.is-point {
+  font-size: 17px;
+  margin-top: 1.1em;
+  padding-left: 30px;
+  border-left: 2px dotted var(--gold);
+}
+
 .arg-page-prose > h1.outline-heading:first-child {
   margin-top: 0.2em;
 }
@@ -305,6 +321,10 @@
 
 .arg-page-prose h1.outline-heading.is-prong .outline-fold-toggle {
   left: -40px;
+}
+
+.arg-page-prose h1.outline-heading.is-point .outline-fold-toggle {
+  left: -26px;
 }
 
 .arg-page-prose h1.outline-heading:hover .outline-fold-toggle,
