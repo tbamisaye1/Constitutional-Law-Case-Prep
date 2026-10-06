@@ -95,8 +95,11 @@ export function SyncBanner({
         `Manual ${new Date().toISOString().slice(0, 16)}`
       )
       await downloadWorkspaceBackup(created.id)
+      const bits = Array.isArray(created.includes) && created.includes.length
+        ? created.includes.join(', ')
+        : 'arguments, notes, guide, facts, openings, cases, PDFs'
       setNote(
-        `Backup #${created.id} saved in Postgres and downloaded. Hard refresh cannot erase that file.`
+        `Backup #${created.id} saved in Postgres and downloaded (${bits}). Hard refresh cannot erase that file.`
       )
       setOpen(true)
     } catch (error) {
@@ -168,8 +171,8 @@ export function SyncBanner({
         <div className="workspace-link-panel">
           <p>
             {pinned
-              ? 'This build uses one shared workspace. After a hard refresh, the app reloads from the database for notes, arguments, guide, facts, openings, and Instant Case PDFs. Use Backup now before competition for a JSON file on your laptop plus a durable Postgres snapshot.'
-              : 'Each browser keeps its own workspace key unless you link them. Copy this key into the other device, then reload. Use Backup now so a JSON copy exists outside the browser.'}
+              ? 'This build uses one shared workspace. After a hard refresh, the app reloads from the database for arguments, notes, guide, facts, openings, and Instant Case PDFs. Backup now saves all of that (including every Arguments draft and prong note) to Postgres and a JSON file on your laptop.'
+              : 'Each browser keeps its own workspace key unless you link them. Copy this key into the other device, then reload. Use Backup now so arguments, notes, and the rest exist outside the browser.'}
           </p>
           <p className="mono workspace-key">{sync.workspaceId}</p>
           <div className="workspace-link-actions">
