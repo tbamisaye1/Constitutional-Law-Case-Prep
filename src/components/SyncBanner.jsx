@@ -5,6 +5,7 @@ import {
   listWorkspaceBackups,
 } from '../api/client'
 import { useCaseLibrary } from '../hooks/useCaseLibrary'
+import { describeSyncStatus } from '../lib/syncStatus'
 import { isWorkspacePinned, setWorkspaceId } from '../lib/workspace'
 
 /**
@@ -13,36 +14,11 @@ import { isWorkspacePinned, setWorkspaceId } from '../lib/workspace'
  * Subscribes to the library store itself so Arguments / Notes pages do not
  * re-render on every cache write or sync tick while the user is typing.
  *
- * The status line is one fixed-height row. Routine sync/pending states keep
- * the same calm copy so the layout never jumps mid-edit.
+ * Pending / syncing states must not claim the database already has the work.
  */
 
 function clock(timestamp) {
   return new Date(timestamp).toLocaleTimeString()
-}
-
-function describe(sync) {
-  if (sync.status === 'off') {
-    return {
-      tone: 'warn',
-      text:
-        'Database sync is off in this browser. Work may not survive clearing site data.',
-    }
-  }
-
-  if (sync.status === 'error') {
-    return {
-      tone: 'warn',
-      text: `Database unreachable (retrying). ${sync.error || ''}`.trim(),
-    }
-  }
-
-  // Idle, syncing, and pending all share one calm line so typing never reflows
-  // the page when a background save or sync finishes.
-  return {
-    tone: 'ok',
-    text: 'Saved to the workspace database (notes, arguments, guide, facts, openings, PDFs).',
-  }
 }
 
 export function SyncBanner({
@@ -67,7 +43,7 @@ export function SyncBanner({
       ? saveErrorOverride
       : lib.saveError
 
-  const { tone, text } = describe(sync)
+  const { tone, text } = describeSyncStatus(sync)
   const pinned = isWorkspacePinned()
   const [open, setOpen] = useState(false)
   const [paste, setPaste] = useState('')
