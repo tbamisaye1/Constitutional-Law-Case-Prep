@@ -3,6 +3,7 @@ import {
   argumentChunksForAskAi,
   flattenArgumentNotes,
   joinArgumentOutlineBlocks,
+  notePreview,
   queryWantsArgumentNotes,
   searchArgumentNotes,
 } from './argumentNotes'
@@ -65,6 +66,15 @@ describe('argumentNotes', () => {
     expect(queryWantsArgumentNotes('look at my argument notes on Youngstown')).toBe(true)
     expect(queryWantsArgumentNotes('first arg section notes')).toBe(true)
     expect(queryWantsArgumentNotes('define AUMF from the article')).toBe(false)
+  })
+
+  it('builds a plain-text note preview for the Structure + notes outline', () => {
+    expect(notePreview('')).toBe('')
+    expect(notePreview('<p>Short working note.</p>')).toBe('Short working note.')
+    const long = notePreview(`<p>${'word '.repeat(80)}</p>`, 40)
+    expect(long.endsWith('…')).toBe(true)
+    expect(long.length).toBeLessThanOrEqual(42)
+    expect(long.includes('<')).toBe(false)
   })
 
   it('joins sections and prongs in outline order for the read-through', () => {

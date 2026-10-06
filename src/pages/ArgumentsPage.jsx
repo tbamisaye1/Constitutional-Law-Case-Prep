@@ -12,6 +12,7 @@ import { UiTabs, UiTabsContent, UiTabsList, UiTabsTrigger } from '../components/
 import { NoteEditor } from '../components/NoteEditor'
 import { SyncBanner } from '../components/SyncBanner'
 import { useArguments } from '../hooks/useArguments'
+import { notePreview } from '../lib/argumentNotes'
 
 function supportsFieldSizing() {
   return typeof CSS !== 'undefined' && typeof CSS.supports === 'function'
@@ -93,6 +94,7 @@ function OutlineMoveButtons({ canUp, canDown, onUp, onDown, label }) {
 }
 
 const EXPAND_KEY = 'case-prep-args-expanded'
+const VIEW_KEY = 'case-prep-args-view'
 
 function readExpanded() {
   try {
@@ -102,6 +104,39 @@ function readExpanded() {
   }
 }
 
+function readViewMode() {
+  try {
+    const raw = localStorage.getItem(VIEW_KEY)
+    if (raw === 'board' || raw === 'joined' || raw === 'focus') return raw
+  } catch {
+    /* ignore */
+  }
+  return 'focus'
+}
+
+function NotePreview({ html, active, onSelect, label }) {
+  const preview = notePreview(html)
+  return (
+    <button
+      type="button"
+      className={
+        active
+          ? 'args-note-preview on'
+          : preview
+            ? 'args-note-preview'
+            : 'args-note-preview is-empty'
+      }
+      onClick={(e) => {
+        e.stopPropagation()
+        onSelect()
+      }}
+      aria-label={label}
+    >
+      {preview || 'No notes yet — click to write working notes for this piece.'}
+    </button>
+  )
+}
+
 /**
  * Argument board: multiple drafts per side, each with sections/prongs,
  * whole-argument notes, and a joined read-through.
@@ -109,6 +144,7 @@ function readExpanded() {
 export function ArgumentsPage() {
   const args = useArguments()
   const [expanded, setExpanded] = useState(readExpanded)
+  const [viewMode, setViewMode] = useState(readViewMode)
 
   useEffect(() => {
     try {
@@ -117,6 +153,14 @@ export function ArgumentsPage() {
       /* ignore */
     }
   }, [expanded])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_KEY, viewMode)
+    } catch {
+      /* ignore */
+    }
+  }, [viewMode])
 
   useEffect(() => {
     if (!expanded) return undefined
@@ -130,6 +174,24 @@ export function ArgumentsPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [expanded])
 
+  // Restore joined focus when that view was remembered from a prior visit.
+  const restoredView = useRef(false)
+  useEffect(() => {
+    if (restoredView.current) return
+    restoredView.current = true
+    if (viewMode === 'joined') args.focusJoinedArgument()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot restore
+  }, [])
+
+  // Leaving joined via Edit / outline should not wipe Structure + notes.
+  useEffect(() => {
+    if (args.focus?.type === 'joined') {
+      setViewMode('joined')
+      return
+    }
+    setViewMode((prev) => (prev === 'joined' ? 'focus' : prev))
+  }, [args.focus?.type])
+
   return (
     <section className={expanded ? 'workspace args-workspace is-expanded' : 'workspace args-workspace'}>
       {!expanded ? (
@@ -137,9 +199,10 @@ export function ArgumentsPage() {
           <div>
             <h1>Arguments</h1>
             <p className="lede">
-              Keep a Main argument and as many alternate drafts as you want. Switch drafts above the
-              outline, focus a section or prong to edit it, or open Full argument to read everything
-              joined. The database is the durable copy; hard refresh reloads from there.
+              Structure the argument on the left; write working notes for each section, prong, or the
+              whole draft on the right. Use Structure + notes to scan your logic beside the outline
+              while you outline. Full argument joins every piece to read through. The database is the
+              durable copy; hard refresh reloads from there.
             </p>
           </div>
           <div className="args-head-actions">
@@ -176,6 +239,8 @@ export function ArgumentsPage() {
             args={args}
             visible={args.side === 'petitioner'}
             expanded={expanded}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
             onToggleExpand={() => setExpanded((v) => !v)}
           />
         </UiTabsContent>
@@ -184,6 +249,8 @@ export function ArgumentsPage() {
             args={args}
             visible={args.side === 'respondent'}
             expanded={expanded}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
             onToggleExpand={() => setExpanded((v) => !v)}
           />
         </UiTabsContent>
@@ -192,7 +259,7 @@ export function ArgumentsPage() {
   )
 }
 
-function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
+function ArgsBoard({ args, visible, expanded, viewMode, setViewMode, onToggleExpand }) {
   const [dragging, setDragging] = useState(null)
   const [dragOver, setDragOver] = useState(null)
 
@@ -203,7 +270,10 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
     setDragOver(null)
   }
 
+  const showBoardPreviews = viewMode === 'board'
   const isJoined = args.focus?.type === 'joined'
+  const wholeOn = !isJoined && args.focus?.type === 'side' && viewMode !== 'board'
+  const boardOn = viewMode === 'board' && !isJoined
   const editorKey = [
     args.side,
     args.activeDraftId || '',
@@ -212,10 +282,35 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
     args.focus?.prongId || '',
   ].join(':')
 
+  function openWholeNotes() {
+    setViewMode('focus')
+    args.focusWholeArgument()
+  }
+
+  function openBoard() {
+    setViewMode('board')
+    if (args.focus?.type === 'joined') args.focusWholeArgument()
+  }
+
+  function openJoined() {
+    setViewMode('joined')
+    args.focusJoinedArgument()
+  }
+
+  function editSection(sectionId) {
+    if (viewMode === 'joined') setViewMode('focus')
+    args.selectSection(sectionId)
+  }
+
+  function editProng(sectionId, prongId) {
+    if (viewMode === 'joined') setViewMode('focus')
+    args.selectProng(sectionId, prongId)
+  }
+
   return (
     <div className={expanded ? 'args-split is-expanded' : 'args-split'}>
       {!expanded ? (
-        <div className="args-outline">
+        <div className={showBoardPreviews ? 'args-outline is-board' : 'args-outline'}>
           <div className="args-drafts">
             <div className="args-drafts-label mono">Drafts</div>
             <div className="args-draft-chips">
@@ -262,18 +357,33 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
           <div className="args-view-chips">
             <button
               type="button"
-              className={args.focus?.type === 'side' ? 'args-whole-chip on' : 'args-whole-chip'}
-              onClick={args.focusWholeArgument}
+              className={wholeOn ? 'args-whole-chip on' : 'args-whole-chip'}
+              onClick={openWholeNotes}
             >
               Whole argument notes
             </button>
             <button
               type="button"
+              className={boardOn ? 'args-whole-chip on' : 'args-whole-chip'}
+              onClick={openBoard}
+            >
+              Structure + notes
+            </button>
+            <button
+              type="button"
               className={isJoined ? 'args-whole-chip on' : 'args-whole-chip'}
-              onClick={args.focusJoinedArgument}
+              onClick={openJoined}
             >
               Full argument (joined)
             </button>
+            {showBoardPreviews ? (
+              <NotePreview
+                html={args.activeDraft?.notes || ''}
+                active={args.focus?.type === 'side'}
+                onSelect={args.focusWholeArgument}
+                label="Whole argument working notes preview"
+              />
+            ) : null}
           </div>
 
           {args.sections.length === 0 && (
@@ -322,7 +432,7 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
               >
                 <div
                   className="args-section-head"
-                  onClick={() => args.selectSection(section.id)}
+                  onClick={() => editSection(section.id)}
                 >
                   <span
                     className="args-grip"
@@ -345,7 +455,7 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
                     value={section.title}
                     aria-label={`Section ${sectionIdx + 1} title`}
                     onChange={(e) => args.updateSectionTitle(section.id, e.target.value)}
-                    onFocus={() => args.selectSection(section.id)}
+                    onFocus={() => editSection(section.id)}
                   />
                   <OutlineMoveButtons
                     label={`section ${sectionIdx + 1}`}
@@ -366,6 +476,14 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
                     <Trash2 size={15} />
                   </button>
                 </div>
+                {showBoardPreviews ? (
+                  <NotePreview
+                    html={section.notes || ''}
+                    active={sectionOn}
+                    onSelect={() => editSection(section.id)}
+                    label={`Section ${sectionIdx + 1} working notes preview`}
+                  />
+                ) : null}
 
                 <ul className="args-prongs">
                   {(section.prongs || []).map((prong, prongIdx) => {
@@ -382,10 +500,11 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
                         className={[
                           prongOn ? 'args-row args-prong-row on' : 'args-row args-prong-row',
                           prongDropOn ? 'is-drop-target' : '',
+                          showBoardPreviews ? 'has-preview' : '',
                         ]
                           .filter(Boolean)
                           .join(' ')}
-                        onClick={() => args.selectProng(section.id, prong.id)}
+                        onClick={() => editProng(section.id, prong.id)}
                         onDragOver={(e) => {
                           if (
                             dragging?.kind !== 'prong' ||
@@ -451,7 +570,7 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
                           onChange={(e) =>
                             args.updateProngTitle(section.id, prong.id, e.target.value)
                           }
-                          onFocus={() => args.selectProng(section.id, prong.id)}
+                          onFocus={() => editProng(section.id, prong.id)}
                         />
                         <OutlineMoveButtons
                           label={`prong ${sectionIdx + 1}.${prongIdx + 1}`}
@@ -471,6 +590,14 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
                         >
                           <Trash2 size={15} />
                         </button>
+                        {showBoardPreviews ? (
+                          <NotePreview
+                            html={prong.notes || ''}
+                            active={prongOn}
+                            onSelect={() => editProng(section.id, prong.id)}
+                            label={`Prong ${sectionIdx + 1}.${prongIdx + 1} working notes preview`}
+                          />
+                        ) : null}
                       </li>
                     )
                   })}
@@ -523,19 +650,21 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
           </button>
         </div>
         <p className="args-notes-hint mono">
-          {args.focus?.type === 'side'
-            ? 'Freeform flowing notes for this draft. Separate from the section/prong outline.'
-            : args.focus?.type === 'joined'
-              ? 'Every section and prong in this draft, joined in outline order. Click Edit to focus a piece.'
-              : args.focus?.type === 'section'
-                ? 'Notes for this section only. Switch drafts above, or open Full argument (joined).'
-                : 'Notes for this prong only. Switch drafts above, or open Full argument (joined).'}
+          {isJoined
+            ? 'Every section and prong in this draft, joined in outline order. Click Edit to focus a piece.'
+            : showBoardPreviews
+              ? 'Working notes for the selected piece. Previews on the left are for scanning only.'
+              : args.focus?.type === 'side'
+                ? 'Freeform flowing notes for this draft. Separate from the section/prong outline.'
+                : args.focus?.type === 'section'
+                  ? 'Notes for this section only. Use Structure + notes to scan logic beside the outline.'
+                  : 'Notes for this prong only. Use Structure + notes to scan logic beside the outline.'}
         </p>
         {isJoined ? (
           <ArgsJoinedReadthrough
             blocks={args.joinedBlocks}
-            onEditSection={args.selectSection}
-            onEditProng={args.selectProng}
+            onEditSection={editSection}
+            onEditProng={editProng}
           />
         ) : (
           <NoteEditor key={editorKey} html={args.notesHtml} onChange={args.setNotesForSide} />

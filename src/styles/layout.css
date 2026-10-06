@@ -1262,6 +1262,60 @@
   margin: 0 0 10px;
 }
 
+.args-note-preview {
+  width: 100%;
+  margin: 4px 0 8px 24px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--paper-2) 80%, transparent);
+  color: var(--ink-3);
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.args-view-chips > .args-note-preview {
+  margin: 2px 0 0;
+}
+
+.args-note-preview.is-empty {
+  font-style: italic;
+  opacity: 0.85;
+}
+
+.args-note-preview.on {
+  border-color: var(--rule);
+  background: var(--paper-2);
+  color: var(--ink-2);
+}
+
+.args-note-preview:hover {
+  border-color: var(--rule-soft);
+  color: var(--ink-2);
+}
+
+.args-outline.is-board .args-section {
+  padding-bottom: 6px;
+}
+
+.args-prong-row.has-preview {
+  padding: 4px 4px 6px;
+}
+
+.args-prong-row.has-preview .args-note-preview {
+  grid-column: 1 / -1;
+  margin: 2px 0 0 28px;
+  width: auto;
+}
+
 .args-whole-chip.on {
   border-color: var(--ink);
   color: var(--ink);

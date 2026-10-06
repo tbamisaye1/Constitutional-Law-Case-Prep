@@ -12,6 +12,24 @@ function stripHtml(html) {
     .trim()
 }
 
+/**
+ * Plain-text preview of TipTap / HTML notes for the Structure + notes outline.
+ * Empty string when there is nothing useful to show.
+ *
+ * @param {string} html
+ * @param {number} [maxLen]
+ */
+export function notePreview(html, maxLen = 220) {
+  const plain = stripHtml(html)
+  if (!plain) return ''
+  const limit = Number.isFinite(maxLen) && maxLen > 0 ? Math.floor(maxLen) : 220
+  if (plain.length <= limit) return plain
+  const cut = plain.slice(0, limit)
+  const atWord = cut.lastIndexOf(' ')
+  const trimmed = atWord > Math.floor(limit * 0.6) ? cut.slice(0, atWord) : cut
+  return `${trimmed.trimEnd()}…`
+}
+
 function chunkText(text, size = 900) {
   const raw = String(text || '').trim()
   if (!raw) return []
