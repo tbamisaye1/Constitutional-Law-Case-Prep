@@ -643,24 +643,36 @@ export function retryWorkspaceBootstrap() {
 }
 
 /**
+ * Publish newly loaded PDF bytes so the library can open a file as soon as
+ * that one arrives, instead of waiting for the whole hydrate loop.
+ */
+function commitBlobs(partial) {
+  if (!partial || !Object.keys(partial).length) return
+  memory = { ...memory, blobs: { ...memory.blobs, ...partial } }
+  emit()
+}
+
+/**
  * Load PDF bytes into memory for every file in the library.
  *
  * IndexedDB first, because it is local and instant. A file this browser has
  * never seen, synced from another device, is then fetched from the backend and
  * cached in IndexedDB so the next refresh is local again.
+ *
+ * Network fetches run a few at a time and each success is committed immediately.
+ * The old loop waited for every PDF (~30 MB) before clearing any "loading…"
+ * label, so Youngstown looked stuck behind Milligan / other large opinions.
  */
 async function hydrateBlobs() {
-  const next = { ...memory.blobs }
-  let added = false
+  const pendingNetwork = []
 
   for (const meta of memory.store.filesMeta) {
-    if (next[meta.id]) continue
+    if (memory.blobs[meta.id]) continue
 
     try {
       const row = await idbGetFile(meta.id)
       if (row?.blob) {
-        next[meta.id] = row.blob
-        added = true
+        commitBlobs({ [meta.id]: row.blob })
         continue
       }
     } catch {
@@ -669,20 +681,31 @@ async function hydrateBlobs() {
 
     // Only worth a request when the backend told us it holds the bytes.
     if (!meta.stored || memory.syncStatus === 'off') continue
-    try {
-      const blob = await downloadDocument(meta.id)
-      next[meta.id] = blob
-      added = true
-      await idbPutFile({ id: meta.id, caseId: meta.caseId, name: meta.name, blob })
-    } catch (error) {
-      console.warn(`Could not fetch ${meta.name} from the backend`, error)
-    }
+    pendingNetwork.push(meta)
   }
 
-  if (added) {
-    memory = { ...memory, blobs: next }
-    emit()
+  const CONCURRENCY = 3
+  let cursor = 0
+  async function worker() {
+    while (cursor < pendingNetwork.length) {
+      const meta = pendingNetwork[cursor]
+      cursor += 1
+      if (memory.blobs[meta.id]) continue
+      try {
+        const blob = await downloadDocument(meta.id)
+        commitBlobs({ [meta.id]: blob })
+        await idbPutFile({ id: meta.id, caseId: meta.caseId, name: meta.name, blob })
+      } catch (error) {
+        console.warn(`Could not fetch ${meta.name} from the backend`, error)
+      }
+    }
   }
+  if (pendingNetwork.length) {
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, pendingNetwork.length) }, () => worker())
+    )
+  }
+
   // Instant Case / library PDFs must also live in FAISS for Ask AI, including
   // ones attached before this wiring existed.
   void indexPendingAskAiFiles()

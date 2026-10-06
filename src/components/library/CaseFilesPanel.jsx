@@ -59,11 +59,21 @@ export function CaseFilesPanel({
                   className="files-open"
                   onClick={() => onSelect(f.id)}
                   disabled={!available}
-                  title={available ? 'Open in reader' : 'Still loading from storage, or re-add this file'}
+                  title={
+                    available
+                      ? 'Open in reader'
+                      : f.stored
+                        ? 'Fetching PDF bytes from workspace storage'
+                        : 'Not uploaded to the workspace yet. Re-add this file.'
+                  }
                 >
                   <FileText size={15} />
                   <span className="files-name">{f.name}</span>
-                  {!available ? <span className="mono files-missing">loading…</span> : null}
+                  {!available ? (
+                    <span className="mono files-missing">
+                      {f.stored ? 'loading…' : 'missing'}
+                    </span>
+                  ) : null}
                 </button>
                 <button
                   type="button"
