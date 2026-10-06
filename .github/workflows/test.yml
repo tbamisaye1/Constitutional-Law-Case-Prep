@@ -22,6 +22,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm test
-      - run: npm run build
+      # Same resolver as the Vercel build (npm install, not npm ci), so CI
+      # fails for the same reasons production would and no others.
+      - name: Install
+        run: npm install --no-audit --no-fund 2>&1 | tee install.log || { tail -n 15 install.log | sed 's/^/::error::/'; exit 1; }
+        shell: bash -o pipefail {0}
+      # Failures are also echoed as annotations so they can be read from the
+      # API without downloading the full log.
+      - name: Unit tests
+        run: npm test 2>&1 | tee test.log || { grep -E "FAIL|✗|×|AssertionError|Error:" test.log | head -n 30 | sed 's/^/::error::/'; exit 1; }
+        shell: bash -o pipefail {0}
+      - name: Build
+        run: npm run build
