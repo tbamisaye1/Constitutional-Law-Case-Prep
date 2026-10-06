@@ -68,7 +68,7 @@ describe('argumentNotes', () => {
     expect(queryWantsArgumentNotes('define AUMF from the article')).toBe(false)
   })
 
-  it('builds a plain-text note preview for the Structure + notes outline', () => {
+  it('builds a plain-text note preview for the scratch jump list', () => {
     expect(notePreview('')).toBe('')
     expect(notePreview('<p>Short working note.</p>')).toBe('Short working note.')
     const long = notePreview(`<p>${'word '.repeat(80)}</p>`, 40)

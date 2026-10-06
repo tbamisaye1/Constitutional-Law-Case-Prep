@@ -13,7 +13,7 @@ function stripHtml(html) {
 }
 
 /**
- * Plain-text preview of TipTap / HTML notes for the Structure + notes outline.
+ * Plain-text preview of TipTap / HTML notes for the scratch jump list.
  * Empty string when there is nothing useful to show.
  *
  * @param {string} html

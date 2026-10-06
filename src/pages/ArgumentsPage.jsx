@@ -5,6 +5,8 @@ import {
   GripVertical,
   Maximize2,
   Minimize2,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
   Trash2,
 } from 'lucide-react'
@@ -94,7 +96,7 @@ function OutlineMoveButtons({ canUp, canDown, onUp, onDown, label }) {
 }
 
 const EXPAND_KEY = 'case-prep-args-expanded'
-const VIEW_KEY = 'case-prep-args-view'
+const SCRATCH_KEY = 'case-prep-args-scratch'
 
 function readExpanded() {
   try {
@@ -104,47 +106,25 @@ function readExpanded() {
   }
 }
 
-function readViewMode() {
+function readScratchOpen() {
   try {
-    const raw = localStorage.getItem(VIEW_KEY)
-    if (raw === 'board' || raw === 'joined' || raw === 'focus') return raw
+    const raw = localStorage.getItem(SCRATCH_KEY)
+    if (raw === '0') return false
+    if (raw === '1') return true
   } catch {
     /* ignore */
   }
-  return 'focus'
-}
-
-function NotePreview({ html, active, onSelect, label }) {
-  const preview = notePreview(html)
-  return (
-    <button
-      type="button"
-      className={
-        active
-          ? 'args-note-preview on'
-          : preview
-            ? 'args-note-preview'
-            : 'args-note-preview is-empty'
-      }
-      onClick={(e) => {
-        e.stopPropagation()
-        onSelect()
-      }}
-      aria-label={label}
-    >
-      {preview || 'No notes yet — click to write working notes for this piece.'}
-    </button>
-  )
+  return true
 }
 
 /**
- * Argument board: multiple drafts per side, each with sections/prongs,
- * whole-argument notes, and a joined read-through.
+ * Argument board: compact outline on the left. Scratch notes (citations,
+ * logic for future-you) sit in a closable rail to the side.
  */
 export function ArgumentsPage() {
   const args = useArguments()
   const [expanded, setExpanded] = useState(readExpanded)
-  const [viewMode, setViewMode] = useState(readViewMode)
+  const [scratchOpen, setScratchOpen] = useState(readScratchOpen)
 
   useEffect(() => {
     try {
@@ -156,11 +136,11 @@ export function ArgumentsPage() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(VIEW_KEY, viewMode)
+      localStorage.setItem(SCRATCH_KEY, scratchOpen ? '1' : '0')
     } catch {
       /* ignore */
     }
-  }, [viewMode])
+  }, [scratchOpen])
 
   useEffect(() => {
     if (!expanded) return undefined
@@ -174,24 +154,6 @@ export function ArgumentsPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [expanded])
 
-  // Restore joined focus when that view was remembered from a prior visit.
-  const restoredView = useRef(false)
-  useEffect(() => {
-    if (restoredView.current) return
-    restoredView.current = true
-    if (viewMode === 'joined') args.focusJoinedArgument()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot restore
-  }, [])
-
-  // Leaving joined via Edit / outline should not wipe Structure + notes.
-  useEffect(() => {
-    if (args.focus?.type === 'joined') {
-      setViewMode('joined')
-      return
-    }
-    setViewMode((prev) => (prev === 'joined' ? 'focus' : prev))
-  }, [args.focus?.type])
-
   return (
     <section className={expanded ? 'workspace args-workspace is-expanded' : 'workspace args-workspace'}>
       {!expanded ? (
@@ -199,10 +161,9 @@ export function ArgumentsPage() {
           <div>
             <h1>Arguments</h1>
             <p className="lede">
-              Structure the argument on the left; write working notes for each section, prong, or the
-              whole draft on the right. Use Structure + notes to scan your logic beside the outline
-              while you outline. Full argument joins every piece to read through. The database is the
-              durable copy; hard refresh reloads from there.
+              Build the outline on the left. Open Scratch on the right for rough notes on the piece
+              you have selected (citations, why this prong exists). Close that rail when you only
+              want to rearrange structure. Full argument joins every piece to read through.
             </p>
           </div>
           <div className="args-head-actions">
@@ -239,8 +200,8 @@ export function ArgumentsPage() {
             args={args}
             visible={args.side === 'petitioner'}
             expanded={expanded}
-            viewMode={viewMode}
-            setViewMode={setViewMode}
+            scratchOpen={scratchOpen}
+            setScratchOpen={setScratchOpen}
             onToggleExpand={() => setExpanded((v) => !v)}
           />
         </UiTabsContent>
@@ -249,8 +210,8 @@ export function ArgumentsPage() {
             args={args}
             visible={args.side === 'respondent'}
             expanded={expanded}
-            viewMode={viewMode}
-            setViewMode={setViewMode}
+            scratchOpen={scratchOpen}
+            setScratchOpen={setScratchOpen}
             onToggleExpand={() => setExpanded((v) => !v)}
           />
         </UiTabsContent>
@@ -259,7 +220,14 @@ export function ArgumentsPage() {
   )
 }
 
-function ArgsBoard({ args, visible, expanded, viewMode, setViewMode, onToggleExpand }) {
+function ArgsBoard({
+  args,
+  visible,
+  expanded,
+  scratchOpen,
+  setScratchOpen,
+  onToggleExpand,
+}) {
   const [dragging, setDragging] = useState(null)
   const [dragOver, setDragOver] = useState(null)
 
@@ -270,10 +238,8 @@ function ArgsBoard({ args, visible, expanded, viewMode, setViewMode, onToggleExp
     setDragOver(null)
   }
 
-  const showBoardPreviews = viewMode === 'board'
   const isJoined = args.focus?.type === 'joined'
-  const wholeOn = !isJoined && args.focus?.type === 'side' && viewMode !== 'board'
-  const boardOn = viewMode === 'board' && !isJoined
+  const showScratch = expanded || scratchOpen
   const editorKey = [
     args.side,
     args.activeDraftId || '',
@@ -282,35 +248,32 @@ function ArgsBoard({ args, visible, expanded, viewMode, setViewMode, onToggleExp
     args.focus?.prongId || '',
   ].join(':')
 
-  function openWholeNotes() {
-    setViewMode('focus')
-    args.focusWholeArgument()
-  }
-
-  function openBoard() {
-    setViewMode('board')
-    if (args.focus?.type === 'joined') args.focusWholeArgument()
-  }
-
-  function openJoined() {
-    setViewMode('joined')
-    args.focusJoinedArgument()
+  function openScratch() {
+    setScratchOpen(true)
   }
 
   function editSection(sectionId) {
-    if (viewMode === 'joined') setViewMode('focus')
     args.selectSection(sectionId)
+    if (!expanded) openScratch()
   }
 
   function editProng(sectionId, prongId) {
-    if (viewMode === 'joined') setViewMode('focus')
     args.selectProng(sectionId, prongId)
+    if (!expanded) openScratch()
   }
 
+  const splitClass = [
+    'args-split',
+    expanded ? 'is-expanded' : '',
+    !expanded && !scratchOpen ? 'is-scratch-closed' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <div className={expanded ? 'args-split is-expanded' : 'args-split'}>
+    <div className={splitClass}>
       {!expanded ? (
-        <div className={showBoardPreviews ? 'args-outline is-board' : 'args-outline'}>
+        <div className="args-outline">
           <div className="args-drafts">
             <div className="args-drafts-label mono">Drafts</div>
             <div className="args-draft-chips">
@@ -357,33 +320,45 @@ function ArgsBoard({ args, visible, expanded, viewMode, setViewMode, onToggleExp
           <div className="args-view-chips">
             <button
               type="button"
-              className={wholeOn ? 'args-whole-chip on' : 'args-whole-chip'}
-              onClick={openWholeNotes}
+              className={args.focus?.type === 'side' ? 'args-whole-chip on' : 'args-whole-chip'}
+              onClick={() => {
+                args.focusWholeArgument()
+                openScratch()
+              }}
             >
               Whole argument notes
             </button>
             <button
               type="button"
-              className={boardOn ? 'args-whole-chip on' : 'args-whole-chip'}
-              onClick={openBoard}
-            >
-              Structure + notes
-            </button>
-            <button
-              type="button"
               className={isJoined ? 'args-whole-chip on' : 'args-whole-chip'}
-              onClick={openJoined}
+              onClick={() => {
+                args.focusJoinedArgument()
+                openScratch()
+              }}
             >
               Full argument (joined)
             </button>
-            {showBoardPreviews ? (
-              <NotePreview
-                html={args.activeDraft?.notes || ''}
-                active={args.focus?.type === 'side'}
-                onSelect={args.focusWholeArgument}
-                label="Whole argument working notes preview"
-              />
-            ) : null}
+            <button
+              type="button"
+              className={scratchOpen ? 'args-whole-chip on' : 'args-whole-chip'}
+              onClick={() => setScratchOpen((open) => !open)}
+              aria-pressed={scratchOpen}
+              title={
+                scratchOpen
+                  ? 'Hide scratch notes · outline only'
+                  : 'Show scratch notes beside the outline'
+              }
+            >
+              {scratchOpen ? (
+                <>
+                  <PanelRightClose size={14} /> Hide scratch
+                </>
+              ) : (
+                <>
+                  <PanelRightOpen size={14} /> Scratch notes
+                </>
+              )}
+            </button>
           </div>
 
           {args.sections.length === 0 && (
@@ -430,10 +405,7 @@ function ArgsBoard({ args, visible, expanded, viewMode, setViewMode, onToggleExp
                   args.moveSection(fromId, sectionIdx)
                 }}
               >
-                <div
-                  className="args-section-head"
-                  onClick={() => editSection(section.id)}
-                >
+                <div className="args-section-head" onClick={() => editSection(section.id)}>
                   <span
                     className="args-grip"
                     draggable
@@ -476,14 +448,6 @@ function ArgsBoard({ args, visible, expanded, viewMode, setViewMode, onToggleExp
                     <Trash2 size={15} />
                   </button>
                 </div>
-                {showBoardPreviews ? (
-                  <NotePreview
-                    html={section.notes || ''}
-                    active={sectionOn}
-                    onSelect={() => editSection(section.id)}
-                    label={`Section ${sectionIdx + 1} working notes preview`}
-                  />
-                ) : null}
 
                 <ul className="args-prongs">
                   {(section.prongs || []).map((prong, prongIdx) => {
@@ -500,7 +464,6 @@ function ArgsBoard({ args, visible, expanded, viewMode, setViewMode, onToggleExp
                         className={[
                           prongOn ? 'args-row args-prong-row on' : 'args-row args-prong-row',
                           prongDropOn ? 'is-drop-target' : '',
-                          showBoardPreviews ? 'has-preview' : '',
                         ]
                           .filter(Boolean)
                           .join(' ')}
@@ -590,14 +553,6 @@ function ArgsBoard({ args, visible, expanded, viewMode, setViewMode, onToggleExp
                         >
                           <Trash2 size={15} />
                         </button>
-                        {showBoardPreviews ? (
-                          <NotePreview
-                            html={prong.notes || ''}
-                            active={prongOn}
-                            onSelect={() => editProng(section.id, prong.id)}
-                            label={`Prong ${sectionIdx + 1}.${prongIdx + 1} working notes preview`}
-                          />
-                        ) : null}
                       </li>
                     )
                   })}
@@ -620,56 +575,128 @@ function ArgsBoard({ args, visible, expanded, viewMode, setViewMode, onToggleExp
         </div>
       ) : null}
 
-      <div className="args-notes">
-        <div className="args-notes-head">
-          {expanded ? (
-            <span className="mono notes-expand-hint">{args.focusLabel}</span>
-          ) : (
-            <span className="mono args-notes-label">{args.focusLabel}</span>
-          )}
-          <button
-            type="button"
-            className={expanded ? 'btn-ink notes-expand-exit' : 'btn-soft'}
-            onClick={onToggleExpand}
-            aria-label={expanded ? 'Exit expanded notes' : 'Expand working notes'}
-            title={
-              expanded
-                ? 'Exit expanded view (Esc) · show argument outline again'
-                : 'Expand notes · hide argument outline'
-            }
-          >
+      {showScratch ? (
+        <div className="args-notes">
+          <div className="args-notes-head">
             {expanded ? (
-              <>
-                <Minimize2 size={15} /> Exit
-              </>
+              <span className="mono notes-expand-hint">{args.focusLabel}</span>
             ) : (
-              <>
-                <Maximize2 size={15} /> Expand
-              </>
+              <span className="mono args-notes-label">{args.focusLabel}</span>
             )}
-          </button>
-        </div>
-        <p className="args-notes-hint mono">
-          {isJoined
-            ? 'Every section and prong in this draft, joined in outline order. Click Edit to focus a piece.'
-            : showBoardPreviews
-              ? 'Working notes for the selected piece. Previews on the left are for scanning only.'
+            <div className="args-notes-head-actions">
+              {!expanded ? (
+                <button
+                  type="button"
+                  className="btn-soft"
+                  onClick={() => setScratchOpen(false)}
+                  aria-label="Hide scratch notes"
+                  title="Hide scratch notes · outline only"
+                >
+                  <PanelRightClose size={15} /> Hide
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className={expanded ? 'btn-ink notes-expand-exit' : 'btn-soft'}
+                onClick={onToggleExpand}
+                aria-label={expanded ? 'Exit expanded notes' : 'Expand working notes'}
+                title={
+                  expanded
+                    ? 'Exit expanded view (Esc) · show argument outline again'
+                    : 'Expand notes · hide argument outline'
+                }
+              >
+                {expanded ? (
+                  <>
+                    <Minimize2 size={15} /> Exit
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 size={15} /> Expand
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+          <p className="args-notes-hint mono">
+            {isJoined
+              ? 'Every section and prong in this draft, joined in outline order. Click Edit to focus a piece.'
               : args.focus?.type === 'side'
-                ? 'Freeform flowing notes for this draft. Separate from the section/prong outline.'
+                ? 'Scratch for the whole draft: citations, reminders, why this structure exists.'
                 : args.focus?.type === 'section'
-                  ? 'Notes for this section only. Use Structure + notes to scan logic beside the outline.'
-                  : 'Notes for this prong only. Use Structure + notes to scan logic beside the outline.'}
-        </p>
-        {isJoined ? (
-          <ArgsJoinedReadthrough
-            blocks={args.joinedBlocks}
-            onEditSection={editSection}
-            onEditProng={editProng}
-          />
-        ) : (
-          <NoteEditor key={editorKey} html={args.notesHtml} onChange={args.setNotesForSide} />
-        )}
-      </div>
+                  ? 'Scratch for this section only. Click another row on the left to switch pieces.'
+                  : 'Scratch for this prong only. Citations and logic for later-you live here.'}
+          </p>
+          {!expanded && !isJoined ? (
+            <ScratchJumpList
+              args={args}
+              onWhole={() => args.focusWholeArgument()}
+              onSection={args.selectSection}
+              onProng={args.selectProng}
+            />
+          ) : null}
+          {isJoined ? (
+            <ArgsJoinedReadthrough
+              blocks={args.joinedBlocks}
+              onEditSection={editSection}
+              onEditProng={editProng}
+            />
+          ) : (
+            <NoteEditor key={editorKey} html={args.notesHtml} onChange={args.setNotesForSide} />
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function ScratchJumpList({ args, onWhole, onSection, onProng }) {
+  const items = [
+    {
+      key: 'whole',
+      label: 'Whole draft',
+      html: args.activeDraft?.notes || '',
+      active: args.focus?.type === 'side',
+      onSelect: onWhole,
+    },
+  ]
+  ;(args.sections || []).forEach((section, sectionIdx) => {
+    items.push({
+      key: `s-${section.id}`,
+      label: `${sectionIdx + 1}. ${section.title || 'Section'}`,
+      html: section.notes || '',
+      active: args.focus?.type === 'section' && args.focus.sectionId === section.id,
+      onSelect: () => onSection(section.id),
+    })
+    ;(section.prongs || []).forEach((prong, prongIdx) => {
+      items.push({
+        key: `p-${prong.id}`,
+        label: `${sectionIdx + 1}.${prongIdx + 1} ${prong.title || 'Prong'}`,
+        html: prong.notes || '',
+        active: args.focus?.type === 'prong' && args.focus.prongId === prong.id,
+        onSelect: () => onProng(section.id, prong.id),
+      })
+    })
+  })
+
+  return (
+    <div className="args-scratch-jump" role="navigation" aria-label="Jump to a piece’s scratch notes">
+      {items.map((item) => {
+        const preview = notePreview(item.html, 90)
+        return (
+          <button
+            key={item.key}
+            type="button"
+            className={item.active ? 'args-scratch-jump-item on' : 'args-scratch-jump-item'}
+            onClick={item.onSelect}
+          >
+            <span className="mono args-scratch-jump-label">{item.label}</span>
+            <span className={preview ? 'args-scratch-jump-preview' : 'args-scratch-jump-preview is-empty'}>
+              {preview || 'No notes yet'}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
