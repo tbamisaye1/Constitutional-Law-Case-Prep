@@ -9,6 +9,18 @@
  * row on Postgres never moves, which is what hid the 2026-10-06 freeze.
  */
 
+function rejectedMessage(rejected) {
+  if (!Array.isArray(rejected) || !rejected.length) return ''
+  const reasons = rejected.map((row) => row?.reason || '').filter(Boolean)
+  if (reasons.some((r) => r.includes('agent_jackson') || r.includes('agent_claim'))) {
+    return 'Server kept your existing Arguments board and rejected an agent/seed overwrite.'
+  }
+  if (reasons.some((r) => r.includes('seed'))) {
+    return 'Server blocked seed outline text from overwriting your Arguments notes.'
+  }
+  return 'Server rejected part of your last Arguments sync. Check the board against another device.'
+}
+
 export function describeSyncStatus(sync) {
   if (!sync || sync.status === 'off') {
     return {
@@ -22,6 +34,14 @@ export function describeSyncStatus(sync) {
     return {
       tone: 'warn',
       text: `Database unreachable (retrying). ${sync.error || ''}`.trim(),
+    }
+  }
+
+  const rejectedText = rejectedMessage(sync.rejected)
+  if (rejectedText) {
+    return {
+      tone: 'warn',
+      text: rejectedText,
     }
   }
 

@@ -261,6 +261,9 @@ let memory = {
   // Last time a push that included Arguments was accepted (written or server echo).
   // Separate from lastSyncedAt so empty heartbeats cannot fake an Arguments save.
   argumentsAckedAt: 0,
+  // Last /sync rejected[] payload (Arguments seed/agent protect). Cleared on a
+  // clean push so the banner does not stick forever after a one-off block.
+  syncRejected: [],
   // False until the first Postgres pull hydrates prep docs. UI stays on a boot
   // screen so localStorage / leftover seed never flash before the DB wins.
   // When sync is off, ready immediately (local-only browser).
@@ -462,6 +465,7 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
       syncError: '',
       lastSyncedAt: Date.now(),
       argumentsAckedAt,
+      syncRejected: Array.isArray(response.rejected) ? response.rejected : [],
     }
     emit()
     persistSoon()
@@ -1943,6 +1947,7 @@ export function useCaseLibrary() {
       pending: pendingCount(snap.store.syncMeta),
       pendingArguments: hasPendingArguments(snap.store.syncMeta),
       argumentsAckedAt: snap.argumentsAckedAt,
+      rejected: snap.syncRejected || [],
       workspaceId: WORKSPACE_ID,
     },
     syncNow: () => {

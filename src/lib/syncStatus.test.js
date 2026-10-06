@@ -61,6 +61,17 @@ describe('describeSyncStatus', () => {
     expect(status.text.toLowerCase()).toContain('arguments confirmed')
   })
 
+  it('warns when the server rejected an Arguments push', () => {
+    const status = describeSyncStatus({
+      status: 'idle',
+      pending: 0,
+      lastSyncedAt: Date.now(),
+      rejected: [{ kind: 'arguments', reason: 'arguments_rejected_seed_content' }],
+    })
+    expect(status.tone).toBe('warn')
+    expect(status.text.toLowerCase()).toContain('seed')
+  })
+
   it('keeps error and off states honest', () => {
     expect(describeSyncStatus({ status: 'off' }).tone).toBe('warn')
     expect(
