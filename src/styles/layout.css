@@ -950,6 +950,10 @@
   min-height: 0;
 }
 
+.args-workspace.is-expanded {
+  overflow: auto;
+}
+
 .args-workspace > .workspace-head,
 .args-workspace > .save-banner,
 .args-workspace > .workspace-link-note {
@@ -989,6 +993,8 @@
 .args-split.is-expanded {
   grid-template-columns: minmax(0, 1fr) 240px;
   min-height: calc(100vh - 140px);
+  height: auto;
+  align-items: stretch;
 }
 
 .args-notes {
@@ -996,7 +1002,8 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  height: 100%;
+  height: auto;
+  max-height: 100%;
   overflow: auto;
   padding: 10px 14px 20px;
   background: var(--paper-2);
@@ -1037,10 +1044,32 @@
   max-width: none;
   margin: 0;
   width: 100%;
+  height: auto;
+  max-height: none;
+  min-height: 100%;
+}
+
+.args-notes .note-editor {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  overflow: visible;
 }
 
 .args-workspace.is-expanded .note-editor {
-  min-height: calc(100vh - 200px);
+  min-height: calc(100vh - 220px);
+  height: auto;
+}
+
+.args-notes .note-editor .tiptap,
+.args-notes .note-prose {
+  height: auto;
+  overflow: visible;
+}
+
+.args-workspace.is-expanded .note-prose {
+  min-height: calc(100vh - 290px);
 }
 
 .args-expand-nav {
@@ -1048,7 +1077,10 @@
   background: var(--paper);
   overflow: auto;
   min-height: 0;
-  height: 100%;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: calc(100vh - 70px);
   padding: 12px 8px 28px;
 }
 
