@@ -21,6 +21,44 @@ const SIZE_KEY = 'case-prep-ask-ai-size'
 const MIN_BUBBLE_WIDTH = 280
 const MIN_BUBBLE_HEIGHT = 260
 
+/**
+ * Pair memory turns into You → Ask AI exchanges so the transcript reads as a
+ * chat instead of a flat label dump. Leading orphan assistants stay alone.
+ * `indexOffset` is added so sliced windows still restore into the full memory.
+ */
+export function groupMemoryExchanges(turns, indexOffset = 0) {
+  const list = Array.isArray(turns) ? turns : []
+  const exchanges = []
+  let i = 0
+  let exchangeNo = 0
+  while (i < list.length) {
+    const turn = list[i]
+    if (turn.role === 'user') {
+      const next = list[i + 1]
+      const paired = next && next.role === 'assistant'
+      exchangeNo += 1
+      exchanges.push({
+        key: `ex-${exchangeNo}-${turn.at || i}`,
+        turns: paired
+          ? [
+              { turn, index: indexOffset + i },
+              { turn: next, index: indexOffset + i + 1 },
+            ]
+          : [{ turn, index: indexOffset + i }],
+      })
+      i += paired ? 2 : 1
+      continue
+    }
+    exchangeNo += 1
+    exchanges.push({
+      key: `ex-${exchangeNo}-${turn.at || i}`,
+      turns: [{ turn, index: indexOffset + i }],
+    })
+    i += 1
+  }
+  return exchanges
+}
+
 function readExpanded() {
   try {
     return localStorage.getItem(EXPAND_KEY) === '1'
@@ -592,37 +630,75 @@ export function AiSelectionBubble() {
 
         {memory.length && !loading ? (
           <div className="ai-memory-transcript">
-            <div className="ai-sample-label mono">Recent thread</div>
+            <div className="ai-memory-transcript-head">
+              <div className="ai-sample-label mono">Past conversation</div>
+              <button
+                type="button"
+                className="btn-soft ai-memory-open-last"
+                onClick={() => restoreFromMemory()}
+              >
+                Open last answer
+              </button>
+            </div>
             <p className="ai-memory-hint">
-              Tap a turn to open the full answer, or use Open last full answer.
+              Earlier turns in this chat. Tap an Ask AI reply to reopen the full answer.
             </p>
-            <button
-              type="button"
-              className="btn-soft ai-memory-open-last"
-              onClick={() => restoreFromMemory()}
-            >
-              Open last full answer
-            </button>
-            {memory.slice(-4).map((turn, i) => {
-              const absoluteIndex = memory.length - Math.min(4, memory.length) + i
-              const canOpen = turn.role === 'assistant'
-              return (
-                <button
-                  key={`${turn.at || absoluteIndex}-${turn.role}`}
-                  type="button"
-                  className={canOpen ? 'ai-memory-turn ai-memory-turn-btn' : 'ai-memory-turn ai-memory-turn-static'}
-                  disabled={!canOpen}
-                  onClick={() => {
-                    if (canOpen) restoreFromMemory(absoluteIndex)
-                  }}
-                >
-                  <span className="mono">{turn.role === 'user' ? 'You' : 'Ask AI'}</span>
-                  {turn.content.slice(0, 140)}
-                  {turn.content.length > 140 ? '…' : ''}
-                  {canOpen ? <span className="mono ai-memory-open-hint">Open →</span> : null}
-                </button>
-              )
-            })}
+            <div className="ai-memory-chat" role="log" aria-label="Past Ask AI turns">
+              {(() => {
+                const recent = memory.slice(-6)
+                const offset = memory.length - recent.length
+                return groupMemoryExchanges(recent, offset).map((exchange) => (
+                  <div key={exchange.key} className="ai-memory-exchange">
+                    {exchange.turns.map((item) => {
+                      const isYou = item.turn.role === 'user'
+                      const canOpen = item.turn.role === 'assistant'
+                      const preview = item.turn.content.slice(0, 160)
+                      const truncated = item.turn.content.length > 160
+                      const className = [
+                        'ai-memory-bubble',
+                        isYou ? 'is-you' : 'is-ai',
+                        canOpen ? 'is-openable' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')
+                      const body = (
+                        <>
+                          <div className="ai-memory-bubble-meta">
+                            <span className="mono ai-memory-bubble-who">
+                              {isYou ? 'You' : 'Ask AI'}
+                            </span>
+                            {canOpen ? (
+                              <span className="mono ai-memory-open-hint">Open full answer →</span>
+                            ) : null}
+                          </div>
+                          <p className="ai-memory-bubble-text">
+                            {preview}
+                            {truncated ? '…' : ''}
+                          </p>
+                        </>
+                      )
+                      if (canOpen) {
+                        return (
+                          <button
+                            key={`${item.index}-${item.turn.role}`}
+                            type="button"
+                            className={className}
+                            onClick={() => restoreFromMemory(item.index)}
+                          >
+                            {body}
+                          </button>
+                        )
+                      }
+                      return (
+                        <div key={`${item.index}-${item.turn.role}`} className={className}>
+                          {body}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))
+              })()}
+            </div>
           </div>
         ) : null}
         {hasSelection ? (

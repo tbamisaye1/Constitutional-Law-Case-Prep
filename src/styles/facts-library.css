@@ -3820,68 +3820,114 @@ button.anno-topic-chip.pick:focus-visible {
 }
 
 .ai-memory-transcript {
-  margin: 0 0 10px;
-  padding: 8px 0 0;
+  margin: 0 0 12px;
+  padding: 10px 0 0;
   border-top: 1px solid var(--rule-soft);
 }
 
-.ai-memory-open-last {
-  margin: 0 0 8px;
-}
-
-.ai-memory-turn {
+.ai-memory-transcript-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin: 0 0 6px;
-  font-size: 12.5px;
-  line-height: 1.4;
-  color: var(--ink-2);
 }
 
-button.ai-memory-turn-btn {
+.ai-memory-open-last {
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.ai-memory-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(42vh, 320px);
+  overflow: auto;
+  padding: 2px 2px 4px;
+}
+
+.ai-memory-exchange {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--rule-soft);
+  background: color-mix(in srgb, var(--paper) 70%, var(--paper-2, #f3f1ec));
+}
+
+.ai-memory-bubble {
   display: block;
   width: 100%;
-  text-align: left;
-  background: transparent;
+  margin: 0;
+  padding: 8px 10px;
   border: 1px solid transparent;
-  border-radius: 0;
-  padding: 6px 4px;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-}
-
-button.ai-memory-turn-btn:hover,
-button.ai-memory-turn-btn:focus-visible {
-  border-color: var(--rule);
-  background: var(--paper-2, rgba(0, 0, 0, 0.03));
-}
-
-.ai-memory-turn-static {
-  display: block;
-  width: 100%;
   text-align: left;
-  background: transparent;
-  border: 0;
-  padding: 6px 4px;
   font: inherit;
   color: inherit;
-  cursor: default;
+  box-sizing: border-box;
 }
 
-.ai-memory-open-hint {
-  display: inline-block;
-  margin-left: 6px;
-  font-size: 10px;
-  color: var(--ink-3);
+.ai-memory-bubble.is-you {
+  background: var(--paper-2, #efece6);
+  border-color: var(--rule-soft);
+  align-self: stretch;
 }
 
-.ai-memory-turn .mono {
-  display: inline-block;
-  min-width: 4.5ch;
-  margin-right: 6px;
+.ai-memory-bubble.is-ai {
+  background: var(--paper);
+  border-color: color-mix(in srgb, var(--ink) 14%, var(--rule-soft));
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+
+button.ai-memory-bubble.is-openable {
+  cursor: pointer;
+}
+
+button.ai-memory-bubble.is-openable:hover,
+button.ai-memory-bubble.is-openable:focus-visible {
+  border-color: var(--ink);
+  background: color-mix(in srgb, var(--gold) 10%, var(--paper));
+}
+
+.ai-memory-bubble-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 4px;
+}
+
+.ai-memory-bubble-who {
   font-size: 10px;
   color: var(--ink-3);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
+}
+
+.ai-memory-bubble.is-you .ai-memory-bubble-who {
+  color: var(--ink-2);
+}
+
+.ai-memory-bubble.is-ai .ai-memory-bubble-who {
+  color: color-mix(in srgb, var(--ink) 70%, var(--gold));
+}
+
+.ai-memory-open-hint {
+  font-size: 10px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.ai-memory-bubble-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .ai-mode-row {
