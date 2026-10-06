@@ -712,6 +712,15 @@ function commitBlobs(partial) {
  * The old loop waited for every PDF (~30 MB) before clearing any "loading…"
  * label, so Youngstown looked stuck behind Milligan / other large opinions.
  */
+/**
+ * Per-file backoff after a failed backend download, so a broken file is not
+ * re-requested on every sync tick (that produced hundreds of console warnings
+ * and wasted bandwidth on 30 MB of opinions). id -> { until, delay }.
+ */
+const downloadBackoff = new Map()
+const BACKOFF_START_MS = 5_000
+const BACKOFF_MAX_MS = 5 * 60_000
+
 async function hydrateBlobs() {
   const pendingNetwork = []
 
@@ -730,6 +739,7 @@ async function hydrateBlobs() {
 
     // Only worth a request when the backend told us it holds the bytes.
     if (!meta.stored || memory.syncStatus === 'off') continue
+    if ((downloadBackoff.get(meta.id)?.until ?? 0) > Date.now()) continue
     pendingNetwork.push(meta)
   }
 
@@ -742,10 +752,14 @@ async function hydrateBlobs() {
       if (memory.blobs[meta.id]) continue
       try {
         const blob = await downloadDocument(meta.id)
+        downloadBackoff.delete(meta.id)
         commitBlobs({ [meta.id]: blob })
         await idbPutFile({ id: meta.id, caseId: meta.caseId, name: meta.name, blob })
       } catch (error) {
-        console.warn(`Could not fetch ${meta.name} from the backend`, error)
+        const prev = downloadBackoff.get(meta.id)?.delay ?? 0
+        const delay = Math.min(prev ? prev * 2 : BACKOFF_START_MS, BACKOFF_MAX_MS)
+        downloadBackoff.set(meta.id, { until: Date.now() + delay, delay })
+        console.warn(`Could not fetch ${meta.name} from the backend (retry in ${Math.round(delay / 1000)}s)`, error)
       }
     }
   }

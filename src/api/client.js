@@ -418,15 +418,39 @@ export async function uploadDocumentDirect(file, { documentId, caseId, name }) {
 /**
  * Download a PDF's bytes as a Blob.
  *
- * The endpoint answers with a redirect to Blob storage and fetch follows it,
- * so the bytes come from the CDN rather than through the API function.
+ * Asks the API for the Blob URL, then fetches it with no custom headers.
+ *
+ * Do not fetch /documents/:id/file directly from the browser: that endpoint
+ * 307-redirects to the Blob CDN and fetch() re-sends X-Workspace-Id on the
+ * redirected request. A custom header makes it a non-simple CORS request, Blob
+ * rejects the preflight, and every PDF fails with "TypeError: Failed to fetch".
  */
 export async function downloadDocument(documentId) {
-  const res = await fetch(`${BASE}/documents/${encodeURIComponent(documentId)}/file`, {
-    headers: workspaceHeaders(),
-  });
-  if (!res.ok) throw new Error(await errorDetail(res, `download failed: ${res.status}`));
-  return res.blob();
+  const id = encodeURIComponent(documentId);
+  const res = await fetch(`${BASE}/documents/${id}/url`, { headers: workspaceHeaders() });
+
+  if (res.ok) {
+    const { url } = await res.json();
+    if (!url) throw new Error("download failed: API returned no URL");
+    // Plain GET, no custom headers or cookies, so no CORS preflight.
+    const blobRes = await fetch(url, { credentials: "omit" });
+    if (!blobRes.ok) throw new Error(`download failed: blob ${blobRes.status}`);
+    return blobRes.blob();
+  }
+
+  // Older API without /url: fall back to the redirect route. This only works
+  // where the browser drops the header on redirect, but it keeps clients
+  // working during a deploy where the frontend ships before the API.
+  if (res.status === 404 || res.status === 405) {
+    const detail = await errorDetail(res, "");
+    if (!/No such document/i.test(detail)) {
+      const legacy = await fetch(`${BASE}/documents/${id}/file`, { headers: workspaceHeaders() });
+      if (!legacy.ok) throw new Error(await errorDetail(legacy, `download failed: ${legacy.status}`));
+      return legacy.blob();
+    }
+    throw new Error(detail);
+  }
+  throw new Error(await errorDetail(res, `download failed: ${res.status}`));
 }
 
 /** Tombstone a document and delete its bytes. */
