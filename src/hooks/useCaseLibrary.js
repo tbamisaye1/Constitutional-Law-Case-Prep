@@ -437,8 +437,43 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
       })
     )
 
-    const applied = applyChanges(memory.store, memory.store.syncMeta, response.changes)
-    const syncMeta = clearAccepted(applied.syncMeta, sent, response.serverTime)
+    // Stale-base Arguments rejects leave the server row untouched, so they do
+    // not appear in the normal since-cursor pull. Fold the echoed board into
+    // changes so applyChanges can drop the dirty local copy.
+    let pullChanges = response.changes || {}
+    const rejectedArgs = (response.rejected || []).filter(
+      (row) =>
+        row &&
+        row.kind === 'arguments' &&
+        row.data &&
+        (row.reason === 'arguments_rejected_stale_base' ||
+          row.reason === 'arguments_rejected_missing_base')
+    )
+    if (rejectedArgs.length) {
+      const library = [...(pullChanges.library_records || [])]
+      for (const row of rejectedArgs) {
+        library.push({
+          kind: 'arguments',
+          id: row.id || 'main',
+          data: row.data,
+          // serverTime is strictly newer than any local dirty stamp from this
+          // round-trip, so applyChanges replaces the stale board.
+          updatedAt: response.serverTime,
+          deleted: false,
+        })
+      }
+      pullChanges = { ...pullChanges, library_records: library }
+    }
+
+    const applied = applyChanges(memory.store, memory.store.syncMeta, pullChanges)
+    let syncMeta = clearAccepted(applied.syncMeta, sent, response.serverTime)
+    if (rejectedArgs.length) {
+      const dirty = { ...syncMeta.dirty }
+      for (const row of rejectedArgs) {
+        delete dirty[metaKey('library_records', 'arguments', row.id || 'main')]
+      }
+      syncMeta = { ...syncMeta, dirty }
+    }
 
     const sentArgsKeys = Object.keys(sent || {}).filter(isArgumentsMetaKey)
     let argumentsAckedAt = memory.argumentsAckedAt

@@ -187,6 +187,23 @@ describe('collectChanges', () => {
     const kinds = changes.library_records.map((r) => r.kind).sort()
     expect(kinds).toEqual(['arguments', 'facts', 'guide_edits', 'openings'])
   })
+
+  it('sends baseUpdatedAt on dirty Arguments pushes', () => {
+    const key = metaKey('library_records', 'arguments', 'main')
+    const base = store({
+      argumentsBoard: [{ id: 'main', notes: { petitioner: '<p>local</p>' } }],
+      syncMeta: {
+        cursor: 0,
+        rows: { [key]: { updatedAt: 5_000, deleted: false, baseUpdatedAt: 5_000 } },
+        dirty: {},
+      },
+    })
+    const meta = markDirty(base.syncMeta, [key], 9_000)
+    const { changes } = collectChanges(base, meta)
+    const args = changes.library_records.find((row) => row.kind === 'arguments')
+    expect(args.baseUpdatedAt).toBe(5_000)
+    expect(args.updatedAt).toBe(9_000)
+  })
 })
 
 describe('applyChanges', () => {
@@ -210,6 +227,36 @@ describe('applyChanges', () => {
 
     expect(result.store.annotations[0].text).toBe('my newer edit')
     expect(result.applied).toBe(0)
+  })
+
+  it('takes a peer Arguments write over a dirty stale local stamp', () => {
+    const key = metaKey('library_records', 'arguments', 'main')
+    const base = store({
+      argumentsBoard: [{ id: 'main', notes: { petitioner: '<p>stale tab</p>' } }],
+    })
+    // Loaded server version 5_000, then dirtied with Date.now()-style 9_000.
+    let meta = {
+      cursor: 0,
+      rows: { [key]: { updatedAt: 5_000, deleted: false, baseUpdatedAt: 5_000 } },
+      dirty: {},
+    }
+    meta = markDirty(meta, [key], 9_000)
+
+    const result = applyChanges(base, meta, {
+      library_records: [
+        {
+          kind: 'arguments',
+          id: 'main',
+          data: { id: 'main', notes: { petitioner: '<p>mcp edit</p>' } },
+          // Newer than base, older than dirty stamp — classic MCP race.
+          updatedAt: 7_000,
+        },
+      ],
+    })
+
+    expect(result.store.argumentsBoard[0].notes.petitioner).toBe('<p>mcp edit</p>')
+    expect(result.syncMeta.dirty[key]).toBeUndefined()
+    expect(result.applied).toBe(1)
   })
 
   it('ignores an echo of a row we just pushed', () => {

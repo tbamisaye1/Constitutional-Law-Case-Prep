@@ -10,9 +10,13 @@
  *
  *   syncMeta = {
  *     cursor: 0,                                  // serverTime of last sync
- *     rows:   { 'annotations::a-1': { updatedAt, deleted } },
+ *     rows:   { 'annotations::a-1': { updatedAt, deleted, baseUpdatedAt? } },
  *     dirty:  { 'annotations::a-1': true },       // not yet accepted by server
  *   }
+ *
+ *   baseUpdatedAt (Arguments): server updatedAt at the moment the row first
+ *   became dirty. Sent on push so the backend can reject a stale board that
+ *   only looks newer because markDirty stamped Date.now().
  *
  * A deleted row leaves the collection but keeps its `rows` entry with
  * deleted: true. That tombstone is what tells the server, and through it the
@@ -67,7 +71,18 @@ export function markDirty(syncMeta, keys, at, deleted = false) {
   const rows = { ...syncMeta.rows }
   const dirty = { ...syncMeta.dirty }
   for (const key of keys) {
-    rows[key] = { updatedAt: at, deleted }
+    const prev = rows[key] || {}
+    const alreadyDirty = Boolean(dirty[key])
+    // First dirty transition captures the last ack'd server version. Later
+    // keystrokes keep that base so a long editing session still pushes against
+    // the board the user actually started from.
+    const baseUpdatedAt =
+      alreadyDirty && prev.baseUpdatedAt != null
+        ? prev.baseUpdatedAt
+        : prev.updatedAt != null
+          ? prev.updatedAt
+          : at
+    rows[key] = { updatedAt: at, deleted, baseUpdatedAt }
     dirty[key] = true
   }
   return { ...syncMeta, rows, dirty }
@@ -96,7 +111,17 @@ export function collectChanges(store, syncMeta) {
     const meta = rowMeta(syncMeta, key, row.updatedAt || 0)
     if (!syncMeta.dirty[key]) return
     const list = changes[entity] || (changes[entity] = [])
-    list.push({ ...row, updatedAt: meta.updatedAt, deleted: meta.deleted })
+    const payload = { ...row, updatedAt: meta.updatedAt, deleted: meta.deleted }
+    // Arguments optimistic concurrency: server refuses differing content when
+    // this does not match the live row's updated_at.
+    if (
+      entity === 'library_records' &&
+      row.kind === 'arguments' &&
+      meta.baseUpdatedAt != null
+    ) {
+      payload.baseUpdatedAt = meta.baseUpdatedAt
+    }
+    list.push(payload)
     sent[key] = meta.updatedAt
   }
 
@@ -243,6 +268,7 @@ function removeById(list, id) {
 export function applyChanges(store, syncMeta, changes) {
   let nextStore = store
   const rows = { ...syncMeta.rows }
+  const dirty = { ...syncMeta.dirty }
   let applied = 0
 
   const isNewer = (key, incoming) => {
@@ -252,7 +278,12 @@ export function applyChanges(store, syncMeta, changes) {
   }
 
   const note = (key, incoming) => {
-    rows[key] = { updatedAt: incoming.updatedAt, deleted: Boolean(incoming.deleted) }
+    rows[key] = {
+      updatedAt: incoming.updatedAt,
+      deleted: Boolean(incoming.deleted),
+      // Fresh pull / force-apply resets the concurrency base to the server.
+      baseUpdatedAt: incoming.updatedAt,
+    }
     applied += 1
   }
 
@@ -361,7 +392,16 @@ export function applyChanges(store, syncMeta, changes) {
     const collection = collectionByKind[row.kind]
     if (!collection) continue
     const key = metaKey('library_records', row.kind, row.id)
-    if (!isNewer(key, row)) continue
+    const meta = rows[key]
+    const base = meta?.baseUpdatedAt != null ? meta.baseUpdatedAt : 0
+    // Arguments: a dirty tab stamps Date.now(), so isNewer would skip a peer /
+    // MCP write that landed after our base. Take the remote board whenever it
+    // is newer than the version we started editing from.
+    const argumentsForceRemote =
+      row.kind === 'arguments' &&
+      Boolean(dirty[key]) &&
+      Number(row.updatedAt) > Number(base)
+    if (!isNewer(key, row) && !argumentsForceRemote) continue
     const current = nextStore[collection] || []
     nextStore = {
       ...nextStore,
@@ -370,9 +410,12 @@ export function applyChanges(store, syncMeta, changes) {
         : upsertById(current, { ...row.data, id: row.id }),
     }
     note(key, row)
+    if (argumentsForceRemote) {
+      delete dirty[key]
+    }
   }
 
-  return { store: nextStore, syncMeta: { ...syncMeta, rows }, applied }
+  return { store: nextStore, syncMeta: { ...syncMeta, rows, dirty }, applied }
 }
 
 /**
