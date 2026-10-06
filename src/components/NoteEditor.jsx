@@ -32,6 +32,63 @@ import {
   applyFontSizeToSelection,
   currentFontSize,
 } from '../lib/noteFontSize'
+import { editorFlushSuppressed } from '../lib/editorFlush'
+
+/**
+ * Extensions every note surface shares (Arguments page, scratch, case notes).
+ * Kept in one place so Tab-nesting, quotes-in-lists and a./1. lists behave the
+ * same wherever the user is typing.
+ */
+export function baseNoteExtensions({ placeholder } = {}) {
+  return [
+    StarterKit.configure({
+      // Replace default listItem so quotes can wrap a line inside an indent.
+      listItem: false,
+    }),
+    ListItemWithBlocks,
+    TextStyle,
+    FontSize,
+    BlockIndent,
+    AlphaListInput,
+    Placeholder.configure({
+      placeholder:
+        placeholder || 'Write like OneNote: "a. " for letters, "1. " for numbers, Tab to nest…',
+    }),
+  ]
+}
+
+/**
+ * OneNote-style keys shared by every note surface. Returns true when handled.
+ */
+export function handleNoteKeyDown(ed, event) {
+  if (!ed || ed.isDestroyed) return false
+
+  // Empty line inside a quote: Enter exits the quote and stays on the
+  // same list item so the next Enter can continue 3. 4. …
+  if (event.key === 'Enter' && !event.shiftKey && exitBlockquoteOnEnter(ed)) {
+    return true
+  }
+
+  // Empty 3. under A.: delete that sub-indent only. TipTap's default
+  // Backspace lifts it into a blank top-level item between A. and B.
+  if (
+    (event.key === 'Backspace' || event.key === 'Delete') &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    deleteEmptyListItem(ed)
+  ) {
+    return true
+  }
+
+  if (event.key !== 'Tab') return false
+  // Always consume Tab so focus stays in the note. At the indent bound
+  // the command is a no-op, which is better than jumping to the next control.
+  // Shift+Tab inside a quote lifts out of the quote before leaving the list.
+  if (event.shiftKey) outdentSelection(ed)
+  else indentSelection(ed)
+  return true
+}
 
 /**
  * TipTap note surface (https://github.com/ueberdosis/tiptap).
@@ -45,7 +102,7 @@ import {
  * Do not write getHTML() on unmount. That used to re-serialize through the
  * schema and wipe custom guide markup when the user only opened Edit / Done.
  */
-export function NoteEditor({ html, onChange, editable = true }) {
+export function NoteEditor({ html, onChange, editable = true, placeholder, lean = false }) {
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const skipping = useRef(true)
@@ -54,20 +111,7 @@ export function NoteEditor({ html, onChange, editable = true }) {
 
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [
-      StarterKit.configure({
-        // Replace default listItem so quotes can wrap a line inside an indent.
-        listItem: false,
-      }),
-      ListItemWithBlocks,
-      TextStyle,
-      FontSize,
-      BlockIndent,
-      AlphaListInput,
-      Placeholder.configure({
-        placeholder: 'Write like OneNote: "a. " for letters, "1. " for numbers, Tab to nest…',
-      }),
-    ],
+    extensions: baseNoteExtensions({ placeholder }),
     content: html || '<p></p>',
     editable,
     onUpdate: ({ editor: ed }) => {
@@ -80,36 +124,7 @@ export function NoteEditor({ html, onChange, editable = true }) {
       attributes: {
         class: 'note-prose',
       },
-      handleKeyDown: (_view, event) => {
-        const ed = editorRef.current
-        if (!ed || ed.isDestroyed) return false
-
-        // Empty line inside a quote: Enter exits the quote and stays on the
-        // same list item so the next Enter can continue 3. 4. …
-        if (event.key === 'Enter' && !event.shiftKey && exitBlockquoteOnEnter(ed)) {
-          return true
-        }
-
-        // Empty 3. under A.: delete that sub-indent only. TipTap's default
-        // Backspace lifts it into a blank top-level item between A. and B.
-        if (
-          (event.key === 'Backspace' || event.key === 'Delete') &&
-          !event.metaKey &&
-          !event.ctrlKey &&
-          !event.altKey &&
-          deleteEmptyListItem(ed)
-        ) {
-          return true
-        }
-
-        if (event.key !== 'Tab') return false
-        // Always consume Tab so focus stays in the note. At the indent bound
-        // the command is a no-op, which is better than jumping to the next control.
-        // Shift+Tab inside a quote lifts out of the quote before leaving the list.
-        if (event.shiftKey) outdentSelection(ed)
-        else indentSelection(ed)
-        return true
-      },
+      handleKeyDown: (_view, event) => handleNoteKeyDown(editorRef.current, event),
     },
   })
 
@@ -123,7 +138,7 @@ export function NoteEditor({ html, onChange, editable = true }) {
       // switch cannot drop the last keystrokes before React state updates.
       // Never flush a near-empty doc: Strict Mode remounts and case switches
       // used to write "<p></p>" over real notes for the previous case.
-      if (!skipping.current && !editor.isDestroyed) {
+      if (!skipping.current && !editor.isDestroyed && !editorFlushSuppressed()) {
         try {
           const nextHtml = editor.getHTML()
           const plain = nextHtml
@@ -143,7 +158,7 @@ export function NoteEditor({ html, onChange, editable = true }) {
   useEffect(() => {
     if (!editor) return undefined
     const flush = () => {
-      if (skipping.current || editor.isDestroyed) return
+      if (skipping.current || editor.isDestroyed || editorFlushSuppressed()) return
       onChangeRef.current?.(editor.getHTML())
     }
     const dom = editor.view.dom
@@ -179,7 +194,7 @@ export function NoteEditor({ html, onChange, editable = true }) {
   const fontSize = currentFontSize(editor)
 
   return (
-    <div className="note-editor">
+    <div className={lean ? 'note-editor is-lean' : 'note-editor'}>
       <div className="note-toolbar" role="toolbar" aria-label="Formatting">
         <ToolBtn
           label="Bold"
@@ -195,6 +210,8 @@ export function NoteEditor({ html, onChange, editable = true }) {
         >
           <Italic size={16} />
         </ToolBtn>
+        {!lean ? (
+          <>
         <label className="note-font-size">
           <span className="note-font-size-label mono">Size</span>
           <select
@@ -227,6 +244,8 @@ export function NoteEditor({ html, onChange, editable = true }) {
         >
           <Heading2 size={16} />
         </ToolBtn>
+          </>
+        ) : null}
         <ToolBtn
           label="Bullet list (-)"
           active={editor.isActive('bulletList')}
@@ -258,6 +277,8 @@ export function NoteEditor({ html, onChange, editable = true }) {
         >
           <Quote size={16} />
         </ToolBtn>
+        {!lean ? (
+          <>
         <span className="note-toolbar-gap" />
         <ToolBtn label="Undo" onClick={() => editor.chain().focus().undo().run()}>
           <Undo2 size={16} />
@@ -265,6 +286,8 @@ export function NoteEditor({ html, onChange, editable = true }) {
         <ToolBtn label="Redo" onClick={() => editor.chain().focus().redo().run()}>
           <Redo2 size={16} />
         </ToolBtn>
+          </>
+        ) : null}
       </div>
       <EditorContent editor={editor} />
     </div>

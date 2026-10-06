@@ -15,6 +15,8 @@ import { NoteEditor } from '../components/NoteEditor'
 import { SyncBanner } from '../components/SyncBanner'
 import { useArguments } from '../hooks/useArguments'
 import { notePreview } from '../lib/argumentNotes'
+import { ArgumentPageView } from '../components/arguments/ArgumentPageView'
+import '../styles/args-page.css'
 
 function supportsFieldSizing() {
   return typeof CSS !== 'undefined' && typeof CSS.supports === 'function'
@@ -96,6 +98,16 @@ function OutlineMoveButtons({ canUp, canDown, onUp, onDown, label }) {
 }
 
 const EXPAND_KEY = 'case-prep-args-expanded'
+const VIEW_KEY = 'case-prep-args-view'
+
+/** "page" = one continuous document per draft; "outline" = the classic board. */
+function readView() {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'outline' ? 'outline' : 'page'
+  } catch {
+    return 'page'
+  }
+}
 const SCRATCH_KEY = 'case-prep-args-scratch'
 
 function readExpanded() {
@@ -125,6 +137,15 @@ export function ArgumentsPage() {
   const args = useArguments()
   const [expanded, setExpanded] = useState(readExpanded)
   const [scratchOpen, setScratchOpen] = useState(readScratchOpen)
+  const [view, setView] = useState(readView)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_KEY, view)
+    } catch {
+      /* ignore */
+    }
+  }, [view])
 
   useEffect(() => {
     try {
@@ -161,28 +182,63 @@ export function ArgumentsPage() {
           <div>
             <h1>Arguments</h1>
             <p className="lede">
-              Build the outline on the left. Open Scratch on the right for rough notes on the piece
-              you have selected (citations, why this prong exists). Close that rail when you only
-              want to rearrange structure. Full argument joins every piece to read through.
+              {view === 'page'
+                ? 'One page per draft. Sections and prongs are headings in the page; the outline on the left is built from them. Scratch on the right is for loose thoughts.'
+                : 'Build the outline on the left. Open Scratch on the right for rough notes on the piece you have selected. Full argument joins every piece to read through.'}
             </p>
           </div>
           <div className="args-head-actions">
-            <button type="button" className="btn-ghost" onClick={args.addDraft}>
-              <Plus size={16} strokeWidth={1.75} />
-              New draft
-            </button>
-            <button type="button" className="btn-ghost" onClick={args.addSection}>
-              <Plus size={16} strokeWidth={1.75} />
-              Add section
-            </button>
-            <button
-              type="button"
-              className="btn-ink"
-              onClick={() => args.addProng(args.activeSectionId)}
-            >
-              <Plus size={16} strokeWidth={1.75} />
-              Add prong
-            </button>
+            <div className="args-view-toggle" role="group" aria-label="Arguments view">
+              <button
+                type="button"
+                className={view === 'page' ? 'on' : ''}
+                aria-pressed={view === 'page'}
+                onClick={() => setView('page')}
+              >
+                Page
+              </button>
+              <button
+                type="button"
+                className={view === 'outline' ? 'on' : ''}
+                aria-pressed={view === 'outline'}
+                onClick={() => setView('outline')}
+              >
+                Outline
+              </button>
+            </div>
+            {view === 'page' ? (
+              <>
+                {!scratchOpen ? (
+                  <button type="button" className="btn-ghost" onClick={() => setScratchOpen(true)}>
+                    <PanelRightOpen size={16} strokeWidth={1.75} />
+                    Scratch
+                  </button>
+                ) : null}
+                <button type="button" className="btn-ghost" onClick={() => setExpanded(true)}>
+                  <Maximize2 size={16} strokeWidth={1.75} />
+                  Focus
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="btn-ghost" onClick={args.addDraft}>
+                  <Plus size={16} strokeWidth={1.75} />
+                  New draft
+                </button>
+                <button type="button" className="btn-ghost" onClick={args.addSection}>
+                  <Plus size={16} strokeWidth={1.75} />
+                  Add section
+                </button>
+                <button
+                  type="button"
+                  className="btn-ink"
+                  onClick={() => args.addProng(args.activeSectionId)}
+                >
+                  <Plus size={16} strokeWidth={1.75} />
+                  Add prong
+                </button>
+              </>
+            )}
           </div>
         </header>
       ) : null}
@@ -196,9 +252,28 @@ export function ArgumentsPage() {
         </UiTabsList>
 
         <UiTabsContent value="petitioner">
+          {view === 'page' && args.side === 'petitioner' ? (
+            <>
+              {expanded ? (
+                <button
+                  type="button"
+                  className="btn-ink argpage-exit-focus"
+                  onClick={() => setExpanded(false)}
+                >
+                  <Minimize2 size={15} /> Exit focus (Esc)
+                </button>
+              ) : null}
+              <ArgumentPageView
+                args={args}
+                scratchOpen={scratchOpen}
+                setScratchOpen={setScratchOpen}
+                expanded={expanded}
+              />
+            </>
+          ) : null}
           <ArgsBoard
             args={args}
-            visible={args.side === 'petitioner'}
+            visible={view === 'outline' && args.side === 'petitioner'}
             expanded={expanded}
             scratchOpen={scratchOpen}
             setScratchOpen={setScratchOpen}
@@ -206,9 +281,28 @@ export function ArgumentsPage() {
           />
         </UiTabsContent>
         <UiTabsContent value="respondent">
+          {view === 'page' && args.side === 'respondent' ? (
+            <>
+              {expanded ? (
+                <button
+                  type="button"
+                  className="btn-ink argpage-exit-focus"
+                  onClick={() => setExpanded(false)}
+                >
+                  <Minimize2 size={15} /> Exit focus (Esc)
+                </button>
+              ) : null}
+              <ArgumentPageView
+                args={args}
+                scratchOpen={scratchOpen}
+                setScratchOpen={setScratchOpen}
+                expanded={expanded}
+              />
+            </>
+          ) : null}
           <ArgsBoard
             args={args}
-            visible={args.side === 'respondent'}
+            visible={view === 'outline' && args.side === 'respondent'}
             expanded={expanded}
             scratchOpen={scratchOpen}
             setScratchOpen={setScratchOpen}

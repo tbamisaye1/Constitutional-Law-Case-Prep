@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { onPageHide, readJson } from '../lib/persist'
 import { joinArgumentOutlineBlocks } from '../lib/argumentNotes'
+import { applyPageToDraft } from '../lib/argumentPage'
 import {
   CATEGORY3_LADDER_DRAFT_ID,
   moveArrayItem,
@@ -532,6 +533,58 @@ export function useArguments() {
     [focus, focusedNotesHtml, patchActiveDraft]
   )
 
+  /**
+   * Page view: the editor hands back the whole draft as parts. Unchanged parts
+   * keep the same draft object, so an idle editor never re-marks the board.
+   */
+  const replaceDraftPage = useCallback(
+    (draftId, parts) => {
+      setDraftsBySide((prev) => {
+        const list = prev[side] || []
+        const current = list.find((d) => d.id === draftId)
+        if (!current) return prev
+        const next = applyPageToDraft(current, parts)
+        if (next === current) return prev
+        return { ...prev, [side]: list.map((d) => (d.id === draftId ? next : d)) }
+      })
+    },
+    [side]
+  )
+
+  /** Scratch pane beside the page: free-form, per draft, synced like notes. */
+  const setDraftScratch = useCallback(
+    (draftId, html) => {
+      setDraftsBySide((prev) => {
+        const list = prev[side] || []
+        const current = list.find((d) => d.id === draftId)
+        if (!current || (current.scratch || '') === (html || '')) return prev
+        return {
+          ...prev,
+          [side]: list.map((d) => (d.id === draftId ? { ...d, scratch: html } : d)),
+        }
+      })
+    },
+    [side]
+  )
+
+  /** Append a block of HTML to the end of this draft's scratch. */
+  const appendDraftScratch = useCallback(
+    (draftId, html) => {
+      if (!html) return
+      setDraftsBySide((prev) => {
+        const list = prev[side] || []
+        const current = list.find((d) => d.id === draftId)
+        if (!current) return prev
+        const base = current.scratch && current.scratch !== '<p></p>' ? current.scratch : ''
+        return {
+          ...prev,
+          [side]: list.map((d) => (d.id === draftId ? { ...d, scratch: base + html } : d)),
+        }
+      })
+    },
+    [side]
+  )
+
   const boardSnapshot = useMemo(
     () => ({
       draftsBySide,
@@ -579,6 +632,9 @@ export function useArguments() {
     moveSectionByDelta,
     moveProng,
     moveProngByDelta,
+    replaceDraftPage,
+    setDraftScratch,
+    appendDraftScratch,
     notesHtml: focusedNotesHtml,
     setNotesForSide: setFocusedNotes,
     boardSnapshot,
