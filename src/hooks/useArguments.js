@@ -4,6 +4,7 @@ import { joinArgumentOutlineBlocks } from '../lib/argumentNotes'
 import { saveWorkspaceDoc, WORKSPACE_DOCS } from '../lib/workspaceDocs'
 import {
   CATEGORY3_LADDER_DRAFT_ID,
+  moveArrayItem,
   normalizeArgumentsBoard,
   normalizeFocus,
   normalizeSections,
@@ -374,6 +375,66 @@ export function useArguments() {
     [side, patchActiveDraft]
   )
 
+  const moveSection = useCallback(
+    (sectionId, toIndex) => {
+      patchActiveDraft((d) => {
+        const sections = d.sections || []
+        const fromIndex = sections.findIndex((s) => s.id === sectionId)
+        if (fromIndex < 0) return d
+        const next = moveArrayItem(sections, fromIndex, toIndex)
+        return next === sections ? d : { ...d, sections: next }
+      })
+    },
+    [patchActiveDraft]
+  )
+
+  const moveSectionByDelta = useCallback(
+    (sectionId, delta) => {
+      patchActiveDraft((d) => {
+        const sections = d.sections || []
+        const fromIndex = sections.findIndex((s) => s.id === sectionId)
+        if (fromIndex < 0) return d
+        const next = moveArrayItem(sections, fromIndex, fromIndex + delta)
+        return next === sections ? d : { ...d, sections: next }
+      })
+    },
+    [patchActiveDraft]
+  )
+
+  const moveProng = useCallback(
+    (sectionId, prongId, toIndex) => {
+      patchActiveDraft((d) => ({
+        ...d,
+        sections: (d.sections || []).map((s) => {
+          if (s.id !== sectionId) return s
+          const prongs = s.prongs || []
+          const fromIndex = prongs.findIndex((p) => p.id === prongId)
+          if (fromIndex < 0) return s
+          const next = moveArrayItem(prongs, fromIndex, toIndex)
+          return next === prongs ? s : { ...s, prongs: next }
+        }),
+      }))
+    },
+    [patchActiveDraft]
+  )
+
+  const moveProngByDelta = useCallback(
+    (sectionId, prongId, delta) => {
+      patchActiveDraft((d) => ({
+        ...d,
+        sections: (d.sections || []).map((s) => {
+          if (s.id !== sectionId) return s
+          const prongs = s.prongs || []
+          const fromIndex = prongs.findIndex((p) => p.id === prongId)
+          if (fromIndex < 0) return s
+          const next = moveArrayItem(prongs, fromIndex, fromIndex + delta)
+          return next === prongs ? s : { ...s, prongs: next }
+        }),
+      }))
+    },
+    [patchActiveDraft]
+  )
+
   const setFocusedNotes = useCallback(
     (html) => {
       if (focus.type === 'joined') return
@@ -449,6 +510,10 @@ export function useArguments() {
     addProng,
     updateProngTitle,
     removeProng,
+    moveSection,
+    moveSectionByDelta,
+    moveProng,
+    moveProngByDelta,
     notesHtml: focusedNotesHtml,
     setNotesForSide: setFocusedNotes,
     boardSnapshot,

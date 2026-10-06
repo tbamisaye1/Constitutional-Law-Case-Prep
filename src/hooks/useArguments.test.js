@@ -3,7 +3,21 @@ import {
   CATEGORY3_LADDER_DRAFT_ID,
   CATEGORY3_LADDER_SEED_VERSION,
 } from '../data/category3LadderDraft'
+import { moveArrayItem } from '../lib/argumentsBoard'
 import { normalizeArgumentsBoard, normalizeSections } from './useArguments'
+
+describe('moveArrayItem', () => {
+  it('moves an item to a new index', () => {
+    expect(moveArrayItem(['a', 'b', 'c', 'd'], 2, 0)).toEqual(['c', 'a', 'b', 'd'])
+    expect(moveArrayItem(['a', 'b', 'c'], 0, 2)).toEqual(['b', 'c', 'a'])
+  })
+
+  it('returns the same array when the move is a no-op', () => {
+    const list = ['a', 'b']
+    expect(moveArrayItem(list, 1, 1)).toBe(list)
+    expect(moveArrayItem(list, -1, 0)).toBe(list)
+  })
+})
 
 describe('normalizeSections', () => {
   it('migrates the old flat outline rows into sections with empty prongs', () => {

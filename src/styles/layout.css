@@ -1313,8 +1313,8 @@
 
 .args-section-head {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 34px;
-  gap: 6px;
+  grid-template-columns: 18px 24px minmax(0, 1fr) 28px 34px;
+  gap: 4px;
   align-items: center;
 }
 
@@ -1333,14 +1333,62 @@
 .args-row,
 .args-prong-row {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 34px;
-  gap: 6px;
+  grid-template-columns: 18px 36px minmax(0, 1fr) 28px 34px;
+  gap: 4px;
   align-items: center;
   padding: 4px 0;
+  border-radius: 4px;
+}
+
+.args-section.is-drop-target > .args-section-head,
+.args-prong-row.is-drop-target {
+  outline: 1px dashed color-mix(in srgb, var(--gold, #b8860b) 55%, var(--rule));
+  background: color-mix(in srgb, var(--gold, #b8860b) 8%, var(--paper));
 }
 
 .args-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--ink-3);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  width: 18px;
+  height: 28px;
+  border-radius: 4px;
+}
+
+.args-grip:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.args-grip:active {
+  cursor: grabbing;
+}
+
+.args-moves {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.args-moves .icon-btn {
+  width: 26px;
+  height: 16px;
+  padding: 0;
+  opacity: 0.55;
+}
+
+.args-moves .icon-btn:hover:not(:disabled) {
+  opacity: 1;
+}
+
+.args-moves .icon-btn:disabled {
+  opacity: 0.2;
+  cursor: default;
 }
 
 .args-num {

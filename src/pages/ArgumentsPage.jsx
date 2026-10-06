@@ -1,8 +1,49 @@
 import { useEffect, useState } from 'react'
-import { Maximize2, Minimize2, Plus, Trash2 } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronUp,
+  GripVertical,
+  Maximize2,
+  Minimize2,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { UiTabs, UiTabsContent, UiTabsList, UiTabsTrigger } from '../components/ui/Tabs'
 import { NoteEditor } from '../components/NoteEditor'
 import { useArguments } from '../hooks/useArguments'
+
+function OutlineMoveButtons({ canUp, canDown, onUp, onDown, label }) {
+  return (
+    <div className="args-moves">
+      <button
+        type="button"
+        className="icon-btn soft"
+        aria-label={`Move ${label} up`}
+        title="Move up"
+        disabled={!canUp}
+        onClick={(e) => {
+          e.stopPropagation()
+          onUp()
+        }}
+      >
+        <ChevronUp size={14} />
+      </button>
+      <button
+        type="button"
+        className="icon-btn soft"
+        aria-label={`Move ${label} down`}
+        title="Move down"
+        disabled={!canDown}
+        onClick={(e) => {
+          e.stopPropagation()
+          onDown()
+        }}
+      >
+        <ChevronDown size={14} />
+      </button>
+    </div>
+  )
+}
 
 const EXPAND_KEY = 'case-prep-args-expanded'
 
@@ -103,7 +144,15 @@ export function ArgumentsPage() {
 }
 
 function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
+  const [dragging, setDragging] = useState(null)
+  const [dragOver, setDragOver] = useState(null)
+
   if (!visible) return null
+
+  function clearDrag() {
+    setDragging(null)
+    setDragOver(null)
+  }
 
   const isJoined = args.focus?.type === 'joined'
   const editorKey = [
@@ -180,27 +229,66 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
           {args.sections.length === 0 && (
             <p className="args-empty">
               No sections yet. Use <strong>Add section</strong>, then <strong>Add prong</strong> for
-              the steps under it.
+              the steps under it. Drag the grip or use the arrows to rearrange.
             </p>
           )}
           {args.sections.map((section, sectionIdx) => {
             const sectionOn =
               args.focus?.type === 'section' && args.focus.sectionId === section.id
             const sectionActive = section.id === args.activeSectionId
+            const sectionDropOn =
+              dragOver?.kind === 'section' && dragOver.sectionId === section.id
             return (
               <div
                 key={section.id}
-                className={
+                className={[
                   sectionOn ||
                   (sectionActive && args.focus?.type !== 'side' && args.focus?.type !== 'joined')
                     ? 'args-section on'
-                    : 'args-section'
-                }
+                    : 'args-section',
+                  sectionDropOn ? 'is-drop-target' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onDragOver={(e) => {
+                  if (dragging?.kind !== 'section') return
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                  setDragOver({ kind: 'section', sectionId: section.id })
+                }}
+                onDragLeave={() => {
+                  setDragOver((cur) =>
+                    cur?.kind === 'section' && cur.sectionId === section.id ? null : cur
+                  )
+                }}
+                onDrop={(e) => {
+                  if (dragging?.kind !== 'section') return
+                  e.preventDefault()
+                  const fromId = dragging.sectionId
+                  clearDrag()
+                  if (fromId === section.id) return
+                  args.moveSection(fromId, sectionIdx)
+                }}
               >
                 <div
                   className="args-section-head"
                   onClick={() => args.selectSection(section.id)}
                 >
+                  <span
+                    className="args-grip"
+                    draggable
+                    title="Drag to reorder section"
+                    aria-label={`Drag section ${sectionIdx + 1}`}
+                    onClick={(e) => e.stopPropagation()}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = 'move'
+                      e.dataTransfer.setData('text/plain', section.id)
+                      setDragging({ kind: 'section', sectionId: section.id })
+                    }}
+                    onDragEnd={clearDrag}
+                  >
+                    <GripVertical size={14} aria-hidden />
+                  </span>
                   <span className="mono args-num">{sectionIdx + 1}</span>
                   <input
                     className="args-input args-section-input"
@@ -208,6 +296,13 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
                     aria-label={`Section ${sectionIdx + 1} title`}
                     onChange={(e) => args.updateSectionTitle(section.id, e.target.value)}
                     onFocus={() => args.selectSection(section.id)}
+                  />
+                  <OutlineMoveButtons
+                    label={`section ${sectionIdx + 1}`}
+                    canUp={sectionIdx > 0}
+                    canDown={sectionIdx < args.sections.length - 1}
+                    onUp={() => args.moveSectionByDelta(section.id, -1)}
+                    onDown={() => args.moveSectionByDelta(section.id, 1)}
                   />
                   <button
                     type="button"
@@ -226,14 +321,76 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
                   {(section.prongs || []).map((prong, prongIdx) => {
                     const prongOn =
                       args.focus?.type === 'prong' && args.focus.prongId === prong.id
+                    const prongDropOn =
+                      dragOver?.kind === 'prong' &&
+                      dragOver.sectionId === section.id &&
+                      dragOver.prongId === prong.id
+                    const prongs = section.prongs || []
                     return (
                       <li
                         key={prong.id}
-                        className={
-                          prongOn ? 'args-row args-prong-row on' : 'args-row args-prong-row'
-                        }
+                        className={[
+                          prongOn ? 'args-row args-prong-row on' : 'args-row args-prong-row',
+                          prongDropOn ? 'is-drop-target' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
                         onClick={() => args.selectProng(section.id, prong.id)}
+                        onDragOver={(e) => {
+                          if (
+                            dragging?.kind !== 'prong' ||
+                            dragging.sectionId !== section.id
+                          ) {
+                            return
+                          }
+                          e.preventDefault()
+                          e.stopPropagation()
+                          e.dataTransfer.dropEffect = 'move'
+                          setDragOver({
+                            kind: 'prong',
+                            sectionId: section.id,
+                            prongId: prong.id,
+                          })
+                        }}
+                        onDragLeave={() => {
+                          setDragOver((cur) =>
+                            cur?.kind === 'prong' && cur.prongId === prong.id ? null : cur
+                          )
+                        }}
+                        onDrop={(e) => {
+                          if (
+                            dragging?.kind !== 'prong' ||
+                            dragging.sectionId !== section.id
+                          ) {
+                            return
+                          }
+                          e.preventDefault()
+                          e.stopPropagation()
+                          const fromId = dragging.prongId
+                          clearDrag()
+                          if (fromId === prong.id) return
+                          args.moveProng(section.id, fromId, prongIdx)
+                        }}
                       >
+                        <span
+                          className="args-grip"
+                          draggable
+                          title="Drag to reorder prong"
+                          aria-label={`Drag prong ${sectionIdx + 1}.${prongIdx + 1}`}
+                          onClick={(e) => e.stopPropagation()}
+                          onDragStart={(e) => {
+                            e.dataTransfer.effectAllowed = 'move'
+                            e.dataTransfer.setData('text/plain', prong.id)
+                            setDragging({
+                              kind: 'prong',
+                              sectionId: section.id,
+                              prongId: prong.id,
+                            })
+                          }}
+                          onDragEnd={clearDrag}
+                        >
+                          <GripVertical size={14} aria-hidden />
+                        </span>
                         <span className="mono args-num">
                           {sectionIdx + 1}.{prongIdx + 1}
                         </span>
@@ -245,6 +402,13 @@ function ArgsBoard({ args, visible, expanded, onToggleExpand }) {
                             args.updateProngTitle(section.id, prong.id, e.target.value)
                           }
                           onFocus={() => args.selectProng(section.id, prong.id)}
+                        />
+                        <OutlineMoveButtons
+                          label={`prong ${sectionIdx + 1}.${prongIdx + 1}`}
+                          canUp={prongIdx > 0}
+                          canDown={prongIdx < prongs.length - 1}
+                          onUp={() => args.moveProngByDelta(section.id, prong.id, -1)}
+                          onDown={() => args.moveProngByDelta(section.id, prong.id, 1)}
                         />
                         <button
                           type="button"

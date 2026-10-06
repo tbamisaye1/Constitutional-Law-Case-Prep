@@ -237,4 +237,25 @@ export function normalizeArgumentsBoard(saved) {
   }
 }
 
+/**
+ * Reorder one item in a list by index. Returns the same array reference when
+ * the move is a no-op so callers can skip a state write.
+ */
+export function moveArrayItem(list, fromIndex, toIndex) {
+  if (!Array.isArray(list)) return list
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= list.length ||
+    toIndex >= list.length
+  ) {
+    return list
+  }
+  const next = list.slice()
+  const [item] = next.splice(fromIndex, 1)
+  next.splice(toIndex, 0, item)
+  return next
+}
+
 export { DEFAULT_NOTES, DEFAULT_OUTLINES, newId, CATEGORY3_LADDER_DRAFT_ID }
