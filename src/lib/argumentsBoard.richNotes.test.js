@@ -69,4 +69,38 @@ describe('preferLocalArgumentDeletions', () => {
     const merged = preferLocalArgumentDeletions(remote, local)
     expect(merged.petitioner[0].sections[0].prongs.map((p) => p.id)).toEqual(['c3-s2-a'])
   })
+
+  it('strips locally tombstoned seed nodes even when remote still has them', () => {
+    const remote = side([
+      { id: 'c3-s0', title: 'Opening theme', notes: '', prongs: [] },
+      seedSection,
+    ])
+    remote.petitioner[0].id = 'alt-q2-ladder'
+    const local = {
+      petitioner: [
+        {
+          id: 'alt-q2-ladder',
+          name: 'Alt',
+          removedOutlineIds: ['c3-s0', 'c3-s2-c'],
+          sections: [
+            {
+              ...seedSection,
+              prongs: [
+                { id: 'c3-s2-a', title: 'a', notes: '' },
+                { id: 'c3-s2-b', title: 'b', notes: '' },
+              ],
+            },
+          ],
+        },
+      ],
+      respondent: [],
+    }
+    const merged = preferLocalArgumentDeletions(remote, local)
+    const ids = merged.petitioner[0].sections.flatMap((s) => [
+      s.id,
+      ...(s.prongs || []).map((p) => p.id),
+    ])
+    expect(ids).not.toContain('c3-s0')
+    expect(ids).not.toContain('c3-s2-c')
+  })
 })

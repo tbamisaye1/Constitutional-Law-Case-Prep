@@ -128,8 +128,42 @@ function normalizeDraft(raw, side, index = 0) {
   }
   // Seeded drafts carry a version so a later rewrite of the seed text can
   // replace an older stored copy. User-created drafts have no version.
-  if (Number.isFinite(raw.seedVersion)) draft.seedVersion = raw.seedVersion
-  return draft
+  // Coerce strings from JSON so a missing Number() check does not re-run seed
+  // merge and restore Opening theme / 3.3 / 4.3.
+  const seedVersion = Number(raw.seedVersion)
+  if (Number.isFinite(seedVersion)) draft.seedVersion = seedVersion
+  if (Array.isArray(raw.removedOutlineIds)) {
+    draft.removedOutlineIds = uniqueIds(raw.removedOutlineIds)
+  }
+  return applyRemovedOutlineIds(draft)
+}
+
+function uniqueIds(ids) {
+  return [...new Set((ids || []).map((id) => String(id || '')).filter(Boolean))]
+}
+
+export function rememberRemovedOutlineIds(draft, ids) {
+  return applyRemovedOutlineIds({
+    ...draft,
+    removedOutlineIds: uniqueIds([...(draft?.removedOutlineIds || []), ...(ids || [])]),
+  })
+}
+
+/** Drop sections/prongs the user trashed, even if seed or a stale sync still has them. */
+export function applyRemovedOutlineIds(draft) {
+  if (!draft || typeof draft !== 'object') return draft
+  const removed = new Set(uniqueIds(draft.removedOutlineIds))
+  if (!removed.size) return draft
+  return {
+    ...draft,
+    removedOutlineIds: [...removed],
+    sections: (draft.sections || [])
+      .filter((section) => !removed.has(section.id))
+      .map((section) => ({
+        ...section,
+        prongs: (section.prongs || []).filter((prong) => !removed.has(prong.id)),
+      })),
+  }
 }
 
 /**
@@ -274,18 +308,19 @@ export function mergeLadderSeedDraft(stored, fresh) {
     }
   })
 
-  // Brand-new seed sections only (never re-add a section the user removed).
-  const storedSectionIds = new Set(storedSectionsList.map((section) => section.id))
-  for (const freshSection of fresh.sections || []) {
-    if (!storedSectionIds.has(freshSection.id)) sections.push(freshSection)
-  }
+  // Do not append seed sections that are absent from stored. "Missing" is how
+  // a deleted Opening theme (c3-s0) looked, so the old loop kept restoring it.
 
-  return {
+  return applyRemovedOutlineIds({
     ...fresh,
     name: stored.name || fresh.name,
     notes: preferRicherNotes(stored.notes, fresh.notes, `draft:${fresh.id}`),
     sections,
-  }
+    removedOutlineIds: uniqueIds([
+      ...(stored.removedOutlineIds || []),
+      ...(fresh.removedOutlineIds || []),
+    ]),
+  })
 }
 
 /**
@@ -305,12 +340,13 @@ export function preferLocalArgumentDeletions(remoteDraftsBySide, localDraftsBySi
     const localById = Object.fromEntries(localList.map((d) => [d.id, d]))
     next[side] = remoteList.map((remoteDraft) => {
       const localDraft = localById[remoteDraft.id]
-      if (!localDraft) return remoteDraft
+      if (!localDraft) return applyRemovedOutlineIds(remoteDraft)
       const remoteCount = countOutlineNodes(remoteDraft)
       const localCount = countOutlineNodes(localDraft)
+      let chosen
       // Local deleted prongs the remote still has — keep the trimmed local outline.
       if (localCount < remoteCount && outlineIsSubset(localDraft, remoteDraft)) {
-        return mergeDraftNotesPreferRicher({
+        chosen = mergeDraftNotesPreferRicher({
           ...remoteDraft,
           name: localDraft.name || remoteDraft.name,
           sections: localDraft.sections,
@@ -319,15 +355,14 @@ export function preferLocalArgumentDeletions(remoteDraftsBySide, localDraftsBySi
             Number(remoteDraft.seedVersion) || 0
           ),
         }, localDraft)
-      }
-      // Remote has fewer nodes. Two cases look the same by count:
-      // (1) this tab added a prong that has not been pushed yet — keep local.
-      // (2) another device deleted seed prongs — take the trimmed remote.
-      // User-created ids (pr-…, p-<timestamp>) mean (1). Seed leftovers mean (2).
-      if (remoteCount < localCount && outlineIsSubset(remoteDraft, localDraft)) {
+      } else if (remoteCount < localCount && outlineIsSubset(remoteDraft, localDraft)) {
+        // Remote has fewer nodes. Two cases look the same by count:
+        // (1) this tab added a prong that has not been pushed yet — keep local.
+        // (2) another device deleted seed prongs — take the trimmed remote.
+        // User-created ids (pr-…, p-<timestamp>) mean (1). Seed leftovers mean (2).
         const extras = extraOutlineIds(localDraft, remoteDraft)
         if (extras.some(isUserCreatedOutlineId)) {
-          return mergeDraftNotesPreferRicher(
+          chosen = mergeDraftNotesPreferRicher(
             {
               ...remoteDraft,
               name: localDraft.name || remoteDraft.name,
@@ -339,14 +374,22 @@ export function preferLocalArgumentDeletions(remoteDraftsBySide, localDraftsBySi
             },
             localDraft
           )
+        } else {
+          chosen = mergeDraftNotesPreferRicher(remoteDraft, localDraft)
         }
-        return mergeDraftNotesPreferRicher(remoteDraft, localDraft)
+      } else if (remoteCount === localCount) {
+        chosen = mergeDraftNotesPreferRicher(remoteDraft, localDraft)
+      } else {
+        chosen = remoteDraft
       }
-      // Same shape: keep remote structure, prefer whichever note body is richer.
-      if (remoteCount === localCount) {
-        return mergeDraftNotesPreferRicher(remoteDraft, localDraft)
-      }
-      return remoteDraft
+      return applyRemovedOutlineIds({
+        ...chosen,
+        removedOutlineIds: uniqueIds([
+          ...(localDraft.removedOutlineIds || []),
+          ...(remoteDraft.removedOutlineIds || []),
+          ...(chosen.removedOutlineIds || []),
+        ]),
+      })
     })
     // Keep local-only drafts the remote never saw.
     for (const localDraft of localList) {

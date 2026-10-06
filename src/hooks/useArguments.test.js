@@ -148,6 +148,36 @@ describe('normalizeArgumentsBoard', () => {
     expect(next.seedVersion).toBe(CATEGORY3_LADDER_SEED_VERSION)
   })
 
+  it('does not restore Opening theme, 3.3, or 4.3 after a seed bump / reload', () => {
+    const board = normalizeArgumentsBoard(null)
+    const ladder = board.draftsBySide.petitioner.find(
+      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
+    )
+    ladder.removedOutlineIds = ['c3-s0', 'c3-s2-c', 'c3-s3-c']
+    ladder.sections = ladder.sections
+      .filter((s) => s.id !== 'c3-s0')
+      .map((s) => ({
+        ...s,
+        prongs: (s.prongs || []).filter(
+          (p) => p.id !== 'c3-s2-c' && p.id !== 'c3-s3-c'
+        ),
+      }))
+    ladder.seedVersion = 0
+
+    const refreshed = normalizeArgumentsBoard(board)
+    const next = refreshed.draftsBySide.petitioner.find(
+      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
+    )
+    const ids = [
+      ...next.sections.map((s) => s.id),
+      ...next.sections.flatMap((s) => (s.prongs || []).map((p) => p.id)),
+    ]
+    expect(ids).not.toContain('c3-s0')
+    expect(ids).not.toContain('c3-s2-c')
+    expect(ids).not.toContain('c3-s3-c')
+    expect(next.sections.some((s) => s.title === 'Opening theme')).toBe(false)
+  })
+
   it('keeps a ladder draft that is already on the current seed version', () => {
     const board = normalizeArgumentsBoard(null)
     const ladder = board.draftsBySide.petitioner.find(

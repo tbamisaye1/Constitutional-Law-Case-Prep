@@ -9,6 +9,7 @@ import {
   normalizeFocus,
   normalizeSections,
   newId,
+  rememberRemovedOutlineIds,
 } from '../lib/argumentsBoard'
 
 export { normalizeSections, normalizeArgumentsBoard }
@@ -264,11 +265,26 @@ export function useArguments() {
   )
 
   const patchActiveDraft = useCallback(
-    (updater) => {
+    (updater, { persistNow = false } = {}) => {
       if (!activeDraftId) return
-      setDraftsBySide((prev) => updateActiveDraft(prev, side, activeDraftId, updater))
+      setDraftsBySide((prev) => {
+        const nextDrafts = updateActiveDraft(prev, side, activeDraftId, updater)
+        if (persistNow) {
+          saveWorkspaceDoc(
+            'arguments',
+            {
+              draftsBySide: nextDrafts,
+              activeDraftBySide,
+              activeSectionBySide,
+              activeFocusBySide,
+            },
+            { immediate: true }
+          )
+        }
+        return nextDrafts
+      })
     },
-    [side, activeDraftId]
+    [side, activeDraftId, activeDraftBySide, activeSectionBySide, activeFocusBySide]
   )
 
   const addSection = useCallback(() => {
@@ -298,6 +314,7 @@ export function useArguments() {
   const removeSection = useCallback(
     (sectionId) => {
       patchActiveDraft((d) => {
+        const removed = (d.sections || []).find((s) => s.id === sectionId)
         const next = (d.sections || []).filter((s) => s.id !== sectionId)
         setActiveSectionBySide((active) => {
           if (active[side] !== sectionId) return active
@@ -308,8 +325,12 @@ export function useArguments() {
           if (cur.sectionId !== sectionId) return active
           return { ...active, [side]: { type: 'side' } }
         })
-        return { ...d, sections: next }
-      })
+        const gone = [
+          sectionId,
+          ...((removed?.prongs || []).map((p) => p.id)),
+        ]
+        return rememberRemovedOutlineIds({ ...d, sections: next }, gone)
+      }, { persistNow: true })
     },
     [side, patchActiveDraft]
   )
@@ -374,14 +395,17 @@ export function useArguments() {
 
   const removeProng = useCallback(
     (sectionId, prongId) => {
-      patchActiveDraft((d) => ({
-        ...d,
-        sections: (d.sections || []).map((s) =>
-          s.id === sectionId
-            ? { ...s, prongs: (s.prongs || []).filter((p) => p.id !== prongId) }
-            : s
-        ),
-      }))
+      patchActiveDraft((d) => {
+        const next = {
+          ...d,
+          sections: (d.sections || []).map((s) =>
+            s.id === sectionId
+              ? { ...s, prongs: (s.prongs || []).filter((p) => p.id !== prongId) }
+              : s
+          ),
+        }
+        return rememberRemovedOutlineIds(next, [prongId])
+      }, { persistNow: true })
       setActiveFocusBySide((active) => {
         const cur = normalizeFocus(active[side])
         if (cur.type === 'prong' && cur.prongId === prongId) {
