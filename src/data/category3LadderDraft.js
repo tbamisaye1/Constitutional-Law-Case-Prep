@@ -1,13 +1,9 @@
 /**
- * Seeded alternate petitioner argument: the Category 3 ladder (Question 2).
+ * Legacy Category 3 ladder draft id + fingerprint text.
  *
- * Written as a nested oral-argument skeleton in Tobi's outline style: theme,
- * "we ask this court to X for N reasons", then framework / prong / fact with the
- * citation tagged next to the fact. Short glosses only where a case or statute
- * would otherwise be unreadable cold.
- *
- * CATEGORY3_LADDER_SEED_VERSION is bumped whenever this text is rewritten. The
- * board replaces an older seeded copy with the newer one.
+ * The board no longer injects this draft. It lives in Postgres (or not) like any
+ * other draft. buildCategory3LadderDraft() remains only so sync merge can
+ * recognize leftover seed HTML and prefer real notes over it.
  */
 
 export const CATEGORY3_LADDER_DRAFT_ID = "alt-q2-ladder";

@@ -1,33 +1,23 @@
 /**
  * Arguments board shape: drafts per side (Main + alternatives).
- * Migrates legacy {outlines, notes} and seeds the Category 3 ladder once.
+ * Migrates legacy {outlines, notes}. Does not invent Bronner seed content —
+ * Postgres (or an empty Main draft) is the source of truth.
  */
 
 import {
   buildCategory3LadderDraft,
   CATEGORY3_LADDER_DRAFT_ID,
-  CATEGORY3_LADDER_SEED_VERSION,
 } from '../data/category3LadderDraft'
-import { snapshotDocRevision } from './docRevisions'
 
+/** Blank Main only. No Bronner outline / Category 3 ladder seed. */
 const DEFAULT_NOTES = {
-  petitioner: '<h2>Petitioner working notes</h2><p>Quips, corrections, language.</p>',
-  respondent: '<h2>Respondent working notes</h2><p>Structure and rebuttal scratch.</p>',
+  petitioner: '',
+  respondent: '',
 }
 
 const DEFAULT_OUTLINES = {
-  petitioner: [
-    { id: 'p1', title: 'Opening theme', prongs: [], notes: '' },
-    { id: 'p2', title: 'Q1 roadmap — search', prongs: [], notes: '' },
-    { id: 'p3', title: 'Q2 roadmap — Youngstown', prongs: [], notes: '' },
-    { id: 'p4', title: 'Hinge + close', prongs: [], notes: '' },
-  ],
-  respondent: [
-    { id: 'r1', title: 'Opening theme', prongs: [], notes: '' },
-    { id: 'r2', title: 'No search / Tuggle line', prongs: [], notes: '' },
-    { id: 'r3', title: 'Category 1 authority', prongs: [], notes: '' },
-    { id: 'r4', title: 'Rebuttal points', prongs: [], notes: '' },
-  ],
+  petitioner: [{ id: 'p1', title: 'New section', prongs: [], notes: '' }],
+  respondent: [{ id: 'r1', title: 'New section', prongs: [], notes: '' }],
 }
 
 function newId(prefix) {
@@ -194,19 +184,6 @@ function applyBoardRemovedIds(draftsBySide, saved) {
   return next
 }
 
-/**
- * Prefer the stored note body when the user (or an older seed they edited)
- * already has real content that differs from the new seed. Empty stored notes
- * take the fresh seed text.
- */
-export function preferStoredNotes(storedNotes, freshNotes) {
-  const stored = typeof storedNotes === 'string' ? storedNotes : ''
-  const fresh = typeof freshNotes === 'string' ? freshNotes : ''
-  if (!stored.trim()) return fresh
-  if (stored === fresh) return fresh
-  return stored
-}
-
 function normNotes(html) {
   return String(html || '')
     .replace(/<[^>]+>/g, ' ')
@@ -214,7 +191,11 @@ function normNotes(html) {
     .trim()
 }
 
-/** Distinctive openings from the Category 3 seed so we never prefer seed over edits. */
+/**
+ * Fingerprints of the old bundled Category 3 seed. Used only so a leftover
+ * seed body loses to real notes during a local/remote merge. The seed is never
+ * injected into the board anymore.
+ */
 const SEED_NOTE_PREFIXES = (() => {
   const draft = buildCategory3LadderDraft()
   const map = new Map()
@@ -235,7 +216,6 @@ function looksLikeSeedNotes(kindKey, notes) {
   const norm = normNotes(notes)
   if (!norm) return false
   if (norm === prefix || norm.startsWith(prefix.slice(0, 80))) return true
-  // First heading is a stable fingerprint even when the seed body is truncated in tests.
   const heading = prefix.split(' ').slice(0, 8).join(' ')
   return heading.length >= 12 && norm.includes(heading)
 }
@@ -247,8 +227,8 @@ function looksLikeSeedTitle(prongId, title) {
 }
 
 /**
- * Pick the note body that is not a seed wipe. Seed loses to any divergent text;
- * otherwise keep the longer body (manual edits are usually longer).
+ * Pick the note body that is not a leftover seed wipe. Seed loses to any
+ * divergent text; otherwise keep the longer body.
  */
 export function preferRicherNotes(aNotes, bNotes, seedKey = '') {
   const a = typeof aNotes === 'string' ? aNotes : ''
@@ -274,81 +254,6 @@ function preferRicherTitle(aTitle, bTitle, prongId = '') {
   if (aSeed && !bSeed) return bTitle || b
   if (bSeed && !aSeed) return aTitle || a
   return a.length >= b.length ? aTitle || a : bTitle || b
-}
-
-/**
- * Upgrade a seeded ladder without wiping titles/notes the user already changed,
- * and without resurrecting sections/prongs the user deleted.
- *
- * Older merge walked the seed and re-inserted every seed prong (2.3 / 3.3 kept
- * coming back after trash). Stored outline wins for structure. Seed only fills
- * empty notes and can append brand-new section ids the stored draft never had.
- */
-export function mergeLadderSeedDraft(stored, fresh) {
-  if (!stored || typeof stored !== 'object') return fresh
-  const storedSectionsList = Array.isArray(stored.sections) ? stored.sections : []
-  // Corrupt / wiped board: take the full seed rather than locking in emptiness.
-  if (!storedSectionsList.length) {
-    return {
-      ...fresh,
-      name: stored.name || fresh.name,
-      notes: preferRicherNotes(stored.notes, fresh.notes, `draft:${fresh.id}`),
-    }
-  }
-
-  const freshSections = Object.fromEntries(
-    (fresh.sections || []).map((section) => [section.id, section])
-  )
-
-  const sections = storedSectionsList.map((storedSection) => {
-    const freshSection = freshSections[storedSection.id]
-    if (!freshSection) return storedSection
-    const freshProngs = Object.fromEntries(
-      (freshSection.prongs || []).map((prong) => [prong.id, prong])
-    )
-    return {
-      ...storedSection,
-      // Stored outline wins. Seed never renames a prong/section the user edited.
-      title: preferRicherTitle(storedSection.title, freshSection.title),
-      notes: preferRicherNotes(
-        storedSection.notes,
-        freshSection.notes,
-        `section:${storedSection.id}`
-      ),
-      // Only prongs still on the board. Missing seed prongs stay deleted.
-      prongs: (storedSection.prongs || []).map((storedProng) => {
-        const freshProng = freshProngs[storedProng.id]
-        if (!freshProng) return storedProng
-        return {
-          ...storedProng,
-          title: preferRicherTitle(
-            storedProng.title,
-            freshProng.title,
-            storedProng.id
-          ),
-          notes: preferRicherNotes(
-            storedProng.notes,
-            freshProng.notes,
-            `prong:${storedProng.id}`
-          ),
-        }
-      }),
-    }
-  })
-
-  // Do not append seed sections that are absent from stored. "Missing" is how
-  // a deleted Opening theme (c3-s0) looked, so the old loop kept restoring it.
-
-  return applyRemovedOutlineIds({
-    ...fresh,
-    name: stored.name || fresh.name,
-    notes: preferRicherNotes(stored.notes, fresh.notes, `draft:${fresh.id}`),
-    sections,
-    removedOutlineIds: uniqueIds([
-      ...(stored.removedOutlineIds || []),
-      ...(fresh.removedOutlineIds || []),
-    ]),
-  })
 }
 
 /**
@@ -518,31 +423,8 @@ function outlineIsSubset(localDraft, remoteDraft) {
 }
 
 /**
- * Append the seeded Category 3 ladder draft when it is missing, and refresh it
- * when the stored copy predates the current seed text. Matching prong/section
- * notes the user already edited are kept (see mergeLadderSeedDraft).
- */
-function withCategory3Ladder(petitionerDrafts) {
-  const index = petitionerDrafts.findIndex((d) => d.id === CATEGORY3_LADDER_DRAFT_ID)
-  if (index === -1) return [...petitionerDrafts, buildCategory3LadderDraft()]
-  const stored = petitionerDrafts[index]
-  const storedVersion = Number.isFinite(stored.seedVersion) ? stored.seedVersion : 0
-  if (storedVersion >= CATEGORY3_LADDER_SEED_VERSION) return petitionerDrafts
-  // Seed bumps used to wipe rewritten prongs. Snapshot first, then merge with
-  // preferStoredNotes so local wording always wins when it diverges.
-  snapshotDocRevision(
-    'arguments',
-    { draftsBySide: { petitioner: petitionerDrafts }, seedMergeFrom: storedVersion },
-    'seed_merge'
-  )
-  const next = [...petitionerDrafts]
-  next[index] = mergeLadderSeedDraft(stored, buildCategory3LadderDraft())
-  return next
-}
-
-/**
  * Migrate v1 {outlines, notes} → draftsBySide, or normalize an existing drafts board.
- * Ensures the Category 3 ladder draft exists under petitioner.
+ * Never invents the Category 3 ladder or Bronner outline seed.
  */
 export function normalizeArgumentsBoard(saved) {
   const empty = !saved || typeof saved !== 'object'
@@ -608,11 +490,6 @@ export function normalizeArgumentsBoard(saved) {
       petitioner: draftsBySide.petitioner[0].id,
       respondent: draftsBySide.respondent[0].id,
     }
-  }
-
-  draftsBySide = {
-    ...draftsBySide,
-    petitioner: withCategory3Ladder(draftsBySide.petitioner),
   }
 
   draftsBySide = applyBoardRemovedIds(draftsBySide, empty ? null : saved)

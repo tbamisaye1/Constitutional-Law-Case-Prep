@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  CATEGORY3_LADDER_DRAFT_ID,
-  CATEGORY3_LADDER_SEED_VERSION,
-} from '../data/category3LadderDraft'
+import { CATEGORY3_LADDER_DRAFT_ID } from '../data/category3LadderDraft'
 import { moveArrayItem } from '../lib/argumentsBoard'
 import { normalizeArgumentsBoard, normalizeSections } from './useArguments'
 
@@ -52,7 +49,7 @@ describe('normalizeSections', () => {
 })
 
 describe('normalizeArgumentsBoard', () => {
-  it('migrates legacy outlines into Main drafts and seeds the Category 3 ladder', () => {
+  it('migrates legacy outlines into Main drafts without inventing a Category 3 ladder', () => {
     const board = normalizeArgumentsBoard({
       outlines: {
         petitioner: [{ id: 'p1', title: 'Opening theme', notes: '', prongs: [] }],
@@ -64,152 +61,74 @@ describe('normalizeArgumentsBoard', () => {
       },
     })
 
+    expect(board.draftsBySide.petitioner).toHaveLength(1)
     expect(board.draftsBySide.petitioner[0].name).toBe('Main')
     expect(board.draftsBySide.petitioner[0].notes).toContain('Main pet notes')
     expect(
       board.draftsBySide.petitioner.some((d) => d.id === CATEGORY3_LADDER_DRAFT_ID)
-    ).toBe(true)
-    const ladder = board.draftsBySide.petitioner.find(
-      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
-    )
-    expect(ladder.sections.length).toBeGreaterThanOrEqual(4)
-    expect(ladder.sections[1].prongs.length).toBe(3)
+    ).toBe(false)
   })
 
-  it('does not duplicate the Category 3 ladder when already present', () => {
-    const first = normalizeArgumentsBoard(null)
-    const second = normalizeArgumentsBoard(first)
-    const ladderCount = second.draftsBySide.petitioner.filter(
-      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
-    ).length
-    expect(ladderCount).toBe(1)
-  })
-
-  it('restores missing ladder structure on seed upgrade but keeps local note edits', () => {
-    const stale = normalizeArgumentsBoard(null)
-    const staleLadder = stale.draftsBySide.petitioner.find(
-      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
-    )
-    staleLadder.notes = '<p>old cryptic shorthand</p>'
-    const firstProng = staleLadder.sections[1].prongs[0]
-    firstProng.title = 'a. Jackson’s method, not just his labels'
-    firstProng.notes = '<p>my rewritten Youngstown prong</p>'
-    staleLadder.sections = []
-    delete staleLadder.seedVersion
-
-    const refreshed = normalizeArgumentsBoard(stale)
-    const ladder = refreshed.draftsBySide.petitioner.find(
-      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
-    )
-    expect(ladder.seedVersion).toBe(CATEGORY3_LADDER_SEED_VERSION)
-    // Draft-level notes the user already had are not wiped by a seed bump.
-    expect(ladder.notes).toContain('old cryptic shorthand')
-    expect(ladder.sections.length).toBeGreaterThanOrEqual(4)
-  })
-
-  it('keeps a rewritten prong when the seed version bumps', () => {
-    const stale = normalizeArgumentsBoard(null)
-    const staleLadder = stale.draftsBySide.petitioner.find(
-      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
-    )
-    const prong = staleLadder.sections.find((s) => s.id === 'c3-s1').prongs[0]
-    prong.title = 'a. Jackson’s method, not just his labels'
-    prong.notes = '<p>my rewritten Youngstown prong</p>'
-    staleLadder.seedVersion = 0
-
-    const refreshed = normalizeArgumentsBoard(stale)
-    const ladder = refreshed.draftsBySide.petitioner.find(
-      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
-    )
-    const kept = ladder.sections.find((s) => s.id === 'c3-s1').prongs[0]
-    expect(ladder.seedVersion).toBe(CATEGORY3_LADDER_SEED_VERSION)
-    expect(kept.title).toBe('a. Jackson’s method, not just his labels')
-    expect(kept.notes).toContain('my rewritten Youngstown prong')
-  })
-
-  it('does not resurrect seed prongs the user deleted when the seed version bumps', () => {
+  it('empty board is a blank Main draft, not Bronner seed content', () => {
     const board = normalizeArgumentsBoard(null)
-    const ladder = board.draftsBySide.petitioner.find(
-      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
-    )
-    const section1 = ladder.sections.find((s) => s.id === 'c3-s1')
-    const section2 = ladder.sections.find((s) => s.id === 'c3-s2')
-    section1.prongs = section1.prongs.filter((p) => p.id !== 'c3-s1-c')
-    section2.prongs = section2.prongs.filter((p) => p.id !== 'c3-s2-c')
-    ladder.seedVersion = 0
-
-    const refreshed = normalizeArgumentsBoard(board)
-    const next = refreshed.draftsBySide.petitioner.find(
-      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
-    )
-    const prongIds = next.sections.flatMap((s) => (s.prongs || []).map((p) => p.id))
-    expect(prongIds).not.toContain('c3-s1-c')
-    expect(prongIds).not.toContain('c3-s2-c')
-    expect(next.seedVersion).toBe(CATEGORY3_LADDER_SEED_VERSION)
+    expect(board.draftsBySide.petitioner).toHaveLength(1)
+    expect(board.draftsBySide.petitioner[0].id).toBe('petitioner-main')
+    expect(board.draftsBySide.petitioner[0].notes).toBe('')
+    expect(
+      board.draftsBySide.petitioner.some((d) => d.id === CATEGORY3_LADDER_DRAFT_ID)
+    ).toBe(false)
   })
 
-  it('does not restore Opening theme, 3.3, or 4.3 after a seed bump / reload', () => {
-    const board = normalizeArgumentsBoard(null)
-    const ladder = board.draftsBySide.petitioner.find(
-      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
-    )
-    ladder.removedOutlineIds = ['c3-s0', 'c3-s2-c', 'c3-s3-c']
-    ladder.sections = ladder.sections
-      .filter((s) => s.id !== 'c3-s0')
-      .map((s) => ({
-        ...s,
-        prongs: (s.prongs || []).filter(
-          (p) => p.id !== 'c3-s2-c' && p.id !== 'c3-s3-c'
-        ),
-      }))
-    ladder.seedVersion = 0
-
-    const refreshed = normalizeArgumentsBoard(board)
-    const next = refreshed.draftsBySide.petitioner.find(
-      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
-    )
-    const ids = [
-      ...next.sections.map((s) => s.id),
-      ...next.sections.flatMap((s) => (s.prongs || []).map((p) => p.id)),
-    ]
-    expect(ids).not.toContain('c3-s0')
-    expect(ids).not.toContain('c3-s2-c')
-    expect(ids).not.toContain('c3-s3-c')
-    expect(next.sections.some((s) => s.title === 'Opening theme')).toBe(false)
-  })
-
-  it('keeps Opening theme deleted when only the board-level tombstone map is present', () => {
-    const board = normalizeArgumentsBoard(null)
-    const withMap = {
-      ...board,
+  it('keeps a ladder draft that already exists in saved data', () => {
+    const board = normalizeArgumentsBoard({
       draftsBySide: {
-        ...board.draftsBySide,
-        petitioner: board.draftsBySide.petitioner.map((d) =>
-          d.id === CATEGORY3_LADDER_DRAFT_ID
-            ? { ...d, seedVersion: 0 }
-            : d
-        ),
+        petitioner: [
+          {
+            id: CATEGORY3_LADDER_DRAFT_ID,
+            name: 'Alt · Q2 Category 3 ladder',
+            notes: '<p>my own edits</p>',
+            sections: [{ id: 'c3-s1', title: 'Lowest ebb', notes: '', prongs: [] }],
+          },
+        ],
+        respondent: [{ id: 'respondent-main', name: 'Main', notes: '', sections: [] }],
       },
-      removedOutlineIdsByDraft: { [CATEGORY3_LADDER_DRAFT_ID]: ['c3-s0'] },
-    }
-    const refreshed = normalizeArgumentsBoard(withMap)
-    const next = refreshed.draftsBySide.petitioner.find(
-      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
-    )
-    expect(next.sections.map((s) => s.id)).not.toContain('c3-s0')
-  })
-
-  it('keeps a ladder draft that is already on the current seed version', () => {
-    const board = normalizeArgumentsBoard(null)
-    const ladder = board.draftsBySide.petitioner.find(
-      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
-    )
-    ladder.notes = '<p>my own edits</p>'
-
-    const again = normalizeArgumentsBoard(board)
-    const kept = again.draftsBySide.petitioner.find(
+      activeDraftBySide: {
+        petitioner: CATEGORY3_LADDER_DRAFT_ID,
+        respondent: 'respondent-main',
+      },
+    })
+    const kept = board.draftsBySide.petitioner.find(
       (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
     )
     expect(kept.notes).toContain('my own edits')
+    expect(kept.sections[0].title).toBe('Lowest ebb')
+  })
+
+  it('keeps Opening theme deleted when the board-level tombstone map is present', () => {
+    const board = normalizeArgumentsBoard({
+      draftsBySide: {
+        petitioner: [
+          {
+            id: CATEGORY3_LADDER_DRAFT_ID,
+            name: 'Alt',
+            notes: '',
+            sections: [
+              { id: 'c3-s0', title: 'Opening theme', notes: '', prongs: [] },
+              { id: 'c3-s1', title: 'Lowest ebb', notes: '', prongs: [] },
+            ],
+          },
+        ],
+        respondent: [{ id: 'respondent-main', name: 'Main', notes: '', sections: [] }],
+      },
+      activeDraftBySide: {
+        petitioner: CATEGORY3_LADDER_DRAFT_ID,
+        respondent: 'respondent-main',
+      },
+      removedOutlineIdsByDraft: { [CATEGORY3_LADDER_DRAFT_ID]: ['c3-s0'] },
+    })
+    const next = board.draftsBySide.petitioner.find(
+      (d) => d.id === CATEGORY3_LADDER_DRAFT_ID
+    )
+    expect(next.sections.map((s) => s.id)).not.toContain('c3-s0')
   })
 })

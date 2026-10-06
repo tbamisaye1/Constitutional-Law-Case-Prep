@@ -18,6 +18,18 @@ import { snapshotDocRevision } from './docRevisions'
 export const DOC_ROW_ID = 'main'
 
 /**
+ * True when localStorage holds a real arguments save, not "missing key".
+ * normalizeArgumentsBoard(null) builds a seeded board, so emptiness must be
+ * checked on the raw JSON before normalization.
+ */
+export function hasPersistedArgumentsSave(raw) {
+  if (!raw || typeof raw !== 'object') return false
+  if (Array.isArray(raw.draftsBySide?.petitioner)) return true
+  if (raw.outlines && typeof raw.outlines === 'object') return true
+  return false
+}
+
+/**
  * @typedef {{
  *   collection: string,
  *   kind: string,
@@ -31,8 +43,8 @@ export const DOC_ROW_ID = 'main'
  */
 
 const DEFAULT_ARG_NOTES = {
-  petitioner: '<h2>Petitioner working notes</h2><p>Quips, corrections, language.</p>',
-  respondent: '<h2>Respondent working notes</h2><p>Structure and rebuttal scratch.</p>',
+  petitioner: '',
+  respondent: '',
 }
 
 const OPENINGS_SEED = {
@@ -80,8 +92,21 @@ export const WORKSPACE_DOCS = {
     fromRow(row) {
       if (!row) return null
       if (!row.draftsBySide && !row.outlines) return null
+      const rawLocal = readJson(this.storageKey, null)
+      // Cleared cookies / first visit: localStorage is empty, but
+      // normalizeArgumentsBoard(null) invents a full seed board. Merging that
+      // "local" seed with Postgres used to overwrite real notes on hydrate and
+      // then push the hybrid back. Trust the database when there is no save.
+      if (!hasPersistedArgumentsSave(rawLocal)) {
+        const remoteOnly = normalizeArgumentsBoard(row)
+        return {
+          ...remoteOnly,
+          activeSectionBySide: {},
+          activeFocusBySide: {},
+        }
+      }
       const remote = normalizeArgumentsBoard(row)
-      const local = normalizeArgumentsBoard(readJson(this.storageKey, null))
+      const local = normalizeArgumentsBoard(rawLocal)
       // Prefer local outline shape when this browser already deleted seed prongs
       // that a stale remote sync still carries (same draft id, fewer prongs).
       const draftsBySide = preferLocalArgumentDeletions(

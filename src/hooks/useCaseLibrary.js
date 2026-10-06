@@ -41,14 +41,12 @@ import {
   flushNotebookSnapshotSave,
   registerNotebookSyncPublisher,
 } from '../lib/notebookWorkspace'
-import { preferLocalArgumentDeletions } from '../lib/argumentsBoard'
 import {
   allWorkspaceDocKinds,
   DOC_ROW_ID,
   flushWorkspaceDocSaves,
   hydrateWorkspaceDocFromRemote,
   registerWorkspaceDocPublisher,
-  saveWorkspaceDoc,
   WORKSPACE_DOCS,
   workspaceDocRowsFromLocal,
 } from '../lib/workspaceDocs'
@@ -222,33 +220,6 @@ let memory = {
 // Dedicated notes key can be ahead of the library mirror after a crashed tab
 // or quota failure. Push that snapshot instead of letting sync hydrate wipe it.
 markStaleNotebookMirrorDirty(parsedLibraryForBoot)
-
-function markStaleArgumentsMirrorDirty(parsed) {
-  if (!WORKSPACE_ID) return
-  if (!parsed || typeof parsed !== 'object') return
-  const mirrored = Array.isArray(parsed.argumentsBoard) ? parsed.argumentsBoard[0] : null
-  const dedicated = workspaceDocRowsFromLocal('arguments')[0]
-  if (!dedicated?.draftsBySide) return
-  const strip = (row) =>
-    row
-      ? {
-          draftsBySide: row.draftsBySide,
-          activeDraftBySide: row.activeDraftBySide,
-        }
-      : null
-  if (JSON.stringify(strip(mirrored)) === JSON.stringify(strip(dedicated))) return
-  const key = metaKey('library_records', 'arguments', DOC_ROW_ID)
-  memory = {
-    ...memory,
-    store: {
-      ...memory.store,
-      argumentsBoard: [dedicated],
-      syncMeta: markDirty(memory.store.syncMeta, [key], Date.now()),
-    },
-  }
-}
-
-markStaleArgumentsMirrorDirty(parsedLibraryForBoot)
 
 /**
  * Editors call this (via notebookWorkspace) whenever the OneNote notebook changes.
@@ -489,8 +460,8 @@ async function runSync({ keepalive = false, forcePull = false, allowBeforeBootst
 const MERGE_BACKUP_KEY = 'case-prep-merge-backup-v1'
 // Bump the suffix when a one-shot server restore must run again after deploy.
 const RECOVER_NOTES_FLAG = 'case-prep-recover-notes-2026-10-05-askai'
-// After seed wiped manual ladder notes: force Postgres arguments to win once.
-const RECOVER_ARGUMENTS_FLAG = 'case-prep-recover-args-2026-10-06-domestic-21'
+// Force Postgres arguments to win once after seed/localStorage wipe bugs.
+const RECOVER_ARGUMENTS_FLAG = 'case-prep-recover-args-2026-10-06-db-wins'
 
 function pickMergedText(keepVal, dropVal) {
   const keep = String(keepVal || '').trim()
@@ -544,14 +515,13 @@ async function recoverNotesFromServerOnce() {
 }
 
 /**
- * One-shot: drop local arguments dirty/meta so the restored Postgres board
- * (manual Jackson / ATA / Mathews notes) wins over a seed copy in this browser.
+ * One-shot: drop local arguments dirty/meta so Postgres wins over a seed copy
+ * left in this browser after clearing site data or a bad merge.
  */
 async function recoverArgumentsFromServerOnce() {
   if (typeof localStorage === 'undefined') return
   if (localStorage.getItem(RECOVER_ARGUMENTS_FLAG) === '1') return
 
-  const localBefore = WORKSPACE_DOCS.arguments.loadLocal()
   const argsKey = metaKey('library_records', 'arguments', DOC_ROW_ID)
   const syncMeta = memory.store.syncMeta || emptySyncMeta()
   const dirty = { ...(syncMeta.dirty || {}) }
@@ -563,19 +533,8 @@ async function recoverArgumentsFromServerOnce() {
   if (ok) {
     localStorage.setItem(RECOVER_ARGUMENTS_FLAG, '1')
     const row = memory.store.argumentsBoard?.[0]
+    // Database only. Do not re-merge the pre-pull seed board back on top.
     if (row) hydrateWorkspaceDocFromRemote('arguments', row)
-    // Outline trash in this browser still wins over a stale Postgres copy.
-    const localAfter = WORKSPACE_DOCS.arguments.loadLocal()
-    const draftsBySide = preferLocalArgumentDeletions(
-      localAfter.draftsBySide,
-      localBefore.draftsBySide
-    )
-    if (
-      JSON.stringify(draftsBySide) !== JSON.stringify(localAfter.draftsBySide)
-    ) {
-      const merged = { ...localAfter, draftsBySide }
-      saveWorkspaceDoc('arguments', merged, { immediate: true })
-    }
   }
   return ok
 }
@@ -607,9 +566,27 @@ async function bootstrapSync() {
     return
   }
 
-  // Dedicated editor keys can be ahead of the library mirror after a tab crash.
+  // Prep docs: database is source of truth on boot. Rewrite local caches from
+  // the pulled rows and clear dirty flags so a seed board never pushes next.
+  for (const kind of allWorkspaceDocKinds()) {
+    const spec = WORKSPACE_DOCS[kind]
+    const row = memory.store[spec.collection]?.[0]
+    if (row) hydrateWorkspaceDocFromRemote(kind, row)
+  }
+  {
+    const syncMeta = memory.store.syncMeta || emptySyncMeta()
+    const dirty = { ...(syncMeta.dirty || {}) }
+    for (const kind of allWorkspaceDocKinds()) {
+      const spec = WORKSPACE_DOCS[kind]
+      delete dirty[metaKey('library_records', spec.kind, DOC_ROW_ID)]
+    }
+    delete dirty[metaKey('library_records', 'notebook', NOTEBOOK_ROW_ID)]
+    setSyncMeta({ ...syncMeta, dirty })
+  }
+
+  // Notebook can legitimately be ahead after a crashed tab; arguments must not
+  // use the same path because empty localStorage normalizes to seed.
   markStaleNotebookMirrorDirty(memory.store)
-  markStaleArgumentsMirrorDirty(memory.store)
 
   markUnsyncedDocDirty('notebook', 'notebook', NOTEBOOK_ROW_ID)
   for (const kind of allWorkspaceDocKinds()) {
@@ -618,6 +595,14 @@ async function bootstrapSync() {
   }
 
   setSyncMeta(markSeedRowsDirty(memory.store, memory.store.syncMeta, Date.now()))
+  // markSeedRowsDirty can re-dirty arguments when the pull row was missing.
+  // If Postgres did send arguments, keep it clean so we do not push seed.
+  if (memory.store.argumentsBoard?.[0]) {
+    const syncMeta = memory.store.syncMeta || emptySyncMeta()
+    const dirty = { ...(syncMeta.dirty || {}) }
+    delete dirty[metaKey('library_records', 'arguments', DOC_ROW_ID)]
+    setSyncMeta({ ...syncMeta, dirty })
+  }
   syncBootstrapDone = true
   await runSync({ allowBeforeBootstrap: true })
 }
