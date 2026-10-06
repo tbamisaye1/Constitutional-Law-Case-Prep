@@ -384,10 +384,7 @@ export function ArticlesPage() {
       </header>
 
       <SyncBanner
-        sync={lib.sync}
         saveError={lib.saveError}
-        lastSavedAt={lib.lastSavedAt}
-        onSyncNow={lib.syncNow}
         onRetrySaveError={
           indexFailMeta || lib.saveError
             ? () => {

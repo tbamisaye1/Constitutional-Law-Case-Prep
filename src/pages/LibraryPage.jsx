@@ -289,7 +289,6 @@ export function LibraryPage() {
       ) : null}
 
       <SyncBanner
-        sync={lib.sync}
         saveError={
           lib.saveError ||
           (unsyncedPdfs.length
@@ -299,8 +298,6 @@ export function LibraryPage() {
                 .join(', ')}${unsyncedPdfs.length > 3 ? '…' : ''}. Open each case and use Retry upload, or re-attach the file.`
             : '')
         }
-        lastSavedAt={lib.lastSavedAt}
-        onSyncNow={lib.syncNow}
         onRetrySaveError={
           unsyncedPdfs[0]
             ? () => lib.retryAskAiIndex?.(unsyncedPdfs[0].id)

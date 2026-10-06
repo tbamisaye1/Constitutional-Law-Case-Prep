@@ -5,7 +5,6 @@ import { NoteEditor } from '../components/NoteEditor'
 import { SectionTree } from '../components/notebook/SectionTree'
 import { PageList } from '../components/notebook/PageList'
 import { SyncBanner } from '../components/SyncBanner'
-import { useCaseLibrary } from '../hooks/useCaseLibrary'
 import { useNotebook } from '../hooks/useNotebook'
 import { NOTEBOOK_META } from '../data/notebookSeed'
 import { findPage } from '../lib/pageTree'
@@ -32,7 +31,6 @@ function readExpanded() {
  */
 export function NotesPage() {
   const nb = useNotebook()
-  const lib = useCaseLibrary()
   const [params] = useSearchParams()
   const [expanded, setExpanded] = useState(readExpanded)
   const sectionName = findSectionName(nb.tree, nb.sectionId)
@@ -85,14 +83,7 @@ export function NotesPage() {
         </header>
       ) : null}
 
-      {!expanded ? (
-        <SyncBanner
-          sync={lib.sync}
-          saveError={lib.saveError}
-          lastSavedAt={lib.lastSavedAt}
-          onSyncNow={lib.syncNow}
-        />
-      ) : null}
+      {!expanded ? <SyncBanner /> : null}
 
       <div className={expanded ? 'onenote-shell is-expanded' : 'onenote-shell'}>
         {!expanded ? (

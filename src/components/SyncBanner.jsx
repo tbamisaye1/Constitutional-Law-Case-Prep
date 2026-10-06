@@ -4,13 +4,17 @@ import {
   downloadWorkspaceBackup,
   listWorkspaceBackups,
 } from '../api/client'
+import { useCaseLibrary } from '../hooks/useCaseLibrary'
 import { isWorkspacePinned, setWorkspaceId } from '../lib/workspace'
 
 /**
  * Where the work on screen is currently saved.
  *
- * Hard refresh must never sound like the only copy is in the browser. When
- * sync is healthy, the database is the durable store; localStorage is a cache.
+ * Subscribes to the library store itself so Arguments / Notes pages do not
+ * re-render on every cache write or sync tick while the user is typing.
+ *
+ * The status line is one fixed-height row. Routine sync/pending states keep
+ * the same calm copy so the layout never jumps mid-edit.
  */
 
 function clock(timestamp) {
@@ -22,44 +26,47 @@ function describe(sync) {
     return {
       tone: 'warn',
       text:
-        'Database sync is off in this browser (storage key blocked). Notes will not survive a clear of site data until sync works.',
+        'Database sync is off in this browser. Work may not survive clearing site data.',
     }
-  }
-
-  if (sync.status === 'syncing') {
-    return { tone: 'info', text: 'Saving to the database…' }
   }
 
   if (sync.status === 'error') {
     return {
       tone: 'warn',
-      text: `Local cache updated; database unreachable (retrying). ${sync.error}`,
+      text: `Database unreachable (retrying). ${sync.error || ''}`.trim(),
     }
   }
 
-  if (sync.pending > 0) {
-    const label = sync.pending === 1 ? '1 change' : `${sync.pending} changes`
-    return {
-      tone: 'info',
-      text: `Local cache updated. ${label} still uploading to the database.`,
-    }
-  }
-
-  const when = sync.lastSyncedAt ? ` Last sync ${clock(sync.lastSyncedAt)}.` : ''
+  // Idle, syncing, and pending all share one calm line so typing never reflows
+  // the page when a background save or sync finishes.
   return {
     tone: 'ok',
-    text: `On the database (local cache + sync after you pause typing): notes, arguments, guide, facts, openings, annotations, PDFs.${when}`,
+    text: 'Saved to the workspace database (notes, arguments, guide, facts, openings, PDFs).',
   }
 }
 
 export function SyncBanner({
-  sync,
-  saveError,
-  lastSavedAt,
-  onSyncNow,
+  /** Optional override (e.g. Library PDF upload errors). */
+  saveError: saveErrorOverride,
   onRetrySaveError,
   retrySaveLabel = 'Retry',
+  /** @deprecated Prefer letting SyncBanner read the store itself. */
+  sync: syncProp,
+  /** @deprecated */
+  lastSavedAt: lastSavedAtProp,
+  /** @deprecated */
+  onSyncNow: onSyncNowProp,
 }) {
+  const lib = useCaseLibrary()
+  const sync = syncProp || lib.sync
+  const lastSavedAt =
+    typeof lastSavedAtProp === 'number' ? lastSavedAtProp : lib.lastSavedAt
+  const onSyncNow = onSyncNowProp || lib.syncNow
+  const saveError =
+    saveErrorOverride !== undefined && saveErrorOverride !== null
+      ? saveErrorOverride
+      : lib.saveError
+
   const { tone, text } = describe(sync)
   const pinned = isWorkspacePinned()
   const [open, setOpen] = useState(false)
@@ -132,42 +139,57 @@ export function SyncBanner({
     }
   }
 
+  const detailBits = []
+  if (sync.lastSyncedAt) detailBits.push(`Last sync ${clock(sync.lastSyncedAt)}`)
+  if (lastSavedAt) detailBits.push(`Local cache write ${clock(lastSavedAt)}`)
+  if (sync.pending > 0) {
+    detailBits.push(
+      sync.pending === 1 ? '1 change still uploading' : `${sync.pending} changes still uploading`
+    )
+  }
+  if (sync.status === 'syncing') detailBits.push('Sync in progress')
+  if (pinned) detailBits.push('Shared workspace pinned for this site')
+
   return (
     <>
       {saveError ? (
         <p className="save-banner error">
-          {saveError}
+          <span className="save-banner-text">{saveError}</span>
           {onRetrySaveError ? (
-            <button type="button" className="anno-jump" onClick={onRetrySaveError}>
-              {retrySaveLabel}
-            </button>
+            <span className="save-banner-actions">
+              <button type="button" className="anno-jump" onClick={onRetrySaveError}>
+                {retrySaveLabel}
+              </button>
+            </span>
           ) : null}
         </p>
       ) : null}
       <p className={`save-banner mono sync-${tone}`}>
-        {text}
-        {lastSavedAt ? ` Local cache write ${clock(lastSavedAt)}.` : ''}
-        {pinned ? ' Shared workspace pinned for this site.' : ''}
-        {sync.status === 'error' || sync.pending > 0 ? (
-          <button type="button" className="anno-jump" onClick={onSyncNow}>
-            Retry now
-          </button>
-        ) : null}
-        {sync.workspaceId && sync.status !== 'off' ? (
-          <>
-            <button type="button" className="anno-jump" disabled={busy} onClick={backupNow}>
-              {busy ? 'Backing up…' : 'Backup now'}
+        <span className="save-banner-text" title={text}>
+          {text}
+        </span>
+        <span className="save-banner-actions">
+          {sync.status === 'error' ? (
+            <button type="button" className="anno-jump" onClick={onSyncNow}>
+              Retry now
             </button>
-            <button type="button" className="anno-jump" disabled={busy} onClick={downloadLatest}>
-              Download backup
+          ) : null}
+          {sync.workspaceId && sync.status !== 'off' ? (
+            <>
+              <button type="button" className="anno-jump" disabled={busy} onClick={backupNow}>
+                {busy ? 'Backing up…' : 'Backup now'}
+              </button>
+              <button type="button" className="anno-jump" disabled={busy} onClick={downloadLatest}>
+                Download backup
+              </button>
+            </>
+          ) : null}
+          {sync.workspaceId ? (
+            <button type="button" className="anno-jump" onClick={() => setOpen((v) => !v)}>
+              {open ? 'Hide devices' : 'Devices'}
             </button>
-          </>
-        ) : null}
-        {sync.workspaceId ? (
-          <button type="button" className="anno-jump" onClick={() => setOpen((v) => !v)}>
-            {open ? 'Hide devices' : 'Devices'}
-          </button>
-        ) : null}
+          ) : null}
+        </span>
       </p>
       {open && sync.workspaceId ? (
         <div className="workspace-link-panel">
@@ -176,6 +198,9 @@ export function SyncBanner({
               ? 'This build uses one shared workspace. After a hard refresh, the app reloads from the database for arguments, notes, guide, facts, openings, and Instant Case PDFs. Backup now saves all of that (including every Arguments draft and prong note) to Postgres and a JSON file on your laptop.'
               : 'Each browser keeps its own workspace key unless you link them. Copy this key into the other device, then reload. Use Backup now so arguments, notes, and the rest exist outside the browser.'}
           </p>
+          {detailBits.length ? (
+            <p className="mono workspace-link-detail">{detailBits.join(' · ')}</p>
+          ) : null}
           <p className="mono workspace-key">{sync.workspaceId}</p>
           <div className="workspace-link-actions">
             <button type="button" className="btn-soft" onClick={copyKey}>

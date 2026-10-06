@@ -138,17 +138,53 @@
 }
 
 .save-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  /* Fixed one-line height so sync/cache text never shoves the editor. */
+  height: 40px;
+  min-height: 40px;
+  max-height: 40px;
   margin: 0;
-  padding: 8px 12px;
+  padding: 0 12px;
   font-size: 12px;
+  line-height: 1.2;
   color: var(--ink-3);
   border: 1px solid var(--rule-soft);
   background: var(--paper-2);
+  overflow: hidden;
+}
+
+.save-banner-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.save-banner-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
 }
 
 .save-banner.error {
+  height: auto;
+  min-height: 40px;
+  max-height: none;
+  padding: 8px 12px;
   color: var(--two);
   border-color: color-mix(in srgb, var(--two) 40%, transparent);
+  white-space: normal;
+}
+
+.save-banner.error .save-banner-text {
+  white-space: normal;
+  text-overflow: unset;
 }
 
 /* Sync tones. Deliberately quiet: this line reports where the work is saved,
@@ -167,7 +203,13 @@
 }
 
 .save-banner .anno-jump {
-  margin-left: 8px;
+  margin-left: 0;
+}
+
+.workspace-link-detail {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ink-3);
 }
 
 .workspace-link-panel {

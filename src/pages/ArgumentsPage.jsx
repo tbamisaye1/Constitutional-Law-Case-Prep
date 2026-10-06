@@ -12,7 +12,6 @@ import { UiTabs, UiTabsContent, UiTabsList, UiTabsTrigger } from '../components/
 import { NoteEditor } from '../components/NoteEditor'
 import { SyncBanner } from '../components/SyncBanner'
 import { useArguments } from '../hooks/useArguments'
-import { useCaseLibrary } from '../hooks/useCaseLibrary'
 
 function supportsFieldSizing() {
   return typeof CSS !== 'undefined' && typeof CSS.supports === 'function'
@@ -109,7 +108,6 @@ function readExpanded() {
  */
 export function ArgumentsPage() {
   const args = useArguments()
-  const lib = useCaseLibrary()
   const [expanded, setExpanded] = useState(readExpanded)
 
   useEffect(() => {
@@ -165,14 +163,7 @@ export function ArgumentsPage() {
         </header>
       ) : null}
 
-      {!expanded ? (
-        <SyncBanner
-          sync={lib.sync}
-          saveError={lib.saveError}
-          lastSavedAt={lib.lastSavedAt}
-          onSyncNow={lib.syncNow}
-        />
-      ) : null}
+      {!expanded ? <SyncBanner /> : null}
 
       <UiTabs value={args.side} onValueChange={args.setSide}>
         <UiTabsList>

@@ -88,12 +88,7 @@ export function CaseAtBarPanel({ lib, onSaveAsFact = null }) {
         </div>
       </div>
 
-      <SyncBanner
-        sync={lib.sync}
-        saveError={lib.saveError}
-        lastSavedAt={lib.lastSavedAt}
-        onSyncNow={lib.syncNow}
-      />
+      <SyncBanner saveError={lib.saveError} />
 
       <div hidden={mode !== 'read'}>
         <div className="library-read-stack case-at-bar-read">
