@@ -289,10 +289,21 @@
 }
 
 .arg-page-prose h1.outline-heading.is-point {
-  font-size: 17px;
+  /* Between a prong (21px) and an in-note heading, so 1.1.1 reads as structure. */
+  font-size: 19px;
   margin-top: 1.1em;
   padding-left: 30px;
   border-left: 2px dotted var(--gold);
+}
+
+/* Ordinary headings inside notes ("## Framework") rank below the outline:
+   section 28 > prong 21 > point 19 > note heading 18 > note h3 16. */
+.arg-page-prose h2 {
+  font-size: 18px;
+}
+
+.arg-page-prose h3 {
+  font-size: 16px;
 }
 
 .arg-page-prose > h1.outline-heading:first-child {
