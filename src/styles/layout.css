@@ -2209,3 +2209,72 @@
     display: none;
   }
 }
+
+/* First paint: wait for Postgres hydrate before mounting prep editors. */
+.workspace-boot {
+  min-height: calc(100vh - 58px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, var(--four-soft), transparent 70%),
+    var(--paper);
+}
+
+.workspace-boot-card {
+  max-width: 34rem;
+  width: 100%;
+  padding: 28px 28px 24px;
+  background: var(--paper-3);
+  border: 1px solid var(--rule);
+  box-shadow: 0 1px 0 var(--rule-soft);
+}
+
+.workspace-boot-kicker {
+  margin: 0 0 10px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.workspace-boot-title {
+  margin: 0 0 12px;
+  font-size: 1.65rem;
+}
+
+.workspace-boot-copy {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 16px;
+  max-width: 40ch;
+}
+
+.workspace-boot-error {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--two);
+}
+
+.workspace-boot-actions {
+  margin-top: 22px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.workspace-boot-pulse {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--rule);
+  border-top-color: var(--four);
+  animation: workspace-boot-spin 0.8s linear infinite;
+}
+
+@keyframes workspace-boot-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

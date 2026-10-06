@@ -78,6 +78,8 @@ const SYNC_HEARTBEAT_MS = 4_000
  * mark seed arguments dirty and overwrite real Postgres notes before pull ran.
  */
 let syncBootstrapDone = false
+let bootstrapInFlight = false
+let bootstrapRetryTimer = 0
 
 /**
  * This browser's workspace key, read once.
@@ -215,6 +217,10 @@ let memory = {
   syncStatus: WORKSPACE_ID ? 'idle' : 'off',
   syncError: '',
   lastSyncedAt: 0,
+  // False until the first Postgres pull hydrates prep docs. UI stays on a boot
+  // screen so localStorage / leftover seed never flash before the DB wins.
+  // When sync is off, ready immediately (local-only browser).
+  workspaceReady: !WORKSPACE_ID,
 }
 
 // Dedicated notes key can be ahead of the library mirror after a crashed tab
@@ -539,6 +545,13 @@ async function recoverArgumentsFromServerOnce() {
   return ok
 }
 
+function markWorkspaceReady() {
+  if (memory.workspaceReady && syncBootstrapDone) return
+  syncBootstrapDone = true
+  memory = { ...memory, workspaceReady: true }
+  emit()
+}
+
 /**
  * First sync after a page load: read the workspace, then offer local rows.
  *
@@ -547,64 +560,86 @@ async function recoverArgumentsFromServerOnce() {
  * earlier on another device. Pulling first gives those rows their real
  * timestamps, so only the rows the workspace has genuinely never seen get
  * offered as new.
+ *
+ * The UI stays on a boot screen until this finishes so editors never mount on
+ * stale localStorage or invented seed boards. After ready, cache + heartbeat
+ * pulls update in the background with no loading gate.
  */
 async function bootstrapSync() {
   if (memory.syncStatus === 'off') {
-    syncBootstrapDone = true
+    markWorkspaceReady()
     return
   }
+  if (syncBootstrapDone) return
+  if (bootstrapInFlight) return
+  bootstrapInFlight = true
 
-  await recoverNotesFromServerOnce()
-  await recoverArgumentsFromServerOnce()
+  try {
+    await recoverNotesFromServerOnce()
+    await recoverArgumentsFromServerOnce()
 
-  // Always pull before any push so seed / empty localStorage cannot overwrite
-  // real argument notes that already live in Postgres.
-  const pulled = await exchange({}, {}, { keepalive: false })
-  if (!pulled) {
-    // Retry later; stay blocked for pushes so we do not upload seed.
-    scheduleSync(SYNC_RETRY_MS, { forcePull: true, allowBeforeBootstrap: true })
-    return
-  }
+    // Always pull before any push so seed / empty localStorage cannot overwrite
+    // real argument notes that already live in Postgres.
+    const pulled = await exchange({}, {}, { keepalive: false })
+    if (!pulled) {
+      // Stay on the boot screen. Retry bootstrap itself (not a bare forcePull)
+      // so hydrate-from-DB still runs before editors mount.
+      window.clearTimeout(bootstrapRetryTimer)
+      bootstrapRetryTimer = window.setTimeout(() => {
+        void bootstrapSync()
+      }, SYNC_RETRY_MS)
+      return
+    }
 
-  // Prep docs: database is source of truth on boot. Rewrite local caches from
-  // the pulled rows and clear dirty flags so a seed board never pushes next.
-  for (const kind of allWorkspaceDocKinds()) {
-    const spec = WORKSPACE_DOCS[kind]
-    const row = memory.store[spec.collection]?.[0]
-    if (row) hydrateWorkspaceDocFromRemote(kind, row)
-  }
-  {
-    const syncMeta = memory.store.syncMeta || emptySyncMeta()
-    const dirty = { ...(syncMeta.dirty || {}) }
+    // Prep docs: database is source of truth on boot. Rewrite local caches from
+    // the pulled rows and clear dirty flags so a seed board never pushes next.
     for (const kind of allWorkspaceDocKinds()) {
       const spec = WORKSPACE_DOCS[kind]
-      delete dirty[metaKey('library_records', spec.kind, DOC_ROW_ID)]
+      const row = memory.store[spec.collection]?.[0]
+      if (row) hydrateWorkspaceDocFromRemote(kind, row)
     }
-    delete dirty[metaKey('library_records', 'notebook', NOTEBOOK_ROW_ID)]
-    setSyncMeta({ ...syncMeta, dirty })
-  }
+    {
+      const syncMeta = memory.store.syncMeta || emptySyncMeta()
+      const dirty = { ...(syncMeta.dirty || {}) }
+      for (const kind of allWorkspaceDocKinds()) {
+        const spec = WORKSPACE_DOCS[kind]
+        delete dirty[metaKey('library_records', spec.kind, DOC_ROW_ID)]
+      }
+      delete dirty[metaKey('library_records', 'notebook', NOTEBOOK_ROW_ID)]
+      setSyncMeta({ ...syncMeta, dirty })
+    }
 
-  // Notebook can legitimately be ahead after a crashed tab; arguments must not
-  // use the same path because empty localStorage normalizes to seed.
-  markStaleNotebookMirrorDirty(memory.store)
+    // Notebook can legitimately be ahead after a crashed tab; arguments must not
+    // use the same path because empty localStorage normalizes to seed.
+    markStaleNotebookMirrorDirty(memory.store)
 
-  markUnsyncedDocDirty('notebook', 'notebook', NOTEBOOK_ROW_ID)
-  for (const kind of allWorkspaceDocKinds()) {
-    const spec = WORKSPACE_DOCS[kind]
-    markUnsyncedDocDirty(spec.kind, spec.collection, DOC_ROW_ID)
-  }
+    markUnsyncedDocDirty('notebook', 'notebook', NOTEBOOK_ROW_ID)
+    for (const kind of allWorkspaceDocKinds()) {
+      const spec = WORKSPACE_DOCS[kind]
+      markUnsyncedDocDirty(spec.kind, spec.collection, DOC_ROW_ID)
+    }
 
-  setSyncMeta(markSeedRowsDirty(memory.store, memory.store.syncMeta, Date.now()))
-  // markSeedRowsDirty can re-dirty arguments when the pull row was missing.
-  // If Postgres did send arguments, keep it clean so we do not push seed.
-  if (memory.store.argumentsBoard?.[0]) {
-    const syncMeta = memory.store.syncMeta || emptySyncMeta()
-    const dirty = { ...(syncMeta.dirty || {}) }
-    delete dirty[metaKey('library_records', 'arguments', DOC_ROW_ID)]
-    setSyncMeta({ ...syncMeta, dirty })
+    setSyncMeta(markSeedRowsDirty(memory.store, memory.store.syncMeta, Date.now()))
+    // markSeedRowsDirty can re-dirty arguments when the pull row was missing.
+    // If Postgres did send arguments, keep it clean so we do not push seed.
+    if (memory.store.argumentsBoard?.[0]) {
+      const syncMeta = memory.store.syncMeta || emptySyncMeta()
+      const dirty = { ...(syncMeta.dirty || {}) }
+      delete dirty[metaKey('library_records', 'arguments', DOC_ROW_ID)]
+      setSyncMeta({ ...syncMeta, dirty })
+    }
+    markWorkspaceReady()
+    await runSync({ allowBeforeBootstrap: true })
+  } finally {
+    bootstrapInFlight = false
   }
-  syncBootstrapDone = true
-  await runSync({ allowBeforeBootstrap: true })
+}
+
+/** Manual retry from the boot screen when the first pull failed. */
+export function retryWorkspaceBootstrap() {
+  if (syncBootstrapDone) return Promise.resolve()
+  window.clearTimeout(bootstrapRetryTimer)
+  return bootstrapSync()
 }
 
 /**
@@ -1831,6 +1866,7 @@ export function useCaseLibrary() {
     pageByFile: snap.store.pageByFile,
     saveError: snap.saveError,
     lastSavedAt: snap.lastSavedAt,
+    workspaceReady: snap.workspaceReady,
     sync: {
       // 'off' (no workspace key) | 'idle' | 'syncing' | 'error'
       status: snap.syncStatus,
@@ -1845,6 +1881,7 @@ export function useCaseLibrary() {
       window.clearTimeout(syncTimer)
       return runSync({ forcePull: true })
     },
+    retryWorkspaceBootstrap,
     recoverFromServer: () => {
       try {
         localStorage.removeItem(RECOVER_NOTES_FLAG)
