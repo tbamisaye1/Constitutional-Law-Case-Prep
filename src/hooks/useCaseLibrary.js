@@ -69,6 +69,13 @@ const WORKSPACE_DOC_SYNC_MS = 900
 const SYNC_RETRY_MS = 30_000
 
 /**
+ * Idle tabs used to skip the network entirely (nothing dirty → no /sync).
+ * A second Chrome window, including Incognito, never saw argument notes until
+ * reload. Pull on this interval, and again when the tab becomes visible.
+ */
+const SYNC_HEARTBEAT_MS = 4_000
+
+/**
  * Until the first pull finishes, do not push. A fresh / incognito tab used to
  * mark seed arguments dirty and overwrite real Postgres notes before pull ran.
  */
@@ -466,9 +473,10 @@ async function runSync({ keepalive = false, forcePull = false, allowBeforeBootst
   }
 
   const { changes, sent } = collectChanges(memory.store, memory.store.syncMeta)
-  // Normal idle browsers with nothing dirty skip the network. forcePull is for
-  // recovery (merge mistakes, another device wrote first) where we still need
-  // a round-trip even though this tab has no pending rows.
+  // Without forcePull, a quiet tab never talks to Postgres. That is fine for
+  // saving (this tab has nothing to push) and wrong for live windows: the
+  // other browser already uploaded arguments. Heartbeat / visibility use
+  // forcePull so idle clients still pull.
   if (!forcePull && !Object.keys(sent).length && memory.syncStatus !== 'error') return
 
   const ok = await exchange(changes, sent, { keepalive })
@@ -887,11 +895,26 @@ hydrateBlobs().then(() => {
   void uploadPendingServerFiles()
 })
 
+function startIdlePullHeartbeat() {
+  if (memory.syncStatus === 'off') return
+  window.setInterval(() => {
+    if (document.visibilityState === 'hidden') return
+    if (memory.syncStatus === 'off' || syncInFlight) return
+    scheduleSync(0, { forcePull: true })
+  }, SYNC_HEARTBEAT_MS)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      scheduleSync(0, { forcePull: true })
+    }
+  })
+}
+
 if (typeof window !== 'undefined') {
   bootstrapSync().then(() => {
     // After pull, stored flags may flip true (bytes already on Blob). Re-hydrate
     // downloads them; uploadPending catches anything still only local.
     void hydrateBlobs().then(() => uploadPendingServerFiles())
+    startIdlePullHeartbeat()
   })
 
   onPageHide(() => {
@@ -911,14 +934,29 @@ if (typeof window !== 'undefined') {
   })
   // Coming back online is the common case for a laptop that was shut, so retry
   // straight away rather than waiting out the retry timer.
-  window.addEventListener('online', () => scheduleSync(0))
+  window.addEventListener('online', () => scheduleSync(0, { forcePull: true }))
   window.addEventListener('storage', (event) => {
     if (event.key !== KEY || !event.newValue) return
     try {
       const parsed = JSON.parse(event.newValue)
+      const docsBefore = Object.fromEntries(
+        allWorkspaceDocKinds().map((kind) => {
+          const spec = WORKSPACE_DOCS[kind]
+          return [kind, memory.store[spec.collection]?.[0]]
+        })
+      )
       memory = { ...memory, store: { ...emptyStore(), ...parsed } }
       emit()
       hydrateBlobs()
+      // Same-profile extra tabs get the library key via storage events, but
+      // Arguments / Notes still live in dedicated keys until hydrate runs.
+      for (const kind of allWorkspaceDocKinds()) {
+        const spec = WORKSPACE_DOCS[kind]
+        const row = memory.store[spec.collection]?.[0]
+        if (row && JSON.stringify(docsBefore[kind]) !== JSON.stringify(row)) {
+          hydrateWorkspaceDocFromRemote(kind, row)
+        }
+      }
     } catch {
       // ignore other-tab parse errors
     }
