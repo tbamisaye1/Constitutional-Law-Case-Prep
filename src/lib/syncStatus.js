@@ -4,6 +4,9 @@
  * Never claim the database has the latest work while changes are still queued
  * or a sync request is in flight. Local cache writes are not the same as a
  * successful push.
+ *
+ * Arguments get an explicit line: heartbeats can return 200 while the Arguments
+ * row on Postgres never moves, which is what hid the 2026-10-06 freeze.
  */
 
 export function describeSyncStatus(sync) {
@@ -23,7 +26,14 @@ export function describeSyncStatus(sync) {
   }
 
   const pending = Number(sync.pending) || 0
-  if (pending > 0 || sync.status === 'syncing') {
+  const pendingArguments = Boolean(sync.pendingArguments)
+  if (pending > 0 || sync.status === 'syncing' || pendingArguments) {
+    if (pendingArguments) {
+      return {
+        tone: 'warn',
+        text: 'Saving Arguments to the workspace database…',
+      }
+    }
     return {
       tone: 'warn',
       text:
@@ -37,6 +47,14 @@ export function describeSyncStatus(sync) {
     return {
       tone: 'warn',
       text: 'Not confirmed in the database yet. Waiting for first sync…',
+    }
+  }
+
+  const argsAck = Number(sync.argumentsAckedAt) || 0
+  if (argsAck) {
+    return {
+      tone: 'ok',
+      text: `Synced to the workspace database at ${new Date(sync.lastSyncedAt).toLocaleTimeString()}. Arguments confirmed ${new Date(argsAck).toLocaleTimeString()}.`,
     }
   }
 

@@ -123,6 +123,10 @@ export function SyncBanner({
       sync.pending === 1 ? '1 change still uploading' : `${sync.pending} changes still uploading`
     )
   }
+  if (sync.pendingArguments) detailBits.push('Arguments still uploading')
+  if (sync.argumentsAckedAt) {
+    detailBits.push(`Arguments confirmed ${clock(sync.argumentsAckedAt)}`)
+  }
   if (sync.status === 'syncing') detailBits.push('Sync in progress')
   if (pinned) detailBits.push('Shared workspace pinned for this site')
 

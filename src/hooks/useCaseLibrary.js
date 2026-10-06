@@ -258,10 +258,22 @@ let memory = {
   syncStatus: WORKSPACE_ID ? 'idle' : 'off',
   syncError: '',
   lastSyncedAt: 0,
+  // Last time a push that included Arguments was accepted (written or server echo).
+  // Separate from lastSyncedAt so empty heartbeats cannot fake an Arguments save.
+  argumentsAckedAt: 0,
   // False until the first Postgres pull hydrates prep docs. UI stays on a boot
   // screen so localStorage / leftover seed never flash before the DB wins.
   // When sync is off, ready immediately (local-only browser).
   workspaceReady: !WORKSPACE_ID,
+}
+
+function isArgumentsMetaKey(key) {
+  return typeof key === 'string' && key.startsWith('library_records::arguments::')
+}
+
+function hasPendingArguments(syncMeta) {
+  const dirty = syncMeta?.dirty || {}
+  return Object.keys(dirty).some(isArgumentsMetaKey)
 }
 
 // Local-only browsers may push a notebook that raced the library mirror.
@@ -420,12 +432,36 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
     const applied = applyChanges(memory.store, memory.store.syncMeta, response.changes)
     const syncMeta = clearAccepted(applied.syncMeta, sent, response.serverTime)
 
+    const sentArgsKeys = Object.keys(sent || {}).filter(isArgumentsMetaKey)
+    let argumentsAckedAt = memory.argumentsAckedAt
+    if (sentArgsKeys.length) {
+      const stillDirty = sentArgsKeys.some((key) => syncMeta.dirty?.[key])
+      const wroteLibrary = Number(response.written?.library_records) > 0
+      const pulledArgs = (response.changes?.library_records || []).some(
+        (row) => row && row.kind === 'arguments'
+      )
+      // Only ack when the Arguments dirty keys cleared AND the server either
+      // wrote library_records or echoed Arguments back. Empty heartbeats never
+      // send Arguments, so they cannot refresh this timestamp.
+      if (!stillDirty && (wroteLibrary || pulledArgs)) {
+        argumentsAckedAt = Date.now()
+      }
+    } else if (
+      (response.changes?.library_records || []).some(
+        (row) => row && row.kind === 'arguments'
+      )
+    ) {
+      // Boot / peer pull landed Arguments from Postgres.
+      argumentsAckedAt = Date.now()
+    }
+
     memory = {
       ...memory,
       store: { ...applied.store, syncMeta },
       syncStatus: 'idle',
       syncError: '',
       lastSyncedAt: Date.now(),
+      argumentsAckedAt,
     }
     emit()
     persistSoon()
@@ -1905,6 +1941,8 @@ export function useCaseLibrary() {
       error: snap.syncError,
       lastSyncedAt: snap.lastSyncedAt,
       pending: pendingCount(snap.store.syncMeta),
+      pendingArguments: hasPendingArguments(snap.store.syncMeta),
+      argumentsAckedAt: snap.argumentsAckedAt,
       workspaceId: WORKSPACE_ID,
     },
     syncNow: () => {

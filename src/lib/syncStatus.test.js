@@ -37,6 +37,30 @@ describe('describeSyncStatus', () => {
     expect(status.text.toLowerCase()).toContain('synced to the workspace database')
   })
 
+  it('warns while Arguments are still dirty even if other pending is zero', () => {
+    const status = describeSyncStatus({
+      status: 'idle',
+      pending: 0,
+      pendingArguments: true,
+      lastSyncedAt: Date.now() - 60_000,
+    })
+    expect(status.tone).toBe('warn')
+    expect(status.text.toLowerCase()).toContain('saving arguments')
+  })
+
+  it('names Arguments confirmation when the server ack is present', () => {
+    const at = new Date('2026-10-06T12:15:00Z').getTime()
+    const argsAt = new Date('2026-10-06T12:16:00Z').getTime()
+    const status = describeSyncStatus({
+      status: 'idle',
+      pending: 0,
+      lastSyncedAt: at,
+      argumentsAckedAt: argsAt,
+    })
+    expect(status.tone).toBe('ok')
+    expect(status.text.toLowerCase()).toContain('arguments confirmed')
+  })
+
   it('keeps error and off states honest', () => {
     expect(describeSyncStatus({ status: 'off' }).tone).toBe('warn')
     expect(
