@@ -9,6 +9,7 @@
 import { readJson, writeJson } from './persist'
 import { SEED_FACTS } from '../data/factsSeed'
 import { normalizeArgumentsBoard } from './argumentsBoard'
+import { snapshotDocRevision } from './docRevisions'
 
 export const DOC_ROW_ID = 'main'
 
@@ -167,6 +168,8 @@ export function saveWorkspaceDoc(kind, data) {
       : kind === 'facts'
         ? data.facts
         : data
+  // Snapshot what is about to be replaced so a bad sync/seed cannot erase work.
+  snapshotDocRevision(kind, spec.loadLocal(), 'save')
   writeJson(spec.storageKey, payload)
   if (typeof publishers[kind] === 'function') publishers[kind](data)
 }
@@ -178,6 +181,7 @@ export function hydrateWorkspaceDocFromRemote(kind, row) {
   if (!data) return false
   const local = spec.loadLocal()
   if (spec.same(local, data)) return false
+  snapshotDocRevision(kind, local, 'hydrate')
   const payload =
     kind === 'guide_edits' ? data.edits : kind === 'facts' ? data.facts : data
   writeJson(spec.storageKey, payload)

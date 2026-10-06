@@ -8,6 +8,7 @@ import {
   CATEGORY3_LADDER_DRAFT_ID,
   CATEGORY3_LADDER_SEED_VERSION,
 } from '../data/category3LadderDraft'
+import { snapshotDocRevision } from './docRevisions'
 
 const DEFAULT_NOTES = {
   petitioner: '<h2>Petitioner working notes</h2><p>Quips, corrections, language.</p>',
@@ -204,6 +205,13 @@ function withCategory3Ladder(petitionerDrafts) {
   const stored = petitionerDrafts[index]
   const storedVersion = Number.isFinite(stored.seedVersion) ? stored.seedVersion : 0
   if (storedVersion >= CATEGORY3_LADDER_SEED_VERSION) return petitionerDrafts
+  // Seed bumps used to wipe rewritten prongs. Snapshot first, then merge with
+  // preferStoredNotes so local wording always wins when it diverges.
+  snapshotDocRevision(
+    'arguments',
+    { draftsBySide: { petitioner: petitionerDrafts }, seedMergeFrom: storedVersion },
+    'seed_merge'
+  )
   const next = [...petitionerDrafts]
   next[index] = mergeLadderSeedDraft(stored, buildCategory3LadderDraft())
   return next
