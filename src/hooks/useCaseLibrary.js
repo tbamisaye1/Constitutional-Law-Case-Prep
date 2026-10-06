@@ -472,6 +472,8 @@ async function runSync({ keepalive = false, forcePull = false, allowBeforeBootst
 const MERGE_BACKUP_KEY = 'case-prep-merge-backup-v1'
 // Bump the suffix when a one-shot server restore must run again after deploy.
 const RECOVER_NOTES_FLAG = 'case-prep-recover-notes-2026-10-05-askai'
+// After seed wiped manual ladder notes: force Postgres arguments to win once.
+const RECOVER_ARGUMENTS_FLAG = 'case-prep-recover-args-2026-10-06-manual'
 
 function pickMergedText(keepVal, dropVal) {
   const keep = String(keepVal || '').trim()
@@ -525,6 +527,31 @@ async function recoverNotesFromServerOnce() {
 }
 
 /**
+ * One-shot: drop local arguments dirty/meta so the restored Postgres board
+ * (manual Jackson / ATA / Mathews notes) wins over a seed copy in this browser.
+ */
+async function recoverArgumentsFromServerOnce() {
+  if (typeof localStorage === 'undefined') return
+  if (localStorage.getItem(RECOVER_ARGUMENTS_FLAG) === '1') return
+
+  const argsKey = metaKey('library_records', 'arguments', DOC_ROW_ID)
+  const syncMeta = memory.store.syncMeta || emptySyncMeta()
+  const dirty = { ...(syncMeta.dirty || {}) }
+  const rows = { ...(syncMeta.rows || {}) }
+  delete dirty[argsKey]
+  delete rows[argsKey]
+  setSyncMeta({ ...syncMeta, dirty, rows, cursor: 0 })
+  const ok = await exchange({}, {})
+  if (ok) {
+    localStorage.setItem(RECOVER_ARGUMENTS_FLAG, '1')
+    // Dedicated editor key must match Postgres after hydrate.
+    const row = memory.store.argumentsBoard?.[0]
+    if (row) hydrateWorkspaceDocFromRemote('arguments', row)
+  }
+  return ok
+}
+
+/**
  * First sync after a page load: read the workspace, then offer local rows.
  *
  * Order matters on a browser that has never synced. Its store is full of seed
@@ -540,6 +567,7 @@ async function bootstrapSync() {
   }
 
   await recoverNotesFromServerOnce()
+  await recoverArgumentsFromServerOnce()
 
   // Always pull before any push so seed / empty localStorage cannot overwrite
   // real argument notes that already live in Postgres.

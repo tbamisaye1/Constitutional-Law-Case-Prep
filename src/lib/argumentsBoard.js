@@ -145,6 +145,75 @@ export function preferStoredNotes(storedNotes, freshNotes) {
   return stored
 }
 
+function normNotes(html) {
+  return String(html || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Distinctive openings from the Category 3 seed so we never prefer seed over edits. */
+const SEED_NOTE_PREFIXES = (() => {
+  const draft = buildCategory3LadderDraft()
+  const map = new Map()
+  map.set(`draft:${draft.id}`, normNotes(draft.notes).slice(0, 160))
+  for (const section of draft.sections || []) {
+    map.set(`section:${section.id}`, normNotes(section.notes).slice(0, 160))
+    for (const prong of section.prongs || []) {
+      map.set(`prong:${prong.id}`, normNotes(prong.notes).slice(0, 160))
+      map.set(`title:${prong.id}`, String(prong.title || '').trim())
+    }
+  }
+  return map
+})()
+
+function looksLikeSeedNotes(kindKey, notes) {
+  const prefix = SEED_NOTE_PREFIXES.get(kindKey)
+  if (!prefix) return false
+  const norm = normNotes(notes)
+  if (!norm) return false
+  if (norm === prefix || norm.startsWith(prefix.slice(0, 80))) return true
+  // First heading is a stable fingerprint even when the seed body is truncated in tests.
+  const heading = prefix.split(' ').slice(0, 8).join(' ')
+  return heading.length >= 12 && norm.includes(heading)
+}
+
+function looksLikeSeedTitle(prongId, title) {
+  const seed = SEED_NOTE_PREFIXES.get(`title:${prongId}`)
+  if (!seed) return false
+  return String(title || '').trim() === seed
+}
+
+/**
+ * Pick the note body that is not a seed wipe. Seed loses to any divergent text;
+ * otherwise keep the longer body (manual edits are usually longer).
+ */
+export function preferRicherNotes(aNotes, bNotes, seedKey = '') {
+  const a = typeof aNotes === 'string' ? aNotes : ''
+  const b = typeof bNotes === 'string' ? bNotes : ''
+  if (!a.trim()) return b
+  if (!b.trim()) return a
+  if (a === b) return a
+  const aSeed = seedKey && looksLikeSeedNotes(seedKey, a)
+  const bSeed = seedKey && looksLikeSeedNotes(seedKey, b)
+  if (aSeed && !bSeed) return b
+  if (bSeed && !aSeed) return a
+  return a.length >= b.length ? a : b
+}
+
+function preferRicherTitle(aTitle, bTitle, prongId = '') {
+  const a = typeof aTitle === 'string' ? aTitle.trim() : ''
+  const b = typeof bTitle === 'string' ? bTitle.trim() : ''
+  if (!a) return b || aTitle || ''
+  if (!b) return aTitle || ''
+  if (a === b) return aTitle || a
+  const aSeed = prongId && looksLikeSeedTitle(prongId, a)
+  const bSeed = prongId && looksLikeSeedTitle(prongId, b)
+  if (aSeed && !bSeed) return bTitle || b
+  if (bSeed && !aSeed) return aTitle || a
+  return a.length >= b.length ? aTitle || a : bTitle || b
+}
+
 /**
  * Upgrade a seeded ladder without wiping titles/notes the user already changed,
  * and without resurrecting sections/prongs the user deleted.
@@ -161,7 +230,7 @@ export function mergeLadderSeedDraft(stored, fresh) {
     return {
       ...fresh,
       name: stored.name || fresh.name,
-      notes: preferStoredNotes(stored.notes, fresh.notes),
+      notes: preferRicherNotes(stored.notes, fresh.notes, `draft:${fresh.id}`),
     }
   }
 
@@ -177,26 +246,29 @@ export function mergeLadderSeedDraft(stored, fresh) {
     )
     return {
       ...storedSection,
-      title:
-        typeof storedSection.title === 'string' &&
-        storedSection.title.trim() &&
-        storedSection.title !== freshSection.title
-          ? storedSection.title
-          : freshSection.title || storedSection.title,
-      notes: preferStoredNotes(storedSection.notes, freshSection.notes),
+      // Stored outline wins. Seed never renames a prong/section the user edited.
+      title: preferRicherTitle(storedSection.title, freshSection.title),
+      notes: preferRicherNotes(
+        storedSection.notes,
+        freshSection.notes,
+        `section:${storedSection.id}`
+      ),
       // Only prongs still on the board. Missing seed prongs stay deleted.
       prongs: (storedSection.prongs || []).map((storedProng) => {
         const freshProng = freshProngs[storedProng.id]
         if (!freshProng) return storedProng
         return {
           ...storedProng,
-          title:
-            typeof storedProng.title === 'string' &&
-            storedProng.title.trim() &&
-            storedProng.title !== freshProng.title
-              ? storedProng.title
-              : freshProng.title || storedProng.title,
-          notes: preferStoredNotes(storedProng.notes, freshProng.notes),
+          title: preferRicherTitle(
+            storedProng.title,
+            freshProng.title,
+            storedProng.id
+          ),
+          notes: preferRicherNotes(
+            storedProng.notes,
+            freshProng.notes,
+            `prong:${storedProng.id}`
+          ),
         }
       }),
     }
@@ -211,7 +283,7 @@ export function mergeLadderSeedDraft(stored, fresh) {
   return {
     ...fresh,
     name: stored.name || fresh.name,
-    notes: preferStoredNotes(stored.notes, fresh.notes),
+    notes: preferRicherNotes(stored.notes, fresh.notes, `draft:${fresh.id}`),
     sections,
   }
 }
@@ -269,41 +341,43 @@ export function preferLocalArgumentDeletions(remoteDraftsBySide, localDraftsBySi
   return next
 }
 
-/** Prefer non-empty / longer notes from local when hydrating a remote outline. */
+/**
+ * Merge notes/titles across local + remote for the same outline.
+ * Never let Category 3 seed text beat a divergent manual edit, even if the
+ * seed copy is longer (that is what wiped Jackson / ATA / Mathews notes).
+ */
 function mergeDraftNotesPreferRicher(remoteDraft, localDraft) {
   const localSections = Object.fromEntries(
     (localDraft.sections || []).map((s) => [s.id, s])
   )
+  const draftKey = `draft:${remoteDraft.id || localDraft.id || ''}`
   return {
     ...remoteDraft,
-    notes: preferStoredNotes(localDraft.notes, remoteDraft.notes),
+    name: preferRicherTitle(localDraft.name, remoteDraft.name),
+    notes: preferRicherNotes(localDraft.notes, remoteDraft.notes, draftKey),
     sections: (remoteDraft.sections || []).map((remoteSection) => {
       const localSection = localSections[remoteSection.id]
       if (!localSection) return remoteSection
       const localProngs = Object.fromEntries(
         (localSection.prongs || []).map((p) => [p.id, p])
       )
+      const sectionKey = `section:${remoteSection.id}`
       return {
         ...remoteSection,
-        title:
-          typeof localSection.title === 'string' &&
-          localSection.title.trim() &&
-          localSection.title !== remoteSection.title
-            ? localSection.title
-            : remoteSection.title,
-        notes: preferStoredNotes(localSection.notes, remoteSection.notes),
+        title: preferRicherTitle(localSection.title, remoteSection.title),
+        notes: preferRicherNotes(localSection.notes, remoteSection.notes, sectionKey),
         prongs: (remoteSection.prongs || []).map((remoteProng) => {
           const localProng = localProngs[remoteProng.id]
           if (!localProng) return remoteProng
+          const prongKey = `prong:${remoteProng.id}`
           return {
             ...remoteProng,
-            title:
-              typeof localProng.title === 'string' &&
-              localProng.title.trim() &&
-              localProng.title !== remoteProng.title
-                ? localProng.title
-                : remoteProng.title,
-            notes: preferStoredNotes(localProng.notes, remoteProng.notes),
+            title: preferRicherTitle(
+              localProng.title,
+              remoteProng.title,
+              remoteProng.id
+            ),
+            notes: preferRicherNotes(localProng.notes, remoteProng.notes, prongKey),
           }
         }),
       }
