@@ -67,7 +67,7 @@ describe('notebookWorkspace persistence', () => {
       tree: [{ id: 'sec-1', name: 'Articles', kind: 'section' }],
       pagesBySection: { 'sec-1': [{ id: 'pg-1', title: 'A', html: '<p>x</p>' }] },
     }
-    saveNotebookSnapshot(snap.tree, snap.pagesBySection)
+    saveNotebookSnapshot(snap.tree, snap.pagesBySection, { immediate: true })
     expect(hydrateNotebookFromRemote({ id: 'main', ...snap })).toBe(false)
   })
 
@@ -82,7 +82,7 @@ describe('notebookWorkspace persistence', () => {
         'sec-bg': [{ id: 'pg-ndaa', title: 'NDAA', html: '<p>covered person</p>' }],
       },
     }
-    saveNotebookSnapshot(local.tree, local.pagesBySection)
+    saveNotebookSnapshot(local.tree, local.pagesBySection, { immediate: true })
 
     const remote = {
       id: 'main',

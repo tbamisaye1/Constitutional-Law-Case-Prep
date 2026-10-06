@@ -182,11 +182,19 @@ export const WORKSPACE_DOCS = {
 /** @type {Record<string, (data: object) => void>} */
 const publishers = {}
 
+/** Quiet period so typing does not stringify + write localStorage on every key. */
+const SAVE_DEBOUNCE_MS = 400
+
+/** @type {Record<string, object>} */
+const pendingSaves = {}
+/** @type {Record<string, number>} */
+const saveTimers = {}
+
 export function registerWorkspaceDocPublisher(kind, fn) {
   publishers[kind] = fn
 }
 
-export function saveWorkspaceDoc(kind, data) {
+function writeWorkspaceDocNow(kind, data) {
   const spec = WORKSPACE_DOCS[kind]
   if (!spec) return
   const payload =
@@ -199,6 +207,36 @@ export function saveWorkspaceDoc(kind, data) {
   snapshotDocRevision(kind, spec.loadLocal(), 'save')
   writeJson(spec.storageKey, payload)
   if (typeof publishers[kind] === 'function') publishers[kind](data)
+}
+
+/**
+ * Persist a workspace doc. Debounced by default so outline titles and TipTap
+ * notes stay smooth; pass `{ immediate: true }` on pagehide / Backup now.
+ */
+export function saveWorkspaceDoc(kind, data, { immediate = false } = {}) {
+  if (!WORKSPACE_DOCS[kind]) return
+  pendingSaves[kind] = data
+  globalThis.clearTimeout(saveTimers[kind])
+  if (immediate) {
+    delete pendingSaves[kind]
+    writeWorkspaceDocNow(kind, data)
+    return
+  }
+  saveTimers[kind] = globalThis.setTimeout(() => {
+    const next = pendingSaves[kind]
+    delete pendingSaves[kind]
+    if (next !== undefined) writeWorkspaceDocNow(kind, next)
+  }, SAVE_DEBOUNCE_MS)
+}
+
+/** Flush any debounced editor saves (tab hide / tests). */
+export function flushWorkspaceDocSaves() {
+  for (const kind of Object.keys(pendingSaves)) {
+    globalThis.clearTimeout(saveTimers[kind])
+    const next = pendingSaves[kind]
+    delete pendingSaves[kind]
+    if (next !== undefined) writeWorkspaceDocNow(kind, next)
+  }
 }
 
 export function hydrateWorkspaceDocFromRemote(kind, row) {

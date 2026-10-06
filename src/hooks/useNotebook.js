@@ -67,7 +67,8 @@ export function useNotebook() {
   }, [tree, pagesBySection])
 
   useEffect(
-    () => onPageHide(() => saveNotebookSnapshot(tree, pagesBySection)),
+    () =>
+      onPageHide(() => saveNotebookSnapshot(tree, pagesBySection, { immediate: true })),
     [tree, pagesBySection]
   )
 

@@ -34,7 +34,10 @@ export function useFacts() {
     saveWorkspaceDoc('facts', { facts })
   }, [facts])
 
-  useEffect(() => onPageHide(() => saveWorkspaceDoc('facts', { facts })), [facts])
+  useEffect(
+    () => onPageHide(() => saveWorkspaceDoc('facts', { facts }, { immediate: true })),
+    [facts]
+  )
 
   useEffect(() => {
     function onHydrate(event) {

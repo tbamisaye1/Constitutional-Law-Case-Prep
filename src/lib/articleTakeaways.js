@@ -305,7 +305,7 @@ export function exportArticleTakeawaysToNotes({
     [ARTICLES_SECTION_ID]: pages,
   }
 
-  saveNotebookSnapshot(tree, pagesBySection)
+  saveNotebookSnapshot(tree, pagesBySection, { immediate: true })
 
   return {
     sectionId: ARTICLES_SECTION_ID,

@@ -66,7 +66,10 @@ export function useGuide() {
     saveWorkspaceDoc('guide_edits', { edits })
   }, [edits])
 
-  useEffect(() => onPageHide(() => saveWorkspaceDoc('guide_edits', { edits })), [edits])
+  useEffect(
+    () => onPageHide(() => saveWorkspaceDoc('guide_edits', { edits }, { immediate: true })),
+    [edits]
+  )
 
   useEffect(() => {
     function onHydrate(event) {

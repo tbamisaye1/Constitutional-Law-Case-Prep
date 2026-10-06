@@ -134,12 +134,16 @@ export function useArguments() {
   useEffect(
     () =>
       onPageHide(() =>
-        persist({
-          draftsBySide,
-          activeDraftBySide,
-          activeSectionBySide,
-          activeFocusBySide,
-        })
+        saveWorkspaceDoc(
+          'arguments',
+          {
+            draftsBySide,
+            activeDraftBySide,
+            activeSectionBySide,
+            activeFocusBySide,
+          },
+          { immediate: true }
+        )
       ),
     [draftsBySide, activeDraftBySide, activeSectionBySide, activeFocusBySide]
   )

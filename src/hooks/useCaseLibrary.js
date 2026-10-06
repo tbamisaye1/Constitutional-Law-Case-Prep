@@ -38,11 +38,13 @@ import {
   notebookRowsFromLocal,
   notebookSnapshotsEqual,
   NOTEBOOK_ROW_ID,
+  flushNotebookSnapshotSave,
   registerNotebookSyncPublisher,
 } from '../lib/notebookWorkspace'
 import {
   allWorkspaceDocKinds,
   DOC_ROW_ID,
+  flushWorkspaceDocSaves,
   hydrateWorkspaceDocFromRemote,
   registerWorkspaceDocPublisher,
   WORKSPACE_DOCS,
@@ -54,8 +56,12 @@ const KEY = 'case-prep-library-v5'
 /** Quiet period before a burst of edits turns into one push. */
 const SYNC_DEBOUNCE_MS = 400
 
-/** Workspace docs (arguments / notes board) push immediately after each save. */
-const WORKSPACE_DOC_SYNC_MS = 0
+/**
+ * Workspace docs (arguments / notebook / facts) wait for a short quiet period
+ * so every keystroke does not start a Postgres round-trip. pagehide / Backup
+ * now still flush immediately via their own paths.
+ */
+const WORKSPACE_DOC_SYNC_MS = 900
 
 /** How often to retry after a failed sync, so a dropped connection recovers. */
 const SYNC_RETRY_MS = 30_000
@@ -874,6 +880,10 @@ if (typeof window !== 'undefined') {
   })
 
   onPageHide(() => {
+    // Flush debounced editor writes before the library snapshot / keepalive
+    // push, or the last keystrokes never leave this tab.
+    flushWorkspaceDocSaves()
+    flushNotebookSnapshotSave()
     window.clearTimeout(persistTimer)
     persistNow()
     // Local persist alone is not enough for phone / friend's laptop. Do not
@@ -1791,7 +1801,12 @@ export function useCaseLibrary() {
       pending: pendingCount(snap.store.syncMeta),
       workspaceId: WORKSPACE_ID,
     },
-    syncNow: () => scheduleSync(0, { forcePull: true }),
+    syncNow: () => {
+      flushWorkspaceDocSaves()
+      flushNotebookSnapshotSave()
+      window.clearTimeout(syncTimer)
+      return runSync({ forcePull: true })
+    },
     recoverFromServer: () => {
       try {
         localStorage.removeItem(RECOVER_NOTES_FLAG)

@@ -14,6 +14,19 @@ import { SyncBanner } from '../components/SyncBanner'
 import { useArguments } from '../hooks/useArguments'
 import { useCaseLibrary } from '../hooks/useCaseLibrary'
 
+function supportsFieldSizing() {
+  return typeof CSS !== 'undefined' && typeof CSS.supports === 'function'
+    ? CSS.supports('field-sizing', 'content')
+    : false
+}
+
+function growTitleField(el) {
+  if (!el || supportsFieldSizing()) return
+  // Never collapse to 0px. That made every keystroke jump the outline.
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight}px`
+}
+
 /**
  * Outline titles that wrap when the column is narrow. Enter commits (no
  * newline in the title); the box grows with the wrapped text.
@@ -22,10 +35,7 @@ function OutlineTitleField({ className, value, onChange, onFocus, 'aria-label': 
   const ref = useRef(null)
 
   useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    el.style.height = '0px'
-    el.style.height = `${el.scrollHeight}px`
+    growTitleField(ref.current)
   }, [value])
 
   return (
@@ -35,7 +45,10 @@ function OutlineTitleField({ className, value, onChange, onFocus, 'aria-label': 
       value={value}
       rows={1}
       aria-label={ariaLabel}
-      onChange={onChange}
+      onChange={(e) => {
+        growTitleField(e.currentTarget)
+        onChange(e)
+      }}
       onFocus={onFocus}
       onKeyDown={(e) => {
         if (e.key === 'Enter' && !e.shiftKey) {

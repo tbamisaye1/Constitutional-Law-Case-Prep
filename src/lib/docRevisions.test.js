@@ -13,11 +13,13 @@ const {
   listDocRevisions,
   snapshotDocRevision,
   findDocRevision,
+  resetDocRevisionSaveThrottleForTests,
 } = await import('./docRevisions')
 
 describe('docRevisions', () => {
   beforeEach(() => {
     memory.clear()
+    resetDocRevisionSaveThrottleForTests()
   })
 
   it('keeps a rolling history and skips identical consecutive saves', () => {
@@ -34,10 +36,17 @@ describe('docRevisions', () => {
 
   it('finds a prior revision by predicate', () => {
     snapshotDocRevision('arguments', { notes: 'force turned inward' }, 'save')
-    snapshotDocRevision('arguments', { notes: 'use of force here is domestic' }, 'save')
+    // hydrate always snapshots; ordinary save is throttled mid-typing burst
+    snapshotDocRevision('arguments', { notes: 'use of force here is domestic' }, 'hydrate')
     const hit = findDocRevision('arguments', (data) =>
       String(data.notes || '').includes('domestic')
     )
     expect(hit?.data.notes).toContain('domestic')
+  })
+
+  it('throttles ordinary save snapshots during a typing burst', () => {
+    expect(snapshotDocRevision('arguments', { a: 1 }, 'save')).toBe(true)
+    expect(snapshotDocRevision('arguments', { a: 2 }, 'save')).toBe(false)
+    expect(listDocRevisions('arguments')).toHaveLength(1)
   })
 })

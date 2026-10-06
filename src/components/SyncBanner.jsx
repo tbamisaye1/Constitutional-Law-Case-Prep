@@ -48,7 +48,7 @@ function describe(sync) {
   const when = sync.lastSyncedAt ? ` Last sync ${clock(sync.lastSyncedAt)}.` : ''
   return {
     tone: 'ok',
-    text: `On the database and syncing as you type (incognito / other devices get the same copy): notes, arguments, guide, facts, openings, annotations, PDFs.${when}`,
+    text: `On the database (local cache + sync after you pause typing): notes, arguments, guide, facts, openings, annotations, PDFs.${when}`,
   }
 }
 
@@ -91,6 +91,8 @@ export function SyncBanner({
     setBusy(true)
     setNote('')
     try {
+      // Flush debounced editor writes and push before snapshotting Postgres.
+      if (typeof onSyncNow === 'function') await Promise.resolve(onSyncNow())
       const created = await createWorkspaceBackup(
         `Manual ${new Date().toISOString().slice(0, 16)}`
       )

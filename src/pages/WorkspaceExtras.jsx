@@ -55,7 +55,10 @@ export function OpeningsPage() {
     saveWorkspaceDoc('openings', drafts)
   }, [drafts])
 
-  useEffect(() => onPageHide(() => saveWorkspaceDoc('openings', drafts)), [drafts])
+  useEffect(
+    () => onPageHide(() => saveWorkspaceDoc('openings', drafts, { immediate: true })),
+    [drafts]
+  )
 
   useEffect(() => {
     function onHydrate(event) {

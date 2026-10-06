@@ -53,15 +53,45 @@ export function notebookRowsForLibraryLoad(libraryNotebook) {
   return notebookRowsFromLocal()
 }
 
-/**
- * Persist locally and queue a workspace sync push when the publisher is live.
- */
-export function saveNotebookSnapshot(tree, pagesBySection) {
+const NOTEBOOK_SAVE_DEBOUNCE_MS = 400
+let notebookSaveTimer = 0
+/** @type {{ tree: object[], pagesBySection: object } | null} */
+let pendingNotebookSave = null
+
+function writeNotebookSnapshotNow(tree, pagesBySection) {
   const payload = { tree, pagesBySection }
   writeJson(NOTEBOOK_STORAGE_KEY, payload)
   if (typeof syncPublisher === 'function') {
     syncPublisher(tree, pagesBySection)
   }
+}
+
+/**
+ * Persist locally and queue a workspace sync push when the publisher is live.
+ * Debounced by default so Notes typing stays smooth; pass `{ immediate: true }`
+ * on pagehide / recovery writes.
+ */
+export function saveNotebookSnapshot(tree, pagesBySection, { immediate = false } = {}) {
+  pendingNotebookSave = { tree, pagesBySection }
+  globalThis.clearTimeout(notebookSaveTimer)
+  if (immediate) {
+    pendingNotebookSave = null
+    writeNotebookSnapshotNow(tree, pagesBySection)
+    return
+  }
+  notebookSaveTimer = globalThis.setTimeout(() => {
+    const next = pendingNotebookSave
+    pendingNotebookSave = null
+    if (next) writeNotebookSnapshotNow(next.tree, next.pagesBySection)
+  }, NOTEBOOK_SAVE_DEBOUNCE_MS)
+}
+
+/** Flush a debounced notebook save (tab hide / tests). */
+export function flushNotebookSnapshotSave() {
+  globalThis.clearTimeout(notebookSaveTimer)
+  const next = pendingNotebookSave
+  pendingNotebookSave = null
+  if (next) writeNotebookSnapshotNow(next.tree, next.pagesBySection)
 }
 
 /**

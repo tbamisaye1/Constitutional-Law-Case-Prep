@@ -10,6 +10,20 @@ import { readJson, writeJson } from './persist'
 export const DOC_REVISIONS_KEY = 'case-prep-doc-revisions-v1'
 export const DOC_REVISIONS_KEEP = 20
 
+/**
+ * Typing used to snapshot the full Arguments board on every keystroke (large
+ * HTML notes × rolling history). Keep recovery snapshots, but not mid-burst.
+ */
+export const DOC_REVISION_SAVE_THROTTLE_MS = 15_000
+
+/** @type {Record<string, number>} */
+const lastSaveSnapshotAt = {}
+
+/** Test helper: clear save-throttle clocks between cases. */
+export function resetDocRevisionSaveThrottleForTests() {
+  for (const key of Object.keys(lastSaveSnapshotAt)) delete lastSaveSnapshotAt[key]
+}
+
 function emptyStore() {
   return { byKind: {} }
 }
@@ -29,6 +43,15 @@ export function listDocRevisions(kind) {
  */
 export function snapshotDocRevision(kind, data, reason = 'save') {
   if (!kind || data == null || typeof data !== 'object') return false
+  const why = String(reason || 'save')
+  // Hydrate / seed paths always snapshot (those are the wipe risks).
+  // Ordinary editor saves are throttled so typing stays on the main thread.
+  if (why === 'save') {
+    const now = Date.now()
+    const prevAt = lastSaveSnapshotAt[kind] || 0
+    if (now - prevAt < DOC_REVISION_SAVE_THROTTLE_MS) return false
+  }
+
   let serialized
   try {
     serialized = JSON.stringify(data)
@@ -44,11 +67,12 @@ export function snapshotDocRevision(kind, data, reason = 'save') {
 
   const entry = {
     at: Date.now(),
-    reason: String(reason || 'save'),
+    reason: why,
     serialized,
   }
   byKind[kind] = [entry, ...prev].slice(0, DOC_REVISIONS_KEEP)
   writeJson(DOC_REVISIONS_KEY, { byKind })
+  if (why === 'save') lastSaveSnapshotAt[kind] = entry.at
   return true
 }
 
