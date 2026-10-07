@@ -106,6 +106,15 @@ export function handleNoteKeyDown(ed, event) {
   return true
 }
 
+/** Replace the editor content with the parent's version without echoing it back. */
+function applyIncoming(editor, html, skipping) {
+  if (html == null || editor.isDestroyed) return
+  if (html === editor.getHTML()) return
+  skipping.current = true
+  editor.commands.setContent(html, { emitUpdate: false })
+  skipping.current = false
+}
+
 /**
  * TipTap note surface (https://github.com/ueberdosis/tiptap).
  * Tab / Shift+Tab nest lists, start a list, or indent the block (OneNote-style).
@@ -118,15 +127,6 @@ export function handleNoteKeyDown(ed, event) {
  * Do not write getHTML() on unmount. That used to re-serialize through the
  * schema and wipe custom guide markup when the user only opened Edit / Done.
  */
-/** Replace the editor content with the parent's version without echoing it back. */
-function applyIncoming(editor, html, skipping) {
-  if (html == null || editor.isDestroyed) return
-  if (html === editor.getHTML()) return
-  skipping.current = true
-  editor.commands.setContent(html, { emitUpdate: false })
-  skipping.current = false
-}
-
 export function NoteEditor({ html, onChange, editable = true, placeholder, lean = false }) {
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
