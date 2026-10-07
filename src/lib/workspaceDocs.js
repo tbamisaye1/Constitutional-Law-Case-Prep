@@ -387,11 +387,17 @@ export function hydrateWorkspaceDocFromRemote(kind, row, { forceRemote = false }
       publishers[kind](data)
     }
   }
-  if (!forceRemote && spec.same(local, data)) return false
-  snapshotDocRevision(kind, local, 'hydrate')
-  const payload =
-    kind === 'guide_edits' ? data.edits : kind === 'facts' ? data.facts : data
-  writeJson(spec.storageKey, payload)
+  // localStorage is shared by every tab in this browser, so it often already
+  // holds this board because another tab wrote it. That says nothing about
+  // this tab's editor, which may still show the older board. Skip the write
+  // but always notify: a silent tab later saved its stale board with a fresh
+  // sync base, and the server accepted it, reverting the other tab's edit.
+  if (forceRemote || !spec.same(local, data)) {
+    snapshotDocRevision(kind, local, 'hydrate')
+    const payload =
+      kind === 'guide_edits' ? data.edits : kind === 'facts' ? data.facts : data
+    writeJson(spec.storageKey, payload)
+  }
   try {
     window.dispatchEvent(new CustomEvent(spec.event, { detail: data }))
   } catch {

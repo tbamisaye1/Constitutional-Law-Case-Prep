@@ -171,3 +171,51 @@ describe('saveWorkspaceDoc sync flag', () => {
     expect(published).toHaveLength(1)
   })
 })
+
+describe('hydrate when another tab already wrote the same board', () => {
+  beforeEach(() => {
+    memory.clear()
+  })
+
+  it('still tells this tab\'s editor about the newer board', async () => {
+    const { hydrateWorkspaceDocFromRemote } = await import('./workspaceDocs')
+    const board = (title) => ({
+      id: 'main',
+      draftsBySide: {
+        petitioner: [
+          {
+            id: 'petitioner-main',
+            name: 'Main',
+            notes: '',
+            sections: [{ id: 's1', title, notes: '', prongs: [] }],
+          },
+        ],
+        respondent: [{ id: 'respondent-main', name: 'Main', notes: '', sections: [] }],
+      },
+      activeDraftBySide: { petitioner: 'petitioner-main', respondent: 'respondent-main' },
+    })
+    // Tabs in one browser share localStorage. The tab where the user typed
+    // has already saved "Category 2" there; this tab's editor still shows
+    // "Category 3" in React state.
+    memory.set('case-prep-arguments-v1', JSON.stringify(board('Not Category 2')))
+
+    const target = new EventTarget()
+    vi.stubGlobal('window', target)
+    const received = []
+    target.addEventListener(WORKSPACE_DOCS.arguments.event, (event) => received.push(event.detail))
+    try {
+      hydrateWorkspaceDocFromRemote('arguments', board('Not Category 2'))
+    } finally {
+      vi.unstubAllGlobals()
+      vi.stubGlobal('localStorage', {
+        getItem: (k) => (memory.has(k) ? memory.get(k) : null),
+        setItem: (k, v) => memory.set(k, String(v)),
+        removeItem: (k) => memory.delete(k),
+        clear: () => memory.clear(),
+      })
+    }
+
+    expect(received).toHaveLength(1)
+    expect(received[0].draftsBySide.petitioner[0].sections[0].title).toBe('Not Category 2')
+  })
+})
