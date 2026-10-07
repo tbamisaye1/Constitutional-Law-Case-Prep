@@ -75,8 +75,12 @@ const SYNC_RETRY_MS = 30_000
  * Idle tabs used to skip the network entirely (nothing dirty → no /sync).
  * A second Chrome window, including Incognito, never saw argument notes until
  * reload. Pull on this interval, and again when the tab becomes visible.
+ *
+ * Local edits schedule their own sync, so this only sets how quickly a change
+ * from another device shows up. It was 4 seconds, and every open tab running
+ * a full /sync that often used up Neon's monthly data transfer quota in a week.
  */
-const SYNC_HEARTBEAT_MS = 4_000
+const SYNC_HEARTBEAT_MS = 30_000
 
 /**
  * Until the first pull finishes, do not push. A fresh / incognito tab used to
