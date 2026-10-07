@@ -64,7 +64,7 @@ function collectHeadings(doc) {
   const headings = []
   doc.forEach((node, offset) => {
     if (node.type.name === OUTLINE_NODE) {
-      headings.push({ pos: offset, kind: node.attrs.kind, id: node.attrs.id })
+      headings.push({ pos: offset, kind: node.attrs.kind, id: node.attrs.id, title: node.textContent })
     }
   })
   return headings
@@ -254,9 +254,14 @@ export const OutlineHeading = Node.create({
           const fixes = outlineFixes(collectHeadings(state.doc))
           if (!fixes.length) return null
           const tr = state.tr
-          for (const fix of fixes) {
+          // Back to front so earlier positions stay valid after a removal.
+          for (const fix of [...fixes].sort((a, b) => b.pos - a.pos)) {
             const node = tr.doc.nodeAt(fix.pos)
             if (!node) continue
+            if (fix.remove) {
+              tr.delete(fix.pos, fix.pos + node.nodeSize)
+              continue
+            }
             tr.setNodeMarkup(fix.pos, undefined, {
               ...node.attrs,
               ...(fix.kind ? { kind: fix.kind } : {}),

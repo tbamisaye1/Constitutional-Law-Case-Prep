@@ -71,19 +71,63 @@ export function classifyOutline(headings) {
 }
 
 /**
- * Pure check used by the plugin and by tests: which headings need a new id or
- * a kind change. `headings` is [{ pos, kind, id }] in document order.
+ * What to do with each heading's id, in document order.
+ *
+ * Must be deterministic: the page is re-read from storage on every sync, and a
+ * random id here made the same data produce a different outline each time (a
+ * ghost "Untitled" section and an endless save loop).
+ *
+ *   keep    first time this id is seen
+ *   drop    a later, blank copy of an earlier heading of the same kind. This
+ *           is what a heading that was saved inside a bullet looks like once it
+ *           is lifted back out: the titled copy comes first, the stored blank
+ *           one later. Dropping it folds its content under the first copy.
+ *   rename  any other repeat (a copied heading): `<id>-dupN`, same every time
+ *   new     no id at all (only happens for brand-new headings)
+ *
+ * @param {Array<{kind: string, id?: string, title?: string}>} headings kinds already classified
+ * @returns {Array<{action: 'keep'|'drop'|'rename'|'new', id: string|null}>}
+ */
+export function dedupeOutline(headings) {
+  const seen = new Map() // id → kind of first heading with it
+  const taken = new Set()
+  return headings.map((h) => {
+    const id = typeof h.id === 'string' && h.id ? h.id : ''
+    if (!id) return { action: 'new', id: null }
+    if (!seen.has(id)) {
+      seen.set(id, h.kind)
+      taken.add(id)
+      return { action: 'keep', id }
+    }
+    if (seen.get(id) === h.kind && !String(h.title ?? '').trim()) return { action: 'drop', id }
+    let n = 1
+    while (taken.has(`${id}-dup${n}`)) n += 1
+    const next = `${id}-dup${n}`
+    taken.add(next)
+    return { action: 'rename', id: next }
+  })
+}
+
+/**
+ * Pure check used by the plugin and by tests: which headings need a new id, a
+ * kind change, or removal (`remove: true`, see dedupeOutline).
+ * `headings` is [{ pos, kind, id, title }] in document order.
  */
 export function outlineFixes(headings) {
   const fixes = []
-  const seen = new Set()
   const classified = classifyOutline(headings)
+  const ids = dedupeOutline(headings.map((h, i) => ({ ...h, kind: classified[i].kind })))
   headings.forEach((h, i) => {
+    const { action, id } = ids[i]
+    if (action === 'drop') {
+      fixes.push({ pos: h.pos, remove: true })
+      return
+    }
     const fix = {}
     const kind = classified[i].kind
     if (kind !== h.kind) fix.kind = kind
-    if (!h.id || seen.has(h.id)) fix.id = newOutlineId(kind)
-    seen.add(fix.id || h.id)
+    if (action === 'new') fix.id = newOutlineId(kind)
+    if (action === 'rename') fix.id = id
     if (Object.keys(fix).length) fixes.push({ pos: h.pos, ...fix })
   })
   return fixes
