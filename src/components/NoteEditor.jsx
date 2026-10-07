@@ -1,5 +1,4 @@
 import { useEffect, useReducer, useRef } from 'react'
-import { hasUnsentEdits } from '../lib/editorFlush'
 import { OutlineHeading } from '../extensions/outlineHeading'
 import { PageDocument } from '../extensions/pageDocument'
 import {
@@ -35,7 +34,7 @@ import {
   applyFontSizeToSelection,
   currentFontSize,
 } from '../lib/noteFontSize'
-import { editorFlushSuppressed } from '../lib/editorFlush'
+import { editorFlushSuppressed, hasUnsentEdits } from '../lib/editorFlush'
 
 /**
  * Extensions every note surface shares (Arguments page, scratch, case notes).
