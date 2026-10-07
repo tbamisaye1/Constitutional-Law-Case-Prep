@@ -490,9 +490,23 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
       // send Arguments, so they cannot refresh this timestamp.
       if (!stillDirty && (wroteLibrary || pulledArgs)) {
         argumentsAckedAt = Date.now()
-        // The server now holds this board (or a newer one we just pulled):
-        // it becomes the base for the next three-way merge.
-        rememberArgumentsBase(applied.store.argumentsBoard?.[0])
+        // The server now holds exactly this board: it becomes the base for the
+        // next three-way merge. NOT when this response also carried an
+        // Arguments row from the server (a pull or a stale-base echo): that
+        // row still has to be merged with this tab's board, and making it the
+        // base first told the merge "this tab deleted everything the other
+        // writer added", which wiped scratch and edits made elsewhere.
+        // hydrateWorkspaceDocFromRemote records the base after merging.
+        if (!rejectedArgs.length) {
+          // The push was accepted, so the server row now equals the board we
+          // SENT. That is the base. A pulled row in the same response is then
+          // merged against it: equal to what we sent -> our newer typing wins;
+          // carries another writer's change -> that change is kept.
+          const sentArgs = (changes?.library_records || []).find(
+            (row) => row && row.kind === 'arguments'
+          )
+          rememberArgumentsBase(sentArgs?.data || applied.store.argumentsBoard?.[0])
+        }
       }
     } else if (
       (response.changes?.library_records || []).some(

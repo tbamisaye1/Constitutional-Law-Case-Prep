@@ -46,11 +46,11 @@ function deepSame(a, b) {
  * Merge one scalar.
  * @returns {{value: any, conflict: boolean}}
  */
-export function mergeScalar(base, local, remote) {
+export function mergeScalar(base, local, remote, { prefer = 'remote' } = {}) {
   if (same(local, remote)) return { value: remote ?? local, conflict: false }
   if (same(local, base)) return { value: remote, conflict: false }
   if (same(remote, base)) return { value: local, conflict: false }
-  return { value: remote, conflict: true }
+  return { value: prefer === 'local' ? local : remote, conflict: true }
 }
 
 function byId(list) {
@@ -105,7 +105,7 @@ function mergeOrder(baseIds, localIds, remoteIds, keep) {
  * @param {Function} mergeItem (base, local, remote, path) => merged item
  * @param {Function} changedFrom (base, item) => true when item differs from base
  */
-function mergeList(baseList, localList, remoteList, mergeItem, changedFrom, path, conflicts) {
+function mergeList(baseList, localList, remoteList, mergeItem, changedFrom, path, conflicts, opts) {
   const base = byId(baseList)
   const local = byId(localList)
   const remote = byId(remoteList)
@@ -119,7 +119,7 @@ function mergeList(baseList, localList, remoteList, mergeItem, changedFrom, path
     const r = remote.get(id)
     if (l && r) {
       keep.add(id)
-      merged.set(id, mergeItem(b, l, r, `${path}/${id}`, conflicts))
+      merged.set(id, mergeItem(b, l, r, `${path}/${id}`, conflicts, opts))
       continue
     }
     if (!b) {
@@ -141,14 +141,21 @@ function mergeList(baseList, localList, remoteList, mergeItem, changedFrom, path
   return order.map((id) => merged.get(id))
 }
 
-function mergeFields(fields, base, local, remote, path, conflicts) {
+function mergeFields(fields, base, local, remote, path, conflicts, opts) {
   const out = { ...remote }
   for (const field of fields) {
-    const { value, conflict } = mergeScalar(base?.[field], local?.[field], remote?.[field])
+    const { value, conflict } = mergeScalar(base?.[field], local?.[field], remote?.[field], opts)
     if (value === undefined) delete out[field]
     else out[field] = value
     if (conflict) {
-      conflicts.push({ path: `${path}.${field}`, field, local: local?.[field], remote: remote?.[field] })
+      conflicts.push({
+        path: `${path}.${field}`,
+        field,
+        local: local?.[field],
+        remote: remote?.[field],
+        // The text that did NOT win; this is what gets kept in scratch.
+        lost: opts?.prefer === 'local' ? remote?.[field] : local?.[field],
+      })
     }
   }
   return out
@@ -170,12 +177,12 @@ function draftChanged(base, item) {
   return !deepSame(base, item)
 }
 
-function mergeProng(base, local, remote, path, conflicts) {
-  return mergeFields(PRONG_FIELDS, base, local, remote, path, conflicts)
+function mergeProng(base, local, remote, path, conflicts, opts) {
+  return mergeFields(PRONG_FIELDS, base, local, remote, path, conflicts, opts)
 }
 
-function mergeSection(base, local, remote, path, conflicts) {
-  const out = mergeFields(SECTION_FIELDS, base, local, remote, path, conflicts)
+function mergeSection(base, local, remote, path, conflicts, opts) {
+  const out = mergeFields(SECTION_FIELDS, base, local, remote, path, conflicts, opts)
   out.prongs = mergeList(
     base?.prongs,
     local?.prongs,
@@ -183,13 +190,14 @@ function mergeSection(base, local, remote, path, conflicts) {
     mergeProng,
     prongChanged,
     path,
-    conflicts
+    conflicts,
+    opts
   )
   return out
 }
 
-function mergeDraft(base, local, remote, path, conflicts) {
-  const out = mergeFields(DRAFT_FIELDS, base, local, remote, path, conflicts)
+function mergeDraft(base, local, remote, path, conflicts, opts) {
+  const out = mergeFields(DRAFT_FIELDS, base, local, remote, path, conflicts, opts)
   const pieceScratch = mergePieceScratch(base?.pieceScratch, local?.pieceScratch, remote?.pieceScratch)
   if (pieceScratch) out.pieceScratch = pieceScratch
   else delete out.pieceScratch
@@ -200,7 +208,8 @@ function mergeDraft(base, local, remote, path, conflicts) {
     mergeSection,
     sectionChanged,
     path,
-    conflicts
+    conflicts,
+    opts
   )
   const removed = new Set([
     ...(local?.removedOutlineIds || []),
@@ -242,26 +251,41 @@ function labelForConflict(conflict, draft) {
  * Put the losing local text of every conflict at the top of the draft scratch,
  * so a double edit never silently drops words.
  */
+function conflictBlocks(draft, mine, at) {
+  const stamp = new Date(at).toISOString().slice(0, 16).replace('T', ' ')
+  return mine
+    .filter((c) => c.field !== 'scratch')
+    .map((c) => {
+      const label = labelForConflict(c, draft)
+      const lost = c.lost !== undefined ? c.lost : c.local
+      const body = RICH_FIELDS.has(c.field) ? lost || '<p></p>' : `<p>${escapeHtml(lost)}</p>`
+      return `<blockquote><p><strong>Other version kept · ${escapeHtml(label)} · ${c.field} · ${stamp}</strong></p>${body}</blockquote>`
+    })
+    .join('')
+}
+
+/**
+ * Keep the losing text of every conflict at the END of the draft scratch, so
+ * a double edit never silently drops words and never buries the user's own
+ * scratch notes under it.
+ */
 function stashConflicts(draft, conflicts, at) {
   const mine = conflicts.filter((c) => c.path.startsWith(`/${draft.__side}/${draft.id}`))
   if (!mine.length) return draft
   const stamp = new Date(at).toISOString().slice(0, 16).replace('T', ' ')
-  const blocks = mine
-    .filter((c) => c.field !== 'scratch')
-    .map((c) => {
-      const label = labelForConflict(c, draft)
-      const body = RICH_FIELDS.has(c.field)
-        ? c.local || '<p></p>'
-        : `<p>${escapeHtml(c.local)}</p>`
-      return `<blockquote><p><strong>Unsynced copy · ${escapeHtml(label)} · ${c.field} · ${stamp}</strong></p>${body}</blockquote>`
-    })
-  // Scratch itself conflicted: keep both, local below remote.
-  const scratchConflict = mine.find((c) => c.field === 'scratch')
   let scratch = draft.scratch || ''
-  if (scratchConflict && scratchConflict.local) {
-    scratch = `${scratch}<p><strong>Unsynced scratch from this device · ${stamp}</strong></p>${scratchConflict.local}`
+  // Scratch itself conflicted: keep both, the other copy below.
+  const scratchConflict = mine.find((c) => c.field === 'scratch')
+  const lostScratch = scratchConflict
+    ? scratchConflict.lost !== undefined
+      ? scratchConflict.lost
+      : scratchConflict.local
+    : ''
+  if (lostScratch) {
+    scratch = `${scratch}<p><strong>Other copy of scratch · ${stamp}</strong></p>${lostScratch}`
   }
-  if (blocks.length) scratch = `${blocks.join('')}${scratch}`
+  const blocks = conflictBlocks(draft, mine, at)
+  if (blocks) scratch = `${scratch}${blocks}`
   return { ...draft, scratch }
 }
 
@@ -325,11 +349,12 @@ export function boardContent(board) {
  *
  * @returns {{draft: object, conflicts: object[]}}
  */
-export function mergeDrafts(base, local, remote, { now = Date.now() } = {}) {
-  if (!base) return { draft: remote, conflicts: [] }
+export function mergeDrafts(base, local, remote, { now = Date.now(), prefer = 'remote' } = {}) {
+  if (!base) return { draft: remote, conflicts: [], stashHtml: '' }
   const conflicts = []
-  const merged = mergeDraft(base, local, remote, `/page/${remote.id}`, conflicts)
-  const stashed = stashConflicts({ ...merged, __side: 'page' }, conflicts, now)
-  delete stashed.__side
-  return { draft: stashed, conflicts }
+  const merged = mergeDraft(base, local, remote, `/page/${remote.id}`, conflicts, { prefer })
+  // Returned separately so the page can APPEND it to scratch instead of
+  // rewriting scratch from a copy that may be stale.
+  const stashHtml = conflictBlocks(merged, conflicts, now)
+  return { draft: merged, conflicts, stashHtml }
 }

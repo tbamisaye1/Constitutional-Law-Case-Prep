@@ -30,6 +30,7 @@ import {
   restoreUntouched,
 } from '../../lib/argumentPage'
 import { mergeDrafts } from '../../lib/argumentsMerge'
+import { isOwnEcho, rememberSent } from '../../lib/pageEcho'
 import { editorFlushSuppressed } from '../../lib/editorFlush'
 import { indentSelection, outdentSelection, toggleOrCycleOrderedList } from '../../lib/noteEditorIndent'
 import { PageOutline } from './PageOutline'
@@ -151,6 +152,10 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
   const normRef = useRef(null)
   const emitTimer = useRef(0)
   const editorRef = useRef(null)
+  // Content keys of the last few versions this editor saved. When one of them
+  // comes back from sync after the user has typed more, it is our own older
+  // save, not someone else's edit: ignore it instead of merging it in.
+  const sentKeys = useRef([])
   const [outline, setOutline] = useState([])
   const [activeId, setActiveId] = useState(null)
   const [notice, setNotice] = useState('')
@@ -178,6 +183,7 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
     const stored = restoreUntouched(parts, normRef.current, rawRef.current)
     normRef.current = nextNorm
     rawRef.current = applyPageToDraft(rawRef.current, stored)
+    sentKeys.current = rememberSent(sentKeys.current, draftPageKey(rawRef.current))
     argsRef.current.replaceDraftPage(draftId, stored)
   }, [draftId])
 
@@ -301,7 +307,10 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
   // Storage changed underneath us (sync pull, MCP, another tab, Outline view).
   useEffect(() => {
     if (!editor || editor.isDestroyed || !normRef.current) return
-    if (draftPageKey(draft) === draftPageKey(rawRef.current)) return
+    const incomingKey = draftPageKey(draft)
+    if (incomingKey === draftPageKey(rawRef.current)) return
+    // Our own earlier save echoed back while the user kept typing.
+    if (isOwnEcho(sentKeys.current, incomingKey)) return
 
     const remoteNorm = normalize(draft)
     const localParts = pageJsonToDraftParts(editor.getJSON(), serializeWith(editor.schema))
@@ -317,21 +326,27 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
 
     let shownNorm = remoteNorm
     let storedParts = null
+    let stashed = false
     if (hasLocalEdits) {
-      const merged = mergeDrafts(
+      // The user is typing in this editor: on a real clash THEIR text stays on
+      // screen and the other version is kept at the end of scratch. Remote
+      // winning here is what reverted text mid-sentence.
+      const { draft: merged, stashHtml } = mergeDrafts(
         normRef.current,
         // Scratch is merged by the board sync, not here: hold it fixed.
         { ...localNorm, scratch: draft.scratch, pieceScratch: draft.pieceScratch },
-        { ...remoteNorm, scratch: draft.scratch, pieceScratch: draft.pieceScratch }
-      ).draft
+        { ...remoteNorm, scratch: draft.scratch, pieceScratch: draft.pieceScratch },
+        { prefer: 'local' }
+      )
       shownNorm = merged
       storedParts = restoreUntouched(
         { notes: merged.notes || '', sections: merged.sections || [] },
         remoteNorm,
         draft
       )
-      if ((merged.scratch || '') !== (draft.scratch || '')) {
-        argsRef.current.setDraftScratch(draftId, merged.scratch)
+      if (stashHtml) {
+        argsRef.current.appendDraftScratch(draftId, stashHtml)
+        stashed = true
       }
     }
 
@@ -354,8 +369,8 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
       rawRef.current = applyPageToDraft(draft, storedParts)
       argsRef.current.replaceDraftPage(draftId, storedParts)
       setNotice(
-        (shownNorm.scratch || '') !== (draft.scratch || '')
-          ? 'Merged with a change from elsewhere · your clashing text is in Scratch'
+        stashed
+          ? 'Merged with a change from elsewhere · the other version is at the end of Scratch'
           : 'Merged with a change from elsewhere'
       )
     } else {
