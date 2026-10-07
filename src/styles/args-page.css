@@ -29,7 +29,7 @@
 
 .argpage {
   display: grid;
-  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 0;
   align-items: start;
   border: 1px solid var(--rule);
@@ -38,7 +38,7 @@
 }
 
 .argpage.has-scratch {
-  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
 .argpage.is-expanded {
@@ -52,14 +52,37 @@
 
 /* Outline ---------------------------------------------------------------- */
 
-.argpage-outline {
+/* The wrapper holds the width and the resize handle; the aside inside it
+   scrolls, so the handle stays the full visible height while you scroll. */
+.argpage-outline-wrap {
   position: sticky;
   top: 70px;
+  display: flex;
+  flex-direction: column;
   max-height: calc(100vh - 90px);
-  overflow: auto;
-  padding: 14px 12px 20px;
   border-right: 1px solid var(--rule);
   background: var(--paper);
+}
+
+.argpage-outline-resize {
+  position: absolute;
+  right: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 2;
+}
+
+.argpage-outline-resize:hover {
+  background: var(--gold-soft);
+}
+
+.argpage-outline {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 12px 20px;
 }
 
 .argpage-outline-label {
@@ -447,13 +470,17 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .argpage-outline,
+  .argpage-outline-wrap,
   .argpage-scratch {
     position: static;
     max-height: none;
     border: 0;
     border-bottom: 1px solid var(--rule);
     width: auto !important;
+  }
+
+  .argpage-outline-resize {
+    display: none;
   }
 
   .arg-page-prose {
