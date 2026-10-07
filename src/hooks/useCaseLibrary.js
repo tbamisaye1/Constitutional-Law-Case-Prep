@@ -26,11 +26,13 @@ import {
   clearAccepted,
   collectChanges,
   emptySyncMeta,
+  keepNewerLocalEdits,
   markDirty,
   metaKey,
   pendingCount,
   rejectedArgumentsEcho,
 } from '../lib/sync'
+import { claimSyncLeadership, hasFollowerTabs, openSyncStatusChannel } from '../lib/syncLeader'
 import { getWorkspaceId } from '../lib/workspace'
 import { suppressEditorFlush } from '../lib/editorFlush'
 import {
@@ -89,6 +91,18 @@ const SYNC_HEARTBEAT_MS = 30_000
 let syncBootstrapDone = false
 let bootstrapInFlight = false
 let bootstrapRetryTimer = 0
+
+/**
+ * Only the leader tab talks to /sync (see lib/syncLeader.js). Followers save
+ * to localStorage, which the leader picks up and pushes, and they show the
+ * leader's sync status from the broadcast channel.
+ */
+let isSyncLeader = false
+let syncStatusChannel = null
+/** Follower "Sync now" calls waiting for the leader to report back, by id. */
+const pendingLeaderSyncs = new Map()
+/** How long a follower waits for the leader before giving up on "Sync now". */
+const LEADER_SYNC_TIMEOUT_MS = 15_000
 
 /**
  * This browser's workspace key, read once.
@@ -558,12 +572,70 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
     return false
   } finally {
     syncInFlight = false
+    broadcastSyncStatus()
   }
+}
+
+function broadcastSyncStatus(ackId) {
+  if (!isSyncLeader || !syncStatusChannel) return
+  syncStatusChannel.postMessage({
+    type: 'status',
+    ackId,
+    status: {
+      syncStatus: memory.syncStatus,
+      syncError: memory.syncError,
+      lastSyncedAt: memory.lastSyncedAt,
+      argumentsAckedAt: memory.argumentsAckedAt,
+      syncRejected: memory.syncRejected,
+    },
+  })
+}
+
+function handleSyncChannelMessage(message) {
+  if (isSyncLeader) {
+    if (message.type === 'status-request') broadcastSyncStatus()
+    if (message.type === 'sync-now') {
+      // The follower saved to localStorage just before asking. Give that
+      // storage event a moment to land so this sync includes its edit.
+      window.setTimeout(async () => {
+        await runSync({ forcePull: true })
+        broadcastSyncStatus(message.id)
+      }, 100)
+    }
+    return
+  }
+  if (message.type !== 'status' || !message.status) return
+  memory = { ...memory, ...message.status }
+  emit()
+  const waiting = message.ackId && pendingLeaderSyncs.get(message.ackId)
+  if (waiting) waiting()
+}
+
+/** Follower side of "Sync now": ask the leader and wait for it to finish. */
+function askLeaderToSync() {
+  if (!syncStatusChannel) return Promise.resolve()
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return new Promise((resolve) => {
+    const done = () => {
+      window.clearTimeout(timer)
+      pendingLeaderSyncs.delete(id)
+      resolve()
+    }
+    const timer = window.setTimeout(done, LEADER_SYNC_TIMEOUT_MS)
+    pendingLeaderSyncs.set(id, done)
+    syncStatusChannel.postMessage({ type: 'sync-now', id })
+  })
+}
+
+function requestFreshPull() {
+  if (isSyncLeader) scheduleSync(0, { forcePull: true })
+  else void askLeaderToSync()
 }
 
 /** Push dirty rows and pull whatever else changed. */
 async function runSync({ keepalive = false, forcePull = false, allowBeforeBootstrap = false } = {}) {
   if (memory.syncStatus === 'off') return
+  if (!isSyncLeader) return
   if (!syncBootstrapDone && !allowBeforeBootstrap && !forcePull) return
 
   // An edit that lands mid-request must not be dropped. Come back once the
@@ -1123,27 +1195,68 @@ hydrateBlobs().then(() => {
   void uploadPendingServerFiles()
 })
 
+let heartbeatStarted = false
+
 function startIdlePullHeartbeat() {
-  if (memory.syncStatus === 'off') return
-  window.setInterval(() => {
-    if (document.visibilityState === 'hidden') return
-    if (memory.syncStatus === 'off' || syncInFlight) return
+  if (memory.syncStatus === 'off' || heartbeatStarted) return
+  heartbeatStarted = true
+  window.setInterval(async () => {
+    if (!isSyncLeader || memory.syncStatus === 'off' || syncInFlight) return
+    // A hidden leader still pulls when another tab may be on screen and
+    // waiting on it for changes from other devices.
+    if (document.visibilityState === 'hidden' && !(await hasFollowerTabs())) return
     scheduleSync(0, { forcePull: true })
   }, SYNC_HEARTBEAT_MS)
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      scheduleSync(0, { forcePull: true })
-    }
+    if (document.visibilityState === 'visible') requestFreshPull()
   })
 }
 
-if (typeof window !== 'undefined') {
+function bootAsLeader() {
   bootstrapSync().then(() => {
     // After pull, stored flags may flip true (bytes already on Blob). Re-hydrate
     // downloads them; uploadPending catches anything still only local.
     void hydrateBlobs().then(() => uploadPendingServerFiles())
     startIdlePullHeartbeat()
   })
+}
+
+/**
+ * A follower skips the boot pull. The leader keeps this browser's
+ * localStorage in step with Postgres, and the editors mount from it. The
+ * follower must not wipe dirty flags or rewrite the editor keys here, because
+ * those are the leader's live, possibly unsent edits.
+ */
+function bootAsFollower() {
+  markWorkspaceReady()
+  syncStatusChannel?.postMessage({ type: 'status-request' })
+  void hydrateBlobs().then(() => uploadPendingServerFiles())
+  startIdlePullHeartbeat()
+  requestFreshPull()
+}
+
+function becomeLeaderAfterPreviousClosed() {
+  isSyncLeader = true
+  if (!syncBootstrapDone) {
+    bootAsLeader()
+    return
+  }
+  startIdlePullHeartbeat()
+  scheduleSync(0, { forcePull: true })
+}
+
+if (typeof window !== 'undefined') {
+  if (memory.syncStatus === 'off') {
+    isSyncLeader = true
+    bootAsLeader()
+  } else {
+    syncStatusChannel = openSyncStatusChannel(handleSyncChannelMessage)
+    claimSyncLeadership(becomeLeaderAfterPreviousClosed).then((leads) => {
+      isSyncLeader = leads
+      if (leads) bootAsLeader()
+      else bootAsFollower()
+    })
+  }
 
   onPageHide(() => {
     // Flush debounced editor writes before the library snapshot / keepalive
@@ -1173,8 +1286,14 @@ if (typeof window !== 'undefined') {
           return [kind, memory.store[spec.collection]?.[0]]
         })
       )
-      memory = { ...memory, store: { ...emptyStore(), ...parsed } }
+      // Adopt the other tab's snapshot, except for edits this tab made that the
+      // snapshot has not seen yet. Taking it whole used to drop those edits.
+      const incoming = { ...emptyStore(), ...parsed }
+      const merged = keepNewerLocalEdits(memory.store, incoming)
+      memory = { ...memory, store: merged }
       emit()
+      if (merged !== incoming) persistSoon()
+      if (isSyncLeader && pendingCount(merged.syncMeta) > 0) scheduleSync()
       hydrateBlobs()
       // Same-profile extra tabs get the library key via storage events, but
       // Arguments / Notes still live in dedicated keys until hydrate runs.
@@ -2090,6 +2209,11 @@ export function useCaseLibrary() {
       flushWorkspaceDocSaves()
       flushNotebookSnapshotSave()
       window.clearTimeout(syncTimer)
+      if (!isSyncLeader) {
+        window.clearTimeout(persistTimer)
+        persistNow()
+        return askLeaderToSync()
+      }
       return runSync({ forcePull: true })
     },
     retryWorkspaceBootstrap,

@@ -489,6 +489,88 @@ export function markSeedRowsDirty(store, syncMeta, at) {
   return markDirty(syncMeta, unseen, at)
 }
 
+function replaceById(list, row) {
+  const index = list.findIndex((item) => item.id === row.id)
+  if (index === -1) return [row, ...list]
+  const next = [...list]
+  next[index] = row
+  return next
+}
+
+/** Copy the row a meta key points at from one store into another. */
+function copyRowByKey(from, to, key, deleted) {
+  const [entity, ...parts] = key.split(SEP)
+  const copyFromList = (collection, id) => {
+    const target = to[collection] || []
+    const row = (from[collection] || []).find((item) => item.id === id)
+    return {
+      ...to,
+      [collection]: deleted || !row ? removeById(target, id) : replaceById(target, row),
+    }
+  }
+
+  if (entity === 'cases') return copyFromList('cases', parts[0])
+  if (entity === 'documents') return copyFromList('filesMeta', parts[0])
+  if (entity === 'annotations') return copyFromList('annotations', parts[0])
+  if (entity === 'notes') {
+    const [caseId, layerId] = parts
+    const layers = { ...(to.notesByCase?.[caseId] || {}) }
+    const html = from.notesByCase?.[caseId]?.[layerId]
+    if (deleted || html === undefined) delete layers[layerId]
+    else layers[layerId] = html
+    return { ...to, notesByCase: { ...(to.notesByCase || {}), [caseId]: layers } }
+  }
+  if (entity === 'library_records') {
+    const [kind, id] = parts
+    const collection = Object.keys(LIBRARY_KINDS).find((name) => LIBRARY_KINDS[name] === kind)
+    if (collection) return copyFromList(collection, id)
+  }
+  return to
+}
+
+/**
+ * Adopt a store another tab saved, without losing this tab's newer edits.
+ *
+ * Tabs in one browser share the library snapshot in localStorage and each
+ * adopts whatever another tab writes. Adopting it wholesale dropped any edit
+ * this tab made after the other tab's last read, so the edit never reached
+ * the server and a later pull reverted it.
+ *
+ * A dirty local row is kept unless the incoming copy knows something newer:
+ * a pending edit stamped later than ours, or a server version past the base
+ * our edit started from (a stale-base reject must still let the server win).
+ *
+ * @param {object} local This tab's store.
+ * @param {object} incoming The store another tab wrote.
+ * @returns {object} The store to adopt. `incoming` itself when nothing local
+ *   needed keeping.
+ */
+export function keepNewerLocalEdits(local, incoming) {
+  const localMeta = local?.syncMeta || emptySyncMeta()
+  const incomingMeta = incoming?.syncMeta || emptySyncMeta()
+  let store = incoming
+  const rows = { ...(incomingMeta.rows || {}) }
+  const dirty = { ...(incomingMeta.dirty || {}) }
+  let kept = 0
+
+  for (const key of Object.keys(localMeta.dirty || {})) {
+    const mine = localMeta.rows?.[key]
+    if (!mine) continue
+    // Pending or already pushed, the incoming copy wins only when it is at
+    // least as new as this tab's edit. Comparing against the base instead
+    // dropped typing made after the leader pushed this tab's earlier save.
+    const theirs = incomingMeta.rows?.[key]
+    if (theirs && theirs.updatedAt >= mine.updatedAt) continue
+    store = copyRowByKey(local, store, key, Boolean(mine.deleted))
+    rows[key] = mine
+    dirty[key] = true
+    kept += 1
+  }
+
+  if (!kept) return incoming
+  return { ...store, syncMeta: { ...incomingMeta, rows, dirty } }
+}
+
 export function pendingCount(syncMeta) {
   return Object.keys(syncMeta.dirty).length
 }
