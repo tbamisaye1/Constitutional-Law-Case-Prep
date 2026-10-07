@@ -593,9 +593,7 @@ export function useArguments() {
         const list = prev[side] || []
         const current = list.find((d) => d.id === draftId)
         if (!current || (current.pieceScratch?.[pieceId] || '') === (html || '')) return prev
-        const map = setPieceHtml(current.pieceScratch, pieceId, html)
-        const next = { ...current, pieceScratch: map }
-        if (!Object.keys(map).length) delete next.pieceScratch
+        const next = { ...current, pieceScratch: setPieceHtml(current.pieceScratch, pieceId, html) }
         return { ...prev, [side]: list.map((d) => (d.id === draftId ? next : d)) }
       })
     },

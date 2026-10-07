@@ -35,7 +35,9 @@ export function normalizePieceScratch(raw) {
   for (const [key, value] of Object.entries(raw)) {
     if (key && typeof value === 'string') out[key] = value
   }
-  return Object.keys(out).length ? out : undefined
+  // An empty object is kept on purpose: it tells the server "cleared", while a
+  // missing key means "this client never had it" (the server keeps its copy).
+  return out
 }
 
 function decodeText(html) {
@@ -144,5 +146,7 @@ export function mergePieceScratch(base, local, remote) {
     else value = `${r || ''}<p><strong>Unsynced scratch from another device</strong></p>${l || ''}`
     if (!isBlankHtml(value)) out[key] = value
   }
-  return Object.keys(out).length ? out : undefined
+  // Undefined only when no side ever had the field; otherwise an object, even
+  // empty, so a clear reaches the server (see normalizePieceScratch).
+  return base || local || remote ? out : undefined
 }

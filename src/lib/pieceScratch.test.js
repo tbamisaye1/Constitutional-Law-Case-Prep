@@ -103,3 +103,13 @@ describe('board sync keeps scratch', () => {
     expect(merged.pieceScratch.p2).toBe('<p>art ii notes</p>')
   })
 })
+
+describe('clearing piece scratch reaches the server', () => {
+  it('keeps an empty object instead of dropping the field', () => {
+    const d = normalizeArgumentsBoard({
+      draftsBySide: { petitioner: [{ ...draft, pieceScratch: {} }], respondent: [] },
+    }).draftsBySide.petitioner[0]
+    expect(d.pieceScratch).toEqual({})
+    expect(mergePieceScratch({ a: '<p>1</p>' }, {}, { a: '<p>1</p>' })).toEqual({})
+  })
+})
