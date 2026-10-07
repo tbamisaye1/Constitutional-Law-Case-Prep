@@ -1,15 +1,15 @@
 /**
- * Editors flush their last HTML on unmount / blur so a fast navigation does not
- * drop keystrokes. During "Reload from database" that flush would write the
- * stale in-memory document straight back over the fresh pull, so the reload
- * holds this gate shut until the remounted editors are up.
+ * Pure rule for when a note editor may push its content on blur, tab hide,
+ * page close or unmount (see NoteEditor).
  */
-let suppressedUntil = 0
 
-export function suppressEditorFlush(ms = 1500) {
-  suppressedUntil = Date.now() + ms
-}
-
-export function editorFlushSuppressed() {
-  return Date.now() < suppressedUntil
+/**
+ * True when the editor holds text the user typed that the parent has not
+ * received: it differs from what was last sent AND from what the parent
+ * currently holds. An editor that was never typed in has nothing to send.
+ */
+export function hasUnsentEdits(current, lastSentHtml, parentHtml) {
+  if (lastSentHtml == null) return false
+  if (current === lastSentHtml) return false
+  return current !== (parentHtml ?? '')
 }
