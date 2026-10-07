@@ -34,6 +34,7 @@ import { editorFlushSuppressed } from '../../lib/editorFlush'
 import { indentSelection, outdentSelection, toggleOrCycleOrderedList } from '../../lib/noteEditorIndent'
 import { PageOutline } from './PageOutline'
 import { ScratchPane } from './ScratchPane'
+import { GENERAL_KEY } from '../../lib/pieceScratch'
 
 /** Quiet period before typing turns into a board update. */
 const EMIT_MS = 300
@@ -193,14 +194,16 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
     const items = readOutline(ed.state.doc)
     let owner = null
     for (const item of items) if (item.pos <= ed.state.selection.from) owner = item
-    const label = owner ? `${owner.number} ${owner.title}`.trim() : 'whole-draft notes'
-    const safe = label.replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    argsRef.current.appendDraftScratch(
-      draftId,
-      `<p><em>↳ from ${safe}</em></p>${html.replace(/<h1 data-outline[^>]*>/g, '<h3>').replace(/<\/h1>/g, '</h3>')}`
-    )
+    const body = html.replace(/<h1 data-outline[^>]*>/g, '<h3>').replace(/<\/h1>/g, '</h3>')
+    // Goes to the scratch of the piece the selection starts in.
+    if (owner?.id) {
+      argsRef.current.appendPieceScratch(draftId, owner.id, body)
+      setNotice(`Sent to scratch · ${owner.number}`)
+    } else {
+      argsRef.current.appendDraftScratch(draftId, `<p><em>↳ from whole-draft notes</em></p>${body}`)
+      setNotice('Sent to scratch · General')
+    }
     setScratchOpen(true)
-    setNotice('Sent to scratch')
     return true
   }, [draftId, setScratchOpen])
 
@@ -317,8 +320,9 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
     if (hasLocalEdits) {
       const merged = mergeDrafts(
         normRef.current,
-        { ...localNorm, scratch: draft.scratch },
-        { ...remoteNorm, scratch: draft.scratch }
+        // Scratch is merged by the board sync, not here: hold it fixed.
+        { ...localNorm, scratch: draft.scratch, pieceScratch: draft.pieceScratch },
+        { ...remoteNorm, scratch: draft.scratch, pieceScratch: draft.pieceScratch }
       ).draft
       shownNorm = merged
       storedParts = restoreUntouched(
@@ -576,8 +580,18 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
       {scratchOpen ? (
         <ScratchPane
           draft={draft}
-          onChange={(html) => args.setDraftScratch(draftId, html)}
-          onAppend={(html) => args.appendDraftScratch(draftId, html)}
+          currentPieceId={activeId}
+          onChangePiece={(key, html) =>
+            key === GENERAL_KEY
+              ? args.setDraftScratch(draftId, html)
+              : args.setPieceScratch(draftId, key, html)
+          }
+          onAppendPiece={(key, html) =>
+            key === GENERAL_KEY
+              ? args.appendDraftScratch(draftId, html)
+              : args.appendPieceScratch(draftId, key, html)
+          }
+          onJump={jumpTo}
           onClose={() => setScratchOpen(false)}
         />
       ) : null}

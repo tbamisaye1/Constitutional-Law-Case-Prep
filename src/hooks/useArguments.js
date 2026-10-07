@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { onPageHide, readJson } from '../lib/persist'
 import { joinArgumentOutlineBlocks } from '../lib/argumentNotes'
 import { applyPageToDraft } from '../lib/argumentPage'
+import { appendPieceHtml, setPieceHtml } from '../lib/pieceScratch'
 import {
   CATEGORY3_LADDER_DRAFT_ID,
   moveArrayItem,
@@ -585,6 +586,37 @@ export function useArguments() {
     [side]
   )
 
+  /** Scratch for one section / prong / sub-point (keyed by heading id). */
+  const setPieceScratch = useCallback(
+    (draftId, pieceId, html) => {
+      setDraftsBySide((prev) => {
+        const list = prev[side] || []
+        const current = list.find((d) => d.id === draftId)
+        if (!current || (current.pieceScratch?.[pieceId] || '') === (html || '')) return prev
+        const map = setPieceHtml(current.pieceScratch, pieceId, html)
+        const next = { ...current, pieceScratch: map }
+        if (!Object.keys(map).length) delete next.pieceScratch
+        return { ...prev, [side]: list.map((d) => (d.id === draftId ? next : d)) }
+      })
+    },
+    [side]
+  )
+
+  /** Append HTML to one piece's scratch. */
+  const appendPieceScratch = useCallback(
+    (draftId, pieceId, html) => {
+      if (!html) return
+      setDraftsBySide((prev) => {
+        const list = prev[side] || []
+        const current = list.find((d) => d.id === draftId)
+        if (!current) return prev
+        const next = { ...current, pieceScratch: appendPieceHtml(current.pieceScratch, pieceId, html) }
+        return { ...prev, [side]: list.map((d) => (d.id === draftId ? next : d)) }
+      })
+    },
+    [side]
+  )
+
   const boardSnapshot = useMemo(
     () => ({
       draftsBySide,
@@ -635,6 +667,8 @@ export function useArguments() {
     replaceDraftPage,
     setDraftScratch,
     appendDraftScratch,
+    setPieceScratch,
+    appendPieceScratch,
     notesHtml: focusedNotesHtml,
     setNotesForSide: setFocusedNotes,
     boardSnapshot,

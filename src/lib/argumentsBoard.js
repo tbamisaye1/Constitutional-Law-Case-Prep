@@ -4,6 +4,7 @@
  * Postgres (or an empty Main draft) is the source of truth.
  */
 
+import { normalizePieceScratch } from './pieceScratch'
 import {
   buildCategory3LadderDraft,
   CATEGORY3_LADDER_DRAFT_ID,
@@ -124,6 +125,9 @@ function normalizeDraft(raw, side, index = 0) {
   if (Number.isFinite(seedVersion)) draft.seedVersion = seedVersion
   // Free-form side notes for this draft (Arguments page scratch pane).
   if (typeof raw.scratch === 'string') draft.scratch = raw.scratch
+  // Scratch per section / prong / sub-point, keyed by heading id.
+  const pieceScratch = normalizePieceScratch(raw.pieceScratch)
+  if (pieceScratch) draft.pieceScratch = pieceScratch
   if (Array.isArray(raw.removedOutlineIds)) {
     draft.removedOutlineIds = uniqueIds(raw.removedOutlineIds)
   }

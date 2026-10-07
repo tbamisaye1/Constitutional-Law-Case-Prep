@@ -460,3 +460,84 @@
     padding: 20px 18px 30vh;
   }
 }
+
+/* Scratch per piece ------------------------------------------------------ */
+
+.argpage-scratch-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 8px;
+}
+
+.argpage-scratch-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  background: var(--paper-3);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.argpage-scratch-follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.argpage-scratch-all {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 30vh;
+}
+
+.argpage-scratch-block {
+  border-top: 1px solid var(--rule);
+}
+
+.argpage-scratch-block-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.argpage-scratch-block-head.is-prong {
+  padding-left: 22px;
+}
+
+.argpage-scratch-block-head.is-point {
+  padding-left: 32px;
+  font-weight: 500;
+}
+
+.argpage-scratch-block-head button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.argpage-scratch-block-head .argpage-scratch-jump {
+  color: var(--ink-3);
+}
+
+.argpage-scratch-all .note-prose {
+  min-height: 0;
+  padding: 4px 14px 10px;
+}

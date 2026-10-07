@@ -18,6 +18,8 @@
  * Pure functions over plain objects. No React, no storage.
  */
 
+import { mergePieceScratch } from './pieceScratch'
+
 const SIDES = ['petitioner', 'respondent']
 
 /** Fields merged as plain values on each level. */
@@ -188,6 +190,9 @@ function mergeSection(base, local, remote, path, conflicts) {
 
 function mergeDraft(base, local, remote, path, conflicts) {
   const out = mergeFields(DRAFT_FIELDS, base, local, remote, path, conflicts)
+  const pieceScratch = mergePieceScratch(base?.pieceScratch, local?.pieceScratch, remote?.pieceScratch)
+  if (pieceScratch) out.pieceScratch = pieceScratch
+  else delete out.pieceScratch
   out.sections = mergeList(
     base?.sections,
     local?.sections,
