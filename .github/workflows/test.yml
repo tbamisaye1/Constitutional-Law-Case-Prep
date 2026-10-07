@@ -33,4 +33,5 @@ jobs:
         run: npm test 2>&1 | tee test.log || { grep -E "FAIL|✗|×|AssertionError|Error:" test.log | head -n 30 | sed 's/^/::error::/'; exit 1; }
         shell: bash -o pipefail {0}
       - name: Build
-        run: npm run build
+        run: npm run build 2>&1 | tee build.log || { grep -iE "error|failed" build.log | head -n 20 | sed 's/^/::error::/'; exit 1; }
+        shell: bash -o pipefail {0}

@@ -34,7 +34,7 @@ import {
   applyFontSizeToSelection,
   currentFontSize,
 } from '../lib/noteFontSize'
-import { editorFlushSuppressed } from '../lib/editorFlush'
+import { editorFlushSuppressed, hasUnsentEdits } from '../lib/editorFlush'
 
 /**
  * Extensions every note surface shares (Arguments page, scratch, case notes).
@@ -105,6 +105,15 @@ export function handleNoteKeyDown(ed, event) {
   return true
 }
 
+/** Replace the editor content with the parent's version without echoing it back. */
+function applyIncoming(editor, html, skipping) {
+  if (html == null || editor.isDestroyed) return
+  if (html === editor.getHTML()) return
+  skipping.current = true
+  editor.commands.setContent(html, { emitUpdate: false })
+  skipping.current = false
+}
+
 /**
  * TipTap note surface (https://github.com/ueberdosis/tiptap).
  * Tab / Shift+Tab nest lists, start a list, or indent the block (OneNote-style).
@@ -122,6 +131,15 @@ export function NoteEditor({ html, onChange, editable = true, placeholder, lean 
   onChangeRef.current = onChange
   const skipping = useRef(true)
   const editorRef = useRef(null)
+  // What this editor last handed to onChange. A flush (blur, tab hidden, page
+  // closed, unmount) only re-sends content the user typed that has not been
+  // sent yet. Without this, an editor still showing an old copy (focused when
+  // a newer version arrived, so setContent was skipped) wrote that old copy
+  // back over the newer one the moment the user clicked away or closed the
+  // tab. That is how restored scratch notes were wiped.
+  const lastSent = useRef(null)
+  const latestHtml = useRef(html)
+  latestHtml.current = html
   const [, bumpToolbar] = useReducer((n) => n + 1, 0)
 
   const editor = useEditor({
@@ -131,7 +149,9 @@ export function NoteEditor({ html, onChange, editable = true, placeholder, lean 
     editable,
     onUpdate: ({ editor: ed }) => {
       if (skipping.current) return
-      onChangeRef.current?.(ed.getHTML())
+      const next = ed.getHTML()
+      lastSent.current = next
+      onChangeRef.current?.(next)
       bumpToolbar()
     },
     onSelectionUpdate: () => bumpToolbar(),
@@ -156,6 +176,7 @@ export function NoteEditor({ html, onChange, editable = true, placeholder, lean 
       if (!skipping.current && !editor.isDestroyed && !editorFlushSuppressed()) {
         try {
           const nextHtml = editor.getHTML()
+          if (!hasUnsentEdits(nextHtml, lastSent.current, latestHtml.current)) return
           const plain = nextHtml
             .replace(/<[^>]+>/g, ' ')
             .replace(/&nbsp;/g, ' ')
@@ -174,7 +195,14 @@ export function NoteEditor({ html, onChange, editable = true, placeholder, lean 
     if (!editor) return undefined
     const flush = () => {
       if (skipping.current || editor.isDestroyed || editorFlushSuppressed()) return
-      onChangeRef.current?.(editor.getHTML())
+      const current = editor.getHTML()
+      if (hasUnsentEdits(current, lastSent.current, latestHtml.current)) {
+        lastSent.current = current
+        onChangeRef.current?.(current)
+        return
+      }
+      // Nothing unsent: if a newer version arrived while focused, show it now.
+      applyIncoming(editor, latestHtml.current, skipping)
     }
     const dom = editor.view.dom
     dom.addEventListener('blur', flush)
@@ -193,12 +221,7 @@ export function NoteEditor({ html, onChange, editable = true, placeholder, lean 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
     if (editor.isFocused) return
-    const current = editor.getHTML()
-    if (html != null && html !== current) {
-      skipping.current = true
-      editor.commands.setContent(html, { emitUpdate: false })
-      skipping.current = false
-    }
+    applyIncoming(editor, html, skipping)
   }, [html, editor])
 
   if (!editor) return null
