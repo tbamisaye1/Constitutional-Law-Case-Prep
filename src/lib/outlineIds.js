@@ -88,3 +88,37 @@ export function outlineFixes(headings) {
   })
   return fixes
 }
+
+/** Schema group for outline headings on the Arguments page (top level only). */
+export const OUTLINE_GROUP = 'outline'
+
+/** Content expression for the Arguments page document. */
+export const PAGE_DOC_CONTENT = `(block | ${OUTLINE_GROUP})+`
+
+/** Transaction meta that marks a deliberate "turn this heading into text". */
+export const OUTLINE_DEMOTE_META = 'outlineDemote'
+
+/**
+ * Did an edit make outline headings disappear while keeping every character?
+ *
+ * That is the signature of a heading being converted into something else
+ * (e.g. the bullet-list button running clearNodes on it): the title text is
+ * still there but it is no longer structure, so the section's prongs silently
+ * slide under the previous section. Real deletions change the text, undo and
+ * the explicit demote command are allowed through.
+ */
+export function isSilentHeadingLoss({
+  beforeCount,
+  afterCount,
+  beforeTitleChars,
+  afterTitleChars,
+  beforeText,
+  afterText,
+  allowed,
+}) {
+  if (allowed) return false
+  if (afterCount >= beforeCount) return false
+  // Only empty headings went away (deleting a blank "Untitled" line): fine.
+  if (afterTitleChars >= beforeTitleChars) return false
+  return beforeText === afterText
+}

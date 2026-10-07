@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef } from 'react'
 import { OutlineHeading } from '../extensions/outlineHeading'
+import { PageDocument } from '../extensions/pageDocument'
 import {
   Bold,
   Italic,
@@ -53,7 +54,11 @@ export function baseNoteExtensions({ placeholder, outlineStructure = false } = {
     StarterKit.configure({
       // Replace default listItem so quotes can wrap a line inside an indent.
       listItem: false,
+      // The Arguments page needs a document that also accepts outline
+      // headings, which are kept out of lists and quotes (see outlineHeading).
+      ...(outlineStructure ? { document: false } : {}),
     }),
+    ...(outlineStructure ? [PageDocument] : []),
     ListItemWithBlocks,
     TextStyle,
     FontSize,

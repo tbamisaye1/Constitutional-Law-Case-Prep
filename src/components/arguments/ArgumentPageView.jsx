@@ -16,7 +16,7 @@ import { createDocument, getHTMLFromFragment } from '@tiptap/core'
 import { Fragment } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
 import { baseNoteExtensions, handleNoteKeyDown } from '../NoteEditor'
-import { OUTLINE_NODE } from '../../extensions/outlineHeading'
+import { OUTLINE_GUARD_EVENT, OUTLINE_NODE } from '../../extensions/outlineHeading'
 import { classifyOutline } from '../../lib/outlineIds'
 import { OutlineFold, foldKey } from '../../extensions/outlineFold'
 import {
@@ -203,6 +203,14 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
     setNotice('Sent to scratch')
     return true
   }, [draftId, setScratchOpen])
+
+  // The heading guard refused an edit (e.g. bullet button on a section title).
+  useEffect(() => {
+    const onGuard = () =>
+      setNotice('Headings stay outside lists and quotes. Use "Text" first to turn one into text.')
+    window.addEventListener(OUTLINE_GUARD_EVENT, onGuard)
+    return () => window.removeEventListener(OUTLINE_GUARD_EVENT, onGuard)
+  }, [])
 
   const initialFolds = useMemo(() => readFolds(draftId), [draftId])
 

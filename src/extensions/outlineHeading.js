@@ -30,8 +30,11 @@ import { Node, mergeAttributes, textblockTypeInputRule } from '@tiptap/core'
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 
 import {
+  OUTLINE_DEMOTE_META,
+  OUTLINE_GROUP,
   OUTLINE_KINDS,
   OUTLINE_NODE,
+  isSilentHeadingLoss,
   newOutlineId,
   normalizeKind,
   outlineFixes,
@@ -40,6 +43,22 @@ import {
 export { OUTLINE_NODE, newOutlineId, outlineFixes }
 
 const invariantsKey = new PluginKey('outlineHeadingInvariants')
+const guardKey = new PluginKey('outlineHeadingGuard')
+
+/** Fired on window when an edit was refused, so the page can say why. */
+export const OUTLINE_GUARD_EVENT = 'case-prep-outline-guard'
+
+/** Number of outline headings and total characters in their titles. */
+function headingStats(doc) {
+  let count = 0
+  let titleChars = 0
+  doc.forEach((node) => {
+    if (node.type.name !== OUTLINE_NODE) return
+    count += 1
+    titleChars += node.textContent.length
+  })
+  return { count, titleChars }
+}
 
 function collectHeadings(doc) {
   const headings = []
@@ -53,7 +72,16 @@ function collectHeadings(doc) {
 
 export const OutlineHeading = Node.create({
   name: OUTLINE_NODE,
-  group: 'block',
+  // On the Arguments page (structure: true) headings are their own group that
+  // only the page document accepts at the top level. Lists, quotes and list
+  // items take `block+`, so a heading can never be wrapped into or joined
+  // inside them (that is how a section once vanished into prong 1.5's
+  // bullets). Saved notes with a heading inside a list are lifted back to the
+  // top level when parsed. Other note editors keep `block` so a prong's
+  // sub-points survive there.
+  group() {
+    return this.options.structure ? OUTLINE_GROUP : 'block'
+  },
   content: 'inline*',
   defining: true,
 
@@ -121,8 +149,10 @@ export const OutlineHeading = Node.create({
         },
       unsetOutlineHeading:
         () =>
-        ({ commands }) =>
-          commands.setNode('paragraph'),
+        ({ commands, tr }) => {
+          tr.setMeta(OUTLINE_DEMOTE_META, true)
+          return commands.setNode('paragraph')
+        },
     }
   },
 
@@ -139,7 +169,7 @@ export const OutlineHeading = Node.create({
         const { $from, empty } = selection
         if (!empty || $from.parent.type.name !== this.name) return false
         if ($from.parentOffset !== 0) return false
-        return this.editor.commands.setNode('paragraph')
+        return this.editor.commands.unsetOutlineHeading()
       },
       // Enter in the middle of a title must not split it into two headings
       // that would share an id: move to a new paragraph below instead.
@@ -185,6 +215,38 @@ export const OutlineHeading = Node.create({
   addProseMirrorPlugins() {
     if (!this.options.structure) return []
     return [
+      // Refuse edits that turn a heading into plain content without deleting
+      // anything (list / quote buttons run clearNodes on the selection).
+      new Plugin({
+        key: guardKey,
+        filterTransaction: (tr) => {
+          if (!tr.docChanged) return true
+          const before = headingStats(tr.before)
+          const after = headingStats(tr.doc)
+          if (after.count >= before.count) return true
+          const allowed =
+            Boolean(tr.getMeta(OUTLINE_DEMOTE_META)) ||
+            Boolean(tr.getMeta('history$')) || // undo / redo
+            Boolean(tr.getMeta('fromStorage')) // external change applied by the page
+          const refused = isSilentHeadingLoss({
+            beforeCount: before.count,
+            afterCount: after.count,
+            beforeTitleChars: before.titleChars,
+            afterTitleChars: after.titleChars,
+            beforeText: tr.before.textContent,
+            afterText: tr.doc.textContent,
+            allowed,
+          })
+          if (refused) {
+            try {
+              window.dispatchEvent(new CustomEvent(OUTLINE_GUARD_EVENT))
+            } catch {
+              /* tests */
+            }
+          }
+          return !refused
+        },
+      }),
       new Plugin({
         key: invariantsKey,
         appendTransaction: (transactions, _old, state) => {
