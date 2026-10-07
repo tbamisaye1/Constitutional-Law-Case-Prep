@@ -177,14 +177,30 @@ function PageEditorForDraft({ args, draft, scratchOpen, setScratchOpen, expanded
     emitTimer.current = 0
     const ed = editorRef.current
     if (!ed || ed.isDestroyed || editorFlushSuppressed() || !normRef.current) return
+    // The stored draft changed after the editor last synced with it (a pull,
+    // MCP, another device) and the merge effect has not run yet. Saving the
+    // editor's parts now would treat everything new in storage as deleted by
+    // the user (a restored prong vanished this way). Let the merge effect run
+    // first; it keeps the typed text and then saves.
+    const stored = argsRef.current.activeDraft
+    const storedKey = stored && stored.id === draftId ? draftPageKey(stored) : null
+    if (
+      storedKey &&
+      storedKey !== draftPageKey(rawRef.current) &&
+      // An echo of our own earlier save is not newer content.
+      !isOwnEcho(sentKeys.current, storedKey)
+    ) {
+      emitTimer.current = window.setTimeout(emitNow, EMIT_MS)
+      return
+    }
     const parts = pageJsonToDraftParts(ed.getJSON(), serializeWith(ed.schema))
     const nextNorm = applyPageToDraft(normRef.current, parts)
     if (nextNorm === normRef.current) return
-    const stored = restoreUntouched(parts, normRef.current, rawRef.current)
+    const toStore = restoreUntouched(parts, normRef.current, rawRef.current)
     normRef.current = nextNorm
-    rawRef.current = applyPageToDraft(rawRef.current, stored)
+    rawRef.current = applyPageToDraft(rawRef.current, toStore)
     sentKeys.current = rememberSent(sentKeys.current, draftPageKey(rawRef.current))
-    argsRef.current.replaceDraftPage(draftId, stored)
+    argsRef.current.replaceDraftPage(draftId, toStore)
   }, [draftId])
 
   const scheduleEmit = useCallback(() => {
