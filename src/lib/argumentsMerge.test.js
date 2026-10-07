@@ -224,15 +224,31 @@ describe('mergeDrafts (page editor)', () => {
     expect(conflicts).toHaveLength(0)
   })
 
-  it('same prong: remote wins and the typed text lands in scratch', async () => {
+  it('same prong while typing: the typed text stays, the other version is returned for scratch', async () => {
     const { mergeDrafts } = await import('./argumentsMerge')
     const base = clone(BASE).draftsBySide.petitioner[0]
+    base.scratch = '<p>my article notes</p>'
     const local = clone(base)
     local.sections[0].prongs[0].notes = '<p>typing here</p>'
     const remote = clone(base)
     remote.sections[0].prongs[0].notes = '<p>other device</p>'
-    const { draft: out } = mergeDrafts(base, local, remote, { now: 0 })
-    expect(out.sections[0].prongs[0].notes).toBe('<p>other device</p>')
-    expect(out.scratch).toContain('typing here')
+    const { draft: out, stashHtml } = mergeDrafts(base, local, remote, { now: 0, prefer: 'local' })
+    expect(out.sections[0].prongs[0].notes).toBe('<p>typing here</p>')
+    expect(stashHtml).toContain('other device')
+    // Scratch is never rewritten by the page merge.
+    expect(out.scratch).toBe('<p>my article notes</p>')
+  })
+
+  it('board merge appends conflict copies after the existing scratch', () => {
+    const base = clone(BASE)
+    base.draftsBySide.petitioner[0].scratch = '<p>my article notes</p>'
+    const local = clone(base)
+    local.draftsBySide.petitioner[0].sections[0].prongs[0].notes = '<p>mine</p>'
+    const remote = clone(base)
+    remote.draftsBySide.petitioner[0].sections[0].prongs[0].notes = '<p>theirs</p>'
+    const { board } = mergeArgumentsBoards(base, local, remote, { now: 0 })
+    const scratch = board.draftsBySide.petitioner[0].scratch
+    expect(scratch.startsWith('<p>my article notes</p>')).toBe(true)
+    expect(scratch).toContain('mine')
   })
 })
