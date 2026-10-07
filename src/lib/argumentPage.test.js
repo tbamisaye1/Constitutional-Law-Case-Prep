@@ -69,7 +69,7 @@ describe('pageJsonToDraftParts', () => {
     )
     expect(parts.sections[0].id).toBe('s1')
     expect(parts.sections[1].id).not.toBe('s1')
-    expect(parts.sections[1].id).toMatch(/^sec-/)
+    expect(parts.sections[1].id).toBe('s1-dup1')
   })
 
   it('handles an empty document', () => {
@@ -193,8 +193,18 @@ describe('outlineFixes', () => {
     expect(fixes[0]).toEqual({ pos: 0, kind: 'section' })
     expect(fixes[1].pos).toBe(5)
     expect(fixes[1].id).toMatch(/^sec-/)
-    expect(fixes[2].pos).toBe(9)
-    expect(fixes[2].id).toMatch(/^pr-/)
+    expect(fixes[2]).toEqual({ pos: 9, id: 'a-dup1' })
+  })
+
+  it('removes a blank later copy of a heading and renames a titled one, the same way every time', () => {
+    const input = [
+      { pos: 0, kind: 'section', id: 's', title: 'One' },
+      { pos: 4, kind: 'section', id: 's', title: '' },
+      { pos: 8, kind: 'section', id: 's', title: 'Copied' },
+    ]
+    const fixes = outlineFixes(input)
+    expect(fixes).toEqual([{ pos: 4, remove: true }, { pos: 8, id: 's-dup1' }])
+    expect(outlineFixes(input)).toEqual(fixes)
   })
 
   it('promotes a point with no prong above it and gives points pt- ids', () => {
@@ -337,5 +347,43 @@ describe('sub-points (1.1.1)', () => {
       serialize
     )
     expect(parts.sections[0].prongs).toEqual([{ id: 'q0', title: 'stray', notes: '<p>x</p>' }])
+  })
+})
+
+describe('duplicate heading ids (section saved inside a bullet, then lifted out)', () => {
+  // Stored data: prong 1.5's notes still hold section 2's titled heading; the
+  // real section 2 is stored after it with the same id, blank, holding prongs.
+  const page = doc(
+    H('section', 's1', 'One'),
+    H('prong', 'p5', 'e. Domestic'),
+    P('bullet'),
+    H('section', 's2', 'Twilight zone'),
+    P('lifted text'),
+    H('section', 's2', ''),
+    P('stored notes'),
+    H('prong', 'p6', 'a. Statutes')
+  )
+
+  it('folds the blank copy into the titled one: no ghost "Untitled" section', () => {
+    const parts = pageJsonToDraftParts(page, serialize)
+    expect(parts.sections.map((s) => [s.id, s.title])).toEqual([
+      ['s1', 'One'],
+      ['s2', 'Twilight zone'],
+    ])
+    expect(parts.sections[1].notes).toBe('<p>lifted text</p><p>stored notes</p>')
+    expect(parts.sections[1].prongs.map((p) => p.id)).toEqual(['p6'])
+    expect(parts.sections[0].prongs[0].notes).toBe('<p>bullet</p>')
+  })
+
+  it('reads the same data the same way every time (no save loop)', () => {
+    const a = JSON.stringify(pageJsonToDraftParts(page, serialize))
+    const b = JSON.stringify(pageJsonToDraftParts(page, serialize))
+    expect(a).toBe(b)
+  })
+
+  it('gives a titled copy a stable id instead of a random one', () => {
+    const copied = doc(H('section', 's1', 'One'), H('section', 's1', 'One (copy)'))
+    const ids = pageJsonToDraftParts(copied, serialize).sections.map((s) => s.id)
+    expect(ids).toEqual(['s1', 's1-dup1'])
   })
 })

@@ -10,7 +10,7 @@
  * HTML serialization injected by the caller so it can be tested without a DOM.
  */
 
-import { OUTLINE_NODE, classifyOutline, newOutlineId, outlineRank } from './outlineIds'
+import { OUTLINE_NODE, classifyOutline, dedupeOutline, newOutlineId, outlineRank } from './outlineIds'
 
 function escapeText(text) {
   return String(text ?? '')
@@ -68,7 +68,6 @@ export function pageJsonToDraftParts(docJson, serialize) {
 
   const intro = []
   const sections = []
-  const seen = new Set()
   let current = null // { target, nodes }
 
   const flush = () => {
@@ -76,8 +75,14 @@ export function pageJsonToDraftParts(docJson, serialize) {
     current.target.notes = html(current.nodes)
   }
 
-  // Same promotion rule the editor plugin enforces (see classifyOutline).
-  const kinds = classifyOutline(top.filter((n) => n.type === OUTLINE_NODE).map((n) => n.attrs || {}))
+  // Same promotion and duplicate rules the editor plugin enforces (see
+  // classifyOutline / dedupeOutline), so re-reading the same page always gives
+  // the same sections, prongs and ids.
+  const headingNodes = top.filter((n) => n.type === OUTLINE_NODE)
+  const kinds = classifyOutline(headingNodes.map((n) => n.attrs || {}))
+  const ids = dedupeOutline(
+    headingNodes.map((n, i) => ({ kind: kinds[i].kind, id: n.attrs?.id, title: nodeText(n) }))
+  )
   let headingIndex = 0
 
   for (const node of top) {
@@ -87,10 +92,11 @@ export function pageJsonToDraftParts(docJson, serialize) {
     }
     const attrs = node.attrs || {}
     const { kind } = kinds[headingIndex]
+    const dedupe = ids[headingIndex]
     headingIndex += 1
-    let id = typeof attrs.id === 'string' && attrs.id ? attrs.id : ''
-    if (!id || seen.has(id)) id = newOutlineId(kind)
-    seen.add(id)
+    // A blank repeat of an earlier heading: its content belongs to that one.
+    if (dedupe.action === 'drop') continue
+    const id = dedupe.id || newOutlineId(kind)
 
     // A point is content of its prong: it stays in the prong's notes HTML,
     // carrying its (de-duplicated) id so folds and the outline stay stable.
