@@ -78,4 +78,28 @@ describe('blobUpload helpers', () => {
     expect(init.headers['x-content-type']).toBe('application/pdf')
     expect(init.headers['x-content-length']).toBe('3')
   })
+
+  it('only sends headers that Blob allows in its CORS preflight', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      async json() {
+        return { url: 'https://example.public.blob.vercel-storage.com/x.pdf' }
+      },
+      async text() {
+        return ''
+      },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = new File([new Uint8Array([1])], 'a.pdf', { type: 'application/pdf' })
+    await putPdfToBlob('tok', 'case-law-agent/ingest/a.pdf', file, file.name)
+
+    const [, init] = fetchMock.mock.calls[0]
+    expect(Object.keys(init.headers).sort()).toEqual([
+      'authorization',
+      'x-api-version',
+      'x-content-length',
+      'x-content-type',
+    ])
+  })
 })

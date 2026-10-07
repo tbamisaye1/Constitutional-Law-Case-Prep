@@ -86,7 +86,9 @@ export async function putPdfToBlob(clientToken, pathname, file, fileName = '') {
       'x-api-version': '7',
       'x-content-type': contentType,
       'x-content-length': String(file.size),
-      'x-add-random-suffix': '0',
+      // Do not send x-add-random-suffix. Blob's CORS preflight no longer
+      // allows it, so the browser blocks the PUT as "Failed to fetch". The
+      // signed client token already carries addRandomSuffix: false.
     },
     body: file,
   })
