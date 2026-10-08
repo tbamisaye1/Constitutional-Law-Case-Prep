@@ -17,6 +17,7 @@ import {
   markSeedRowsDirty,
   metaKey,
   pendingCount,
+  rebaseAcceptedArguments,
   rejectedArgumentsEcho,
 } from './sync'
 
@@ -453,5 +454,61 @@ describe('Arguments stale-base rejection', () => {
     const echo = rejectedArgumentsEcho({ id: 'main', data: serverBoard, serverUpdatedAt: 7_000 }, 1)
     const pulled = applyChanges(store(), emptySyncMeta(), { library_records: [echo] })
     expect(pulled.store.argumentsBoard[0].forceApply).toBeUndefined()
+  })
+})
+
+describe('rebaseAcceptedArguments', () => {
+  const key = metaKey('library_records', 'arguments', 'main')
+
+  // Typing during an in-flight push: the first edit set base 1_000, the push
+  // carried updatedAt 2_000, and a mid-flight keystroke re-stamped 3_000.
+  function typedDuringPush() {
+    let meta = { ...emptySyncMeta(), rows: { [key]: { updatedAt: 1_000, deleted: false } } }
+    meta = markDirty(meta, [key], 2_000)
+    const sent = { [key]: 2_000 }
+    meta = markDirty(meta, [key], 3_000)
+    return clearAccepted(meta, sent, 2_500)
+  }
+
+  it('moves the base of a still-dirty board to the version the server stored', () => {
+    const meta = typedDuringPush()
+    expect(meta.dirty[key]).toBe(true)
+    expect(meta.rows[key].baseUpdatedAt).toBe(1_000)
+
+    const { syncMeta, rebasedIds } = rebaseAcceptedArguments(
+      meta,
+      [{ kind: 'arguments', id: 'main', updatedAt: 2_000 }],
+      []
+    )
+    expect(rebasedIds).toEqual(['main'])
+    expect(syncMeta.rows[key].baseUpdatedAt).toBe(2_000)
+    expect(syncMeta.rows[key].updatedAt).toBe(3_000)
+
+    const { changes } = collectChanges(
+      store({ argumentsBoard: [{ id: 'main', draftsBySide: {} }] }),
+      syncMeta
+    )
+    expect(changes.library_records[0].baseUpdatedAt).toBe(2_000)
+  })
+
+  it('leaves the base alone when the server rewrote the board', () => {
+    const meta = typedDuringPush()
+    const { syncMeta, rebasedIds } = rebaseAcceptedArguments(
+      meta,
+      [{ kind: 'arguments', id: 'main', updatedAt: 2_000 }],
+      [{ kind: 'arguments', id: 'main', reason: 'arguments_rejected_seed_content' }]
+    )
+    expect(rebasedIds).toEqual([])
+    expect(syncMeta).toBe(meta)
+  })
+
+  it('ignores rows that are no longer dirty and older servers without accepted', () => {
+    const clean = { ...emptySyncMeta(), rows: { [key]: { updatedAt: 2_000, deleted: false } } }
+    expect(
+      rebaseAcceptedArguments(clean, [{ kind: 'arguments', id: 'main', updatedAt: 2_000 }], [])
+        .rebasedIds
+    ).toEqual([])
+    const meta = typedDuringPush()
+    expect(rebaseAcceptedArguments(meta, undefined, undefined).syncMeta).toBe(meta)
   })
 })

@@ -466,6 +466,43 @@ export function clearAccepted(syncMeta, sent, cursor) {
 }
 
 /**
+ * Move the concurrency base of still-dirty Arguments rows to the version the
+ * server just stored.
+ *
+ * When the user keeps typing while a push is in flight, the row stays dirty
+ * and markDirty keeps the base it captured before that push. The server has
+ * meanwhile stored the push at a new updated_at, and the pull will not echo it
+ * back when the edit was stamped before `since`. Without this, the next push
+ * claims the old base, the server refuses it as stale, and the three-way merge
+ * moves the newest typing out of the prong and into scratch.
+ *
+ * @param {object} syncMeta Bookkeeping after clearAccepted().
+ * @param {object[]} accepted response.accepted: {kind, id, updatedAt}.
+ * @param {object[]} rejected response.rejected. A row the server rewrote
+ *   (seed protect) is not the board this tab sent, so it is never a base.
+ * @returns {{syncMeta: object, rebasedIds: string[]}}
+ */
+export function rebaseAcceptedArguments(syncMeta, accepted, rejected) {
+  const rejectedIds = new Set(
+    (rejected || []).filter((row) => row?.kind === 'arguments').map((row) => row.id || 'main')
+  )
+  let rows = syncMeta.rows
+  const rebasedIds = []
+  for (const row of accepted || []) {
+    if (row?.kind !== 'arguments') continue
+    const id = row.id || 'main'
+    const updatedAt = Number(row.updatedAt)
+    if (rejectedIds.has(id) || !Number.isFinite(updatedAt)) continue
+    const key = metaKey('library_records', 'arguments', id)
+    if (!syncMeta.dirty[key] || !rows[key]) continue
+    rows = { ...rows, [key]: { ...rows[key], baseUpdatedAt: updatedAt } }
+    rebasedIds.push(id)
+  }
+  if (!rebasedIds.length) return { syncMeta, rebasedIds }
+  return { syncMeta: { ...syncMeta, rows }, rebasedIds }
+}
+
+/**
  * Meta entries for rows that came from the seed files and have never synced.
  *
  * A brand new browser holds a full seeded library. Without this, none of it is

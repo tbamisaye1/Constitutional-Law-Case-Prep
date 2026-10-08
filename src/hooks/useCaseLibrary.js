@@ -31,6 +31,7 @@ import {
   metaKey,
   pendingCount,
   rejectedArgumentsEcho,
+  rebaseAcceptedArguments,
 } from '../lib/sync'
 import { claimSyncLeadership, hasFollowerTabs, openSyncStatusChannel } from '../lib/syncLeader'
 import { getWorkspaceId } from '../lib/workspace'
@@ -489,6 +490,14 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
         delete dirty[metaKey('library_records', 'arguments', row.id || 'main')]
       }
       syncMeta = { ...syncMeta, dirty }
+    }
+    const rebased = rebaseAcceptedArguments(syncMeta, response.accepted, response.rejected)
+    syncMeta = rebased.syncMeta
+    if (rebased.rebasedIds.length) {
+      const sentArgs = (changes?.library_records || []).find(
+        (row) => row && row.kind === 'arguments'
+      )
+      if (sentArgs?.data) rememberArgumentsBase(sentArgs.data)
     }
 
     const sentArgsKeys = Object.keys(sent || {}).filter(isArgumentsMetaKey)
