@@ -6,6 +6,12 @@
  */
 let suppressedUntil = 0
 
+/**
+ * Window event for "Sync now": every open editor hands its unsaved text to the
+ * store immediately, the same as it does on blur or pagehide.
+ */
+export const FLUSH_EDITORS_EVENT = 'case-prep-flush-editors'
+
 export function suppressEditorFlush(ms = 1500) {
   suppressedUntil = Date.now() + ms
 }
