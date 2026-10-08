@@ -118,6 +118,32 @@ export function SyncBanner({
     }
   }
 
+  async function forceSave() {
+    if (busy || sync.status === 'off') return
+    const ok = window.confirm(
+      'Force save replaces the Arguments board in the database with exactly what this tab shows, even if another tab, device, or the assistant changed it since.\n\nThe replaced version stays in the database history. Continue?'
+    )
+    if (!ok) return
+    setBusy(true)
+    setNote('')
+    try {
+      const result = await lib.forceSaveArguments()
+      if (result.ok) {
+        setNote(`Force saved Arguments to the database at ${clock(Date.now())}.`)
+      } else if (result.reason === 'network') {
+        setNote('Could not reach the database. Your board is still on this device; try again.')
+      } else if (result.reason === 'nothing-to-save') {
+        setNote('This tab has no Arguments board saved yet, so there was nothing to push.')
+      } else {
+        setNote(`The server still refused the save (${result.reason}). Use Download backup before changing anything else.`)
+      }
+    } catch (error) {
+      setNote(error?.message || 'Force save failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function downloadLatest() {
     if (busy || sync.status === 'off') return
     setBusy(true)
@@ -188,6 +214,15 @@ export function SyncBanner({
                 title="Discard this device's copy and show exactly what the database holds"
               >
                 Reload from database
+              </button>
+              <button
+                type="button"
+                className="anno-jump"
+                disabled={busy}
+                onClick={forceSave}
+                title="Save this tab's Arguments board to the database, replacing the copy there"
+              >
+                Force save
               </button>
               <button type="button" className="anno-jump" disabled={busy} onClick={backupNow}>
                 {busy ? 'Backing up…' : 'Backup now'}

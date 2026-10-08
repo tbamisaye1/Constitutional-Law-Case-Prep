@@ -35,7 +35,7 @@ import {
 } from '../lib/sync'
 import { claimSyncLeadership, hasFollowerTabs, openSyncStatusChannel } from '../lib/syncLeader'
 import { getWorkspaceId } from '../lib/workspace'
-import { suppressEditorFlush } from '../lib/editorFlush'
+import { FLUSH_EDITORS_EVENT, suppressEditorFlush } from '../lib/editorFlush'
 import {
   hydrateNotebookFromRemote,
   notebookRowsForLibraryLoad,
@@ -885,6 +885,59 @@ export async function reloadFromDatabase() {
     /* tests */
   }
   return { ok: true, dropped }
+}
+
+/**
+ * Push this tab's Arguments board to Postgres and make it the live version.
+ *
+ * For "the server keeps rejecting my save" or "this tab is right, the database
+ * is wrong". The row carries forceOverwrite, so the server skips the stale-base
+ * check and stores it even if another tab, device, or the assistant wrote in
+ * the meantime. The board it replaces goes to the server's revision history,
+ * and the seed / agent overwrite guards still apply.
+ *
+ * Runs from follower tabs too: the board on screen in THIS tab is the one the
+ * user asked to save, and the leader may be holding an older copy.
+ *
+ * @returns {Promise<{ok: boolean, reason?: string}>} reason is 'off',
+ *   'nothing-to-save', 'network', or a server rejection reason.
+ */
+export async function forceSaveArguments() {
+  if (memory.syncStatus === 'off') return { ok: false, reason: 'off' }
+
+  // The page editor hands its unsent text to React, which saves it on the next
+  // render. Give that render a moment before flushing the debounced save.
+  try {
+    window.dispatchEvent(new CustomEvent(FLUSH_EDITORS_EVENT))
+  } catch {
+    /* tests */
+  }
+  await new Promise((resolve) => window.setTimeout(resolve, 60))
+  flushWorkspaceDocSaves()
+
+  for (let i = 0; syncInFlight && i < 100; i += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 100))
+  }
+  window.clearTimeout(syncTimer)
+
+  const [board] = workspaceDocRowsFromLocal('arguments')
+  if (!board) return { ok: false, reason: 'nothing-to-save' }
+
+  const key = metaKey('library_records', 'arguments', DOC_ROW_ID)
+  const syncMeta = markDirty(memory.store.syncMeta, [key], Date.now())
+  memory = { ...memory, store: { ...memory.store, argumentsBoard: [board], syncMeta } }
+  emit()
+  persistSoon()
+
+  const { changes, sent } = collectChanges(memory.store, syncMeta)
+  changes.library_records = (changes.library_records || []).map((row) =>
+    row.kind === 'arguments' ? { ...row, forceOverwrite: true } : row
+  )
+  const ok = await exchange(changes, sent)
+  if (!ok) return { ok: false, reason: 'network' }
+  const refused = (memory.syncRejected || []).find((row) => row?.kind === 'arguments')
+  if (refused) return { ok: false, reason: refused.reason || 'rejected' }
+  return { ok: true }
 }
 
 /** Manual retry from the boot screen when the first pull failed. */
@@ -2227,6 +2280,7 @@ export function useCaseLibrary() {
     },
     retryWorkspaceBootstrap,
     reloadFromDatabase,
+    forceSaveArguments,
     recoverFromServer: () => {
       try {
         localStorage.removeItem(RECOVER_NOTES_FLAG)
