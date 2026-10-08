@@ -18,6 +18,9 @@ function rejectedMessage(rejected) {
   if (reasons.some((r) => r.includes('seed'))) {
     return 'Server blocked seed outline text from overwriting your Arguments notes.'
   }
+  if (reasons.some((r) => r.includes('stale_base') || r.includes('missing_base'))) {
+    return 'Arguments changed somewhere else (another tab, device, or the assistant) while you edited. Both versions were merged; any text that clashed is at the end of the draft scratch.'
+  }
   return 'Server rejected part of your last Arguments sync. Check the board against another device.'
 }
 

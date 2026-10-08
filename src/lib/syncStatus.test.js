@@ -72,6 +72,17 @@ describe('describeSyncStatus', () => {
     expect(status.text.toLowerCase()).toContain('seed')
   })
 
+  it('explains a stale-base reject as a merge with another writer', () => {
+    const status = describeSyncStatus({
+      status: 'idle',
+      pending: 0,
+      lastSyncedAt: Date.now(),
+      rejected: [{ kind: 'arguments', reason: 'arguments_rejected_stale_base' }],
+    })
+    expect(status.tone).toBe('warn')
+    expect(status.text).toContain('scratch')
+  })
+
   it('keeps error and off states honest', () => {
     expect(describeSyncStatus({ status: 'off' }).tone).toBe('warn')
     expect(
