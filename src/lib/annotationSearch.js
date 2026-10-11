@@ -244,6 +244,7 @@ export function prepNotesForAskAi(
     notesByCase = {},
     noteTabs = [],
     argumentsBoard = null,
+    preferredSide = 'both',
   } = {}
 ) {
   const notebook = notebookChunksForAskAi(query, { limit: notebookLimit })
@@ -261,6 +262,7 @@ export function prepNotesForAskAi(
   })
   const argNotes = argumentChunksForAskAi(query, argumentsBoard, {
     limit: argumentLimit,
+    preferredSide,
   })
 
   // Interleave so PDF annotations, case tabs, and argument notes are visible.

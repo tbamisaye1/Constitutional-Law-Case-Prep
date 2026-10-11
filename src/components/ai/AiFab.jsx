@@ -26,12 +26,21 @@ export function AiFab() {
       type="button"
       className="ai-fab"
       aria-label="Ask AI"
-      onClick={() =>
+      onClick={() => {
+        const surface = surfaceFromPath()
+        // On Arguments, keep the Petitioner/Respondent tab already in ctx
+        // (ArgumentsPage syncs it). Elsewhere reset to both.
         openBubble(
-          { surface: surfaceFromPath(), selection: '', case_id: null, page: null, side: 'both' },
+          {
+            surface,
+            selection: '',
+            case_id: null,
+            page: null,
+            ...(surface === 'arguments' ? {} : { side: 'both' }),
+          },
           { top: 0, left: 0 }
         )
-      }
+      }}
     >
       <Sparkles size={18} />
       <span>Ask AI</span>

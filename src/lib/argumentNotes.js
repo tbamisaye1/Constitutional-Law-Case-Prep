@@ -189,13 +189,52 @@ export function joinArgumentOutlineBlocks(sections) {
 }
 
 /**
- * Rank argument notes for a prompt. Boosts whole-argument vs prong when asked.
+ * Infer petitioner / respondent from the Ask AI prompt when the toggle is "both".
+ * @param {string} prompt
+ * @returns {'petitioner' | 'respondent' | null}
  */
-export function searchArgumentNotes(query, board, { limit = 6 } = {}) {
+export function inferAdvocacySideFromQuery(prompt) {
+  const q = String(prompt || '').toLowerCase()
+  if (!q.trim()) return null
+  const wantsRespondent =
+    /\bfor\s+respondent\b/.test(q) ||
+    /\brespondent'?s?\s+(argument|case|outline|notes?|side|brief)\b/.test(q) ||
+    /\b(evaluate|analyse|analyze|fill|strengthen|critique)\b.{0,40}\brespondent\b/.test(q) ||
+    /\brespondent\b.{0,40}\b(argument|outline|structure|notes?)\b/.test(q)
+  const wantsPetitioner =
+    /\bfor\s+petitioner\b/.test(q) ||
+    /\bpetitioner'?s?\s+(argument|case|outline|notes?|side|brief)\b/.test(q) ||
+    /\b(evaluate|analyse|analyze|fill|strengthen|critique)\b.{0,40}\bpetitioner\b/.test(q) ||
+    /\bpetitioner\b.{0,40}\b(argument|outline|structure|notes?)\b/.test(q)
+  if (wantsRespondent && !wantsPetitioner) return 'respondent'
+  if (wantsPetitioner && !wantsRespondent) return 'petitioner'
+  return null
+}
+
+/**
+ * @param {string | null | undefined} side
+ * @returns {'both' | 'petitioner' | 'respondent'}
+ */
+export function normalizeAdvocacySide(side) {
+  const raw = String(side || '').trim().toLowerCase()
+  if (raw === 'petitioner' || raw === 'respondent') return raw
+  return 'both'
+}
+
+/**
+ * Rank argument notes for a prompt. Boosts whole-argument vs prong when asked.
+ * Prefer one side when the Arguments tab / Ask AI toggle / query names it.
+ */
+export function searchArgumentNotes(query, board, { limit = 6, preferredSide = 'both' } = {}) {
   const q = notesSearchQuery(query)
   const tokens = tokenize(q)
   const rows = flattenArgumentNotes(board)
   if (!rows.length) return []
+
+  const sideHint =
+    normalizeAdvocacySide(preferredSide) !== 'both'
+      ? normalizeAdvocacySide(preferredSide)
+      : inferAdvocacySideFromQuery(query)
 
   const wantsWhole =
     /\b(whole|full|entire|overall)\b.{0,24}\b(argument|notes?|outline)\b/.test(
@@ -220,24 +259,45 @@ export function searchArgumentNotes(query, board, { limit = 6 } = {}) {
       if (wantsProng && (row.focusType === 'prong' || row.focusType === 'section')) score += 25
       // Light structure signal so Ask AI can see the outline even without prose.
       if (tokens.some((t) => row.title.toLowerCase().includes(t))) score += 8
+      if (sideHint && row.side === sideHint) score += 45
+      if (sideHint && row.side && row.side !== sideHint) score -= 20
       return { ...row, score }
     })
-    .filter((row) => row.score > 0 || wantsWhole || wantsProng)
+    .filter((row) => {
+      if (sideHint && row.side && row.side !== sideHint) {
+        // Keep opposite-side rows only when they still score highly on content.
+        return row.score > 40
+      }
+      return row.score > 0 || wantsWhole || wantsProng || Boolean(sideHint)
+    })
     .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
 
   // If the user clearly asked about arguments but tokens missed, still return top rows.
+  const fallbackRows = sideHint ? rows.filter((r) => r.side === sideHint) : rows
   const picked =
     scored.length > 0
       ? scored
-      : wantsWhole || wantsProng || /\barguments?\b/.test(String(query || '').toLowerCase())
-        ? rows
+      : wantsWhole ||
+          wantsProng ||
+          Boolean(sideHint) ||
+          /\barguments?\b/.test(String(query || '').toLowerCase())
+        ? fallbackRows.length
+          ? fallbackRows
+          : rows
         : []
 
   return picked.slice(0, limit)
 }
 
-export function argumentChunksForAskAi(query, board, { limit = 4, chunkSize = 900 } = {}) {
-  const hits = searchArgumentNotes(query, board, { limit: Math.max(limit, 4) })
+export function argumentChunksForAskAi(
+  query,
+  board,
+  { limit = 4, chunkSize = 900, preferredSide = 'both' } = {}
+) {
+  const hits = searchArgumentNotes(query, board, {
+    limit: Math.max(limit, 4),
+    preferredSide,
+  })
   const chunks = []
   for (const hit of hits) {
     if (chunks.length >= limit) break
@@ -268,7 +328,9 @@ export function queryWantsArgumentNotes(prompt) {
     /\bprongs?\b/.test(q) ||
     /\b(first|1st|second|2nd)\s+arg(ument)?\b/.test(q) ||
     /\bsection\s*\d+\b/.test(q) ||
-    /\b(petitioner|respondent)\s+(argument|notes?|outline)\b/.test(q) ||
-    /\bwhole\s+argument\b/.test(q)
+    /\b(petitioner|respondent)\s+(argument|notes?|outline|structure|case|side)\b/.test(q) ||
+    /\bfor\s+(petitioner|respondent)\b/.test(q) ||
+    /\bwhole\s+argument\b/.test(q) ||
+    Boolean(inferAdvocacySideFromQuery(prompt))
   )
 }

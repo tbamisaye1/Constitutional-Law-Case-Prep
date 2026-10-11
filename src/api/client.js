@@ -115,6 +115,12 @@ export async function chatPrep(
         return row;
       });
   }
+  const side = String(options?.side || "")
+    .trim()
+    .toLowerCase();
+  if (side === "petitioner" || side === "respondent") {
+    body.side = side;
+  }
 
   const res = await fetch(`${BASE}/chat`, {
     method: "POST",

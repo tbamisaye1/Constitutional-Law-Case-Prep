@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   argumentChunksForAskAi,
   flattenArgumentNotes,
+  inferAdvocacySideFromQuery,
   joinArgumentOutlineBlocks,
   notePreview,
   queryWantsArgumentNotes,
@@ -65,7 +66,25 @@ describe('argumentNotes', () => {
   it('detects argument note intent', () => {
     expect(queryWantsArgumentNotes('look at my argument notes on Youngstown')).toBe(true)
     expect(queryWantsArgumentNotes('first arg section notes')).toBe(true)
+    expect(queryWantsArgumentNotes('evaluate my arguments for respondent')).toBe(true)
     expect(queryWantsArgumentNotes('define AUMF from the article')).toBe(false)
+  })
+
+  it('infers advocacy side from the prompt', () => {
+    expect(inferAdvocacySideFromQuery('evaluate my arguments for respondent')).toBe(
+      'respondent'
+    )
+    expect(inferAdvocacySideFromQuery('fill petitioner outline holes')).toBe('petitioner')
+    expect(inferAdvocacySideFromQuery('what is Youngstown')).toBe(null)
+  })
+
+  it('prefers respondent chunks when preferredSide is set', () => {
+    const hits = searchArgumentNotes('Youngstown detention', BOARD, {
+      preferredSide: 'respondent',
+      limit: 4,
+    })
+    expect(hits.length).toBeGreaterThan(0)
+    expect(hits.every((h) => h.side === 'respondent')).toBe(true)
   })
 
   it('builds a plain-text note preview for the scratch jump list', () => {

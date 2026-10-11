@@ -16,7 +16,11 @@ import {
 } from './askAiMemory'
 import { prepNotesForAskAi } from '../lib/annotationSearch'
 import { queryWantsNotes } from '../lib/notebookSearch'
-import { queryWantsArgumentNotes } from '../lib/argumentNotes'
+import {
+  inferAdvocacySideFromQuery,
+  normalizeAdvocacySide,
+  queryWantsArgumentNotes,
+} from '../lib/argumentNotes'
 import { expandInstantCaseQuery, queryMentionsInstantCase } from '../data/caseAtBar'
 import { getCaseLibraryStore, useCaseLibrary } from '../hooks/useCaseLibrary'
 import { WORKSPACE_DOCS } from '../lib/workspaceDocs'
@@ -258,6 +262,15 @@ export function AiUiProvider({ children }) {
         wantsArgumentNotes
       if (wantsNotes && !includeNotes) setIncludeNotes(true)
 
+      // Arguments tab / side toggle wins; otherwise infer from "for respondent" etc.
+      const toggleSide = normalizeAdvocacySide(ctx.side)
+      const inferredSide = inferAdvocacySideFromQuery(user_prompt)
+      const advocacySide =
+        toggleSide !== 'both' ? toggleSide : inferredSide || 'both'
+      if (advocacySide !== 'both' && advocacySide !== ctx.side) {
+        setCtx((c) => ({ ...c, side: advocacySide }))
+      }
+
       // "Instant case" → Bronner record aliases for local note/annotation search.
       const notesQuery = expandInstantCaseQuery(user_prompt)
 
@@ -278,6 +291,7 @@ export function AiUiProvider({ children }) {
           notesByCase: store.notesByCase || lib.notesByCase || {},
           noteTabs: store.noteTabs || lib.noteTabs || [],
           argumentsBoard,
+          preferredSide: advocacySide,
           totalLimit: 10,
         })
       }
@@ -307,6 +321,7 @@ export function AiUiProvider({ children }) {
             history: historyForApi,
             notes,
             model_tier: modelTier,
+            side: advocacySide,
           }
         )
         const status = groundingStatusFromReply(data.grounding_status, data.reply)
@@ -371,6 +386,7 @@ export function AiUiProvider({ children }) {
       ctx.selection,
       ctx.source_file,
       ctx.page,
+      ctx.side,
       prompt,
       groundingSource,
       includeNotes,

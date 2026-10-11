@@ -178,7 +178,10 @@ export function AiSelectionBubble() {
   const hasSelection = Boolean(ctx.selection?.trim())
   const sourceFile = (ctx.source_file || '').trim()
   const readingArticle = Boolean(sourceFile) || ctx.surface === 'pdf'
-  const showSideToggles = hasSelection && !readingArticle
+  // Always show the side toggle for free-form Ask AI (Arguments evaluation).
+  // Hide only when reading a named PDF article, where the question is usually
+  // "explain this passage" rather than advocacy drafting.
+  const showSideToggles = !readingArticle
   const showSamples = !hasSelection && !loading && !reply
   const sampleGroups = webPlus ? WEB_SAMPLE_PROMPT_GROUPS : SAMPLE_PROMPT_GROUPS
   const quickActions = webPlus ? WEB_SELECTION_QUICK : SELECTION_QUICK
@@ -701,22 +704,29 @@ export function AiSelectionBubble() {
             </div>
           </div>
         ) : null}
+        {showSideToggles ? (
+          <div className="ai-side-row" role="group" aria-label="Advocacy side">
+            {['both', 'petitioner', 'respondent'].map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={ctx.side === s ? 'on' : ''}
+                onClick={() => setCtx((c) => ({ ...c, side: s }))}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {showSideToggles ? (
+          <p className="ai-notes-toggle-hint" style={{ marginTop: -4, marginBottom: 8 }}>
+            Locks Ask AI onto that side when evaluating or filling Arguments. On Arguments, this
+            follows the Petitioner / Respondent tab.
+          </p>
+        ) : null}
+
         {hasSelection ? (
           <>
-            {showSideToggles ? (
-              <div className="ai-side-row" role="group" aria-label="Side">
-                {['both', 'petitioner', 'respondent'].map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    className={ctx.side === s ? 'on' : ''}
-                    onClick={() => setCtx((c) => ({ ...c, side: s }))}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            ) : null}
             {readingArticle ? (
               <p className="ai-bubble-source mono">
                 From {sourceFile || 'this PDF'}

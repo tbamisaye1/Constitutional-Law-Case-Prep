@@ -16,6 +16,7 @@ import { SyncBanner } from '../components/SyncBanner'
 import { useArguments } from '../hooks/useArguments'
 import { notePreview } from '../lib/argumentNotes'
 import { ArgumentPageView } from '../components/arguments/ArgumentPageView'
+import { useAiUi } from '../ai/AiUiContext'
 import '../styles/args-page.css'
 
 function supportsFieldSizing() {
@@ -135,9 +136,20 @@ function readScratchOpen() {
  */
 export function ArgumentsPage() {
   const args = useArguments()
+  const { setCtx } = useAiUi()
   const [expanded, setExpanded] = useState(readExpanded)
   const [scratchOpen, setScratchOpen] = useState(readScratchOpen)
   const [view, setView] = useState(readView)
+
+  // Keep Ask AI on the same advocacy side as the Arguments tab.
+  useEffect(() => {
+    if (args.side !== 'petitioner' && args.side !== 'respondent') return
+    setCtx((c) =>
+      c.side === args.side && c.surface === 'arguments'
+        ? c
+        : { ...c, side: args.side, surface: 'arguments' }
+    )
+  }, [args.side, setCtx])
 
   useEffect(() => {
     try {
