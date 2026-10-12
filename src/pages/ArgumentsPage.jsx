@@ -16,6 +16,7 @@ import { SyncBanner } from '../components/SyncBanner'
 import { useArguments } from '../hooks/useArguments'
 import { notePreview } from '../lib/argumentNotes'
 import { ArgumentPageView } from '../components/arguments/ArgumentPageView'
+import { PracticeLog } from '../components/arguments/PracticeLog'
 import { useAiUi } from '../ai/AiUiContext'
 import '../styles/args-page.css'
 
@@ -256,6 +257,17 @@ export function ArgumentsPage() {
       ) : null}
 
       {!expanded ? <SyncBanner /> : null}
+      {!expanded ? (
+        <PracticeLog
+          entries={args.practiceLog}
+          side={args.side}
+          canEdit
+          onAdd={args.addPracticeEntry}
+          onUpdate={args.updatePracticeEntry}
+          onRemove={args.removePracticeEntry}
+        />
+      ) : null}
+
 
       <UiTabs value={args.side} onValueChange={args.setSide}>
         <UiTabsList>

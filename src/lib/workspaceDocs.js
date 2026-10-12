@@ -110,6 +110,7 @@ export const WORKSPACE_DOCS = {
         id: DOC_ROW_ID,
         draftsBySide: board.draftsBySide,
         activeDraftBySide: board.activeDraftBySide,
+        practiceLog: board.practiceLog || [],
         removedOutlineIdsByDraft: removedOutlineIdsByDraft(board.draftsBySide),
         // activeSectionBySide / activeFocusBySide stay browser-local. Syncing
         // them made devices fight over which prong was open (jumping back to
@@ -153,6 +154,7 @@ export const WORKSPACE_DOCS = {
         ...remote,
         draftsBySide: merged.draftsBySide,
         activeDraftBySide: merged.activeDraftBySide,
+        practiceLog: merged.practiceLog,
         activeSectionBySide: local.activeSectionBySide,
         activeFocusBySide: local.activeFocusBySide,
       }
@@ -164,6 +166,7 @@ export const WORKSPACE_DOCS = {
         return {
           draftsBySide: n.draftsBySide,
           activeDraftBySide: n.activeDraftBySide,
+          practiceLog: n.practiceLog || [],
         }
       }
       return jsonSame(strip(a), strip(b))

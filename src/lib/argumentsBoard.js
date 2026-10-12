@@ -504,6 +504,7 @@ export function normalizeArgumentsBoard(saved) {
     draftsBySide,
     activeDraftBySide,
     removedOutlineIdsByDraft: removedOutlineIdsByDraft(draftsBySide),
+    practiceLog: normalizePracticeLog(empty ? null : saved.practiceLog),
     activeSectionBySide: {
       petitioner: empty ? null : saved.activeSectionBySide?.petitioner || null,
       respondent: empty ? null : saved.activeSectionBySide?.respondent || null,
@@ -513,6 +514,25 @@ export function normalizeArgumentsBoard(saved) {
       respondent: normalizeFocus(empty ? null : saved.activeFocusBySide?.respondent),
     },
   }
+}
+
+/**
+ * Chronological log of oral-argument practice sessions and feedback.
+ * Stored on the Arguments board so it syncs with the rest of the prep.
+ */
+export function normalizePracticeLog(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((row) => row && typeof row === 'object' && typeof row.id === 'string' && row.id)
+    .map((row) => ({
+      id: row.id,
+      at: Number(row.at) || Date.now(),
+      side: row.side === 'respondent' ? 'respondent' : 'petitioner',
+      argued: typeof row.argued === 'string' ? row.argued : '',
+      feedback: typeof row.feedback === 'string' ? row.feedback : '',
+      from: typeof row.from === 'string' ? row.from : '',
+    }))
+    .sort((a, b) => (b.at || 0) - (a.at || 0))
 }
 
 /**

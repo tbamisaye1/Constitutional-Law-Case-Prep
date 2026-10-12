@@ -568,3 +568,188 @@
   min-height: 0;
   padding: 4px 14px 10px;
 }
+
+.args-practice-log {
+  margin: 0 0 14px;
+  border: 1px solid var(--rule-soft);
+  background: var(--paper-2);
+  border-radius: 2px;
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+
+.args-practice-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.args-practice-log-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.args-practice-log-head p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
+  font-family: var(--font-body);
+}
+
+.args-practice-count {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--rule-soft);
+  background: var(--paper-3);
+  color: var(--ink-2);
+  font-size: 11px;
+}
+
+.args-practice-log-body {
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.args-practice-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 14px;
+  padding: 14px;
+  border: 1px solid var(--rule-soft);
+  background: var(--paper-3);
+}
+
+.args-practice-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.args-practice-form label.span-2 {
+  grid-column: 1 / -1;
+}
+
+.args-practice-form input,
+.args-practice-form select,
+.args-practice-form textarea {
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--ink);
+  border: 1px solid var(--rule-soft);
+  background: var(--paper);
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.args-practice-form input:focus,
+.args-practice-form select:focus,
+.args-practice-form textarea:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold-soft);
+}
+
+.args-practice-form textarea {
+  min-height: 72px;
+  line-height: 1.45;
+}
+
+.args-practice-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.args-practice-form.is-inline-edit {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.args-practice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.args-practice-item {
+  border: 1px solid var(--rule-soft);
+  background: var(--paper-3);
+  padding: 12px 14px;
+}
+
+.args-practice-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.args-practice-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.args-practice-item-meta {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+
+.args-practice-block + .args-practice-block {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.args-practice-block h3 {
+  margin: 0 0 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.args-practice-block.is-feedback h3 {
+  color: var(--four);
+}
+
+.args-practice-block p {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: var(--ink);
+}
+
+.args-practice-empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-3);
+  font-family: var(--font-body);
+}
+
+/* Conflict review -------------------------------------------------------- */

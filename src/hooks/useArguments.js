@@ -8,6 +8,7 @@ import {
   moveArrayItem,
   normalizeArgumentsBoard,
   normalizeFocus,
+  normalizePracticeLog,
   normalizeSections,
   newId,
   rememberRemovedOutlineIds,
@@ -43,6 +44,7 @@ export function useArguments() {
   const [side, setSide] = useState('petitioner')
   const [draftsBySide, setDraftsBySide] = useState(initial.draftsBySide)
   const [activeDraftBySide, setActiveDraftBySide] = useState(initial.activeDraftBySide)
+  const [practiceLog, setPracticeLog] = useState(() => normalizePracticeLog(initial.practiceLog))
   const [activeSectionBySide, setActiveSectionBySide] = useState(initial.activeSectionBySide)
   const [activeFocusBySide, setActiveFocusBySide] = useState(initial.activeFocusBySide)
   const skipFirstWrite = useRef(true)
@@ -117,6 +119,7 @@ export function useArguments() {
     next = {
       draftsBySide,
       activeDraftBySide,
+      practiceLog,
       activeSectionBySide,
       activeFocusBySide,
     }
@@ -144,7 +147,7 @@ export function useArguments() {
       return
     }
     persistContent()
-  }, [draftsBySide, activeDraftBySide])
+  }, [draftsBySide, activeDraftBySide, practiceLog])
 
   useEffect(() => {
     if (skipFirstWrite.current) return
@@ -159,13 +162,14 @@ export function useArguments() {
           {
             draftsBySide,
             activeDraftBySide,
+            practiceLog,
             activeSectionBySide,
             activeFocusBySide,
           },
           { immediate: true }
         )
       ),
-    [draftsBySide, activeDraftBySide, activeSectionBySide, activeFocusBySide]
+    [draftsBySide, activeDraftBySide, practiceLog, activeSectionBySide, activeFocusBySide]
   )
 
   useEffect(() => {
@@ -176,6 +180,7 @@ export function useArguments() {
       applyingRemote.current = true
       setDraftsBySide(normalized.draftsBySide)
       setActiveDraftBySide(normalized.activeDraftBySide)
+      setPracticeLog(normalizePracticeLog(normalized.practiceLog))
       // Keep outline focus local. Sync was re-applying an older activeFocus
       // (e.g. prong 3.2) on every pull and yanking the editor back mid-click.
     }
@@ -618,6 +623,7 @@ export function useArguments() {
   const boardSnapshot = useMemo(
     () => ({
       draftsBySide,
+      practiceLog,
       outlines: {
         petitioner: draftsBySide.petitioner?.[0]?.sections || [],
         respondent: draftsBySide.respondent?.[0]?.sections || [],
@@ -627,8 +633,41 @@ export function useArguments() {
         respondent: draftsBySide.respondent?.[0]?.notes || '',
       },
     }),
-    [draftsBySide]
+    [draftsBySide, practiceLog]
   )
+
+  const addPracticeEntry = useCallback((entry) => {
+    const next = {
+      id: newId('practice'),
+      at: Date.now(),
+      side: entry?.side === 'respondent' ? 'respondent' : 'petitioner',
+      argued: typeof entry?.argued === 'string' ? entry.argued : '',
+      feedback: typeof entry?.feedback === 'string' ? entry.feedback : '',
+      from: typeof entry?.from === 'string' ? entry.from : '',
+    }
+    setPracticeLog((prev) => [next, ...normalizePracticeLog(prev)])
+  }, [])
+
+  const updatePracticeEntry = useCallback((entryId, patch) => {
+    if (!entryId) return
+    setPracticeLog((prev) =>
+      normalizePracticeLog(prev).map((row) => {
+        if (row.id !== entryId) return row
+        const next = { ...row, at: Date.now() }
+        if (patch && typeof patch === 'object') {
+          if (patch.side === 'respondent' || patch.side === 'petitioner') next.side = patch.side
+          if (typeof patch.argued === 'string') next.argued = patch.argued
+          if (typeof patch.feedback === 'string') next.feedback = patch.feedback
+          if (typeof patch.from === 'string') next.from = patch.from
+        }
+        return next
+      })
+    )
+  }, [])
+
+  const removePracticeEntry = useCallback((entryId) => {
+    setPracticeLog((prev) => normalizePracticeLog(prev).filter((row) => row.id !== entryId))
+  }, [])
 
   return {
     side,
@@ -669,6 +708,10 @@ export function useArguments() {
     appendPieceScratch,
     notesHtml: focusedNotesHtml,
     setNotesForSide: setFocusedNotes,
+    practiceLog,
+    addPracticeEntry,
+    updatePracticeEntry,
+    removePracticeEntry,
     boardSnapshot,
   }
 }

@@ -18,9 +18,27 @@
  * Pure functions over plain objects. No React, no storage.
  */
 
+import { normalizePracticeLog } from './argumentsBoard'
 import { mergePieceScratch } from './pieceScratch'
 
 const SIDES = ['petitioner', 'respondent']
+
+/**
+ * Union practice-log entries by id. Newer `at` wins when the same id appears
+ * on both sides; entries only one side has are kept.
+ */
+export function mergePracticeLogs(base, local, remote) {
+  const byId = new Map()
+  for (const entry of [
+    ...normalizePracticeLog(base),
+    ...normalizePracticeLog(remote),
+    ...normalizePracticeLog(local),
+  ]) {
+    const prev = byId.get(entry.id)
+    if (!prev || (entry.at || 0) >= (prev.at || 0)) byId.set(entry.id, entry)
+  }
+  return [...byId.values()].sort((a, b) => (b.at || 0) - (a.at || 0))
+}
 
 /** Fields merged as plain values on each level. */
 const DRAFT_FIELDS = ['name', 'notes', 'scratch']
@@ -330,7 +348,12 @@ export function mergeArgumentsBoards(base, local, remote, { now = Date.now() } =
       : draftsBySide[side][0]?.id ?? null
   }
   return {
-    board: { ...remote, draftsBySide, activeDraftBySide },
+    board: {
+      ...remote,
+      draftsBySide,
+      activeDraftBySide,
+      practiceLog: mergePracticeLogs(base?.practiceLog, local?.practiceLog, remote?.practiceLog),
+    },
     conflicts,
   }
 }
@@ -340,6 +363,7 @@ export function boardContent(board) {
   return {
     draftsBySide: board?.draftsBySide || { petitioner: [], respondent: [] },
     activeDraftBySide: board?.activeDraftBySide || {},
+    practiceLog: normalizePracticeLog(board?.practiceLog),
   }
 }
 
