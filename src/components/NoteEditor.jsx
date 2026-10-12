@@ -34,7 +34,12 @@ import {
   applyFontSizeToSelection,
   currentFontSize,
 } from '../lib/noteFontSize'
-import { editorFlushSuppressed, hasUnsentEdits } from '../lib/editorFlush'
+import {
+  FLUSH_EDITORS_EVENT,
+  editorFlushSuppressed,
+  flushEditorDecision,
+  isBlankNoteHtml,
+} from '../lib/editorFlush'
 
 /**
  * Extensions every note surface shares (Arguments page, scratch, case notes).
@@ -176,13 +181,10 @@ export function NoteEditor({ html, onChange, editable = true, placeholder, lean 
       if (!skipping.current && !editor.isDestroyed && !editorFlushSuppressed()) {
         try {
           const nextHtml = editor.getHTML()
-          if (!hasUnsentEdits(nextHtml, lastSent.current, latestHtml.current)) return
-          const plain = nextHtml
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/&nbsp;/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim()
-          if (plain.length > 0) onChangeRef.current?.(nextHtml)
+          const decision = flushEditorDecision(nextHtml, lastSent.current, latestHtml.current)
+          if (decision !== 'push' || isBlankNoteHtml(nextHtml)) return
+          lastSent.current = nextHtml
+          onChangeRef.current?.(nextHtml)
         } catch {
           /* ignore */
         }
@@ -196,13 +198,17 @@ export function NoteEditor({ html, onChange, editable = true, placeholder, lean 
     const flush = () => {
       if (skipping.current || editor.isDestroyed || editorFlushSuppressed()) return
       const current = editor.getHTML()
-      if (hasUnsentEdits(current, lastSent.current, latestHtml.current)) {
+      const decision = flushEditorDecision(current, lastSent.current, latestHtml.current)
+      if (decision === 'push') {
         lastSent.current = current
         onChangeRef.current?.(current)
         return
       }
-      // Nothing unsent: if a newer version arrived while focused, show it now.
-      applyIncoming(editor, latestHtml.current, skipping)
+      if (decision === 'apply') {
+        // Newer parent arrived while focused (sync / another tab). Show it now.
+        applyIncoming(editor, latestHtml.current, skipping)
+      }
+      // 'noop': parent prop is still catching up — keep what is on screen.
     }
     const dom = editor.view.dom
     dom.addEventListener('blur', flush)
@@ -211,10 +217,12 @@ export function NoteEditor({ html, onChange, editable = true, placeholder, lean 
     }
     document.addEventListener('visibilitychange', onHide)
     window.addEventListener('pagehide', flush)
+    window.addEventListener(FLUSH_EDITORS_EVENT, flush)
     return () => {
       dom.removeEventListener('blur', flush)
       document.removeEventListener('visibilitychange', onHide)
       window.removeEventListener('pagehide', flush)
+      window.removeEventListener(FLUSH_EDITORS_EVENT, flush)
     }
   }, [editor])
 
