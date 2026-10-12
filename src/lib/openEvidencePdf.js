@@ -117,6 +117,41 @@ export function isBootstrapOyezSource(source) {
   return /\(Oyez summary\)\s*$/i.test(String(source || ''))
 }
 
+/** Strip the "(Oyez summary)" suffix for matching against real case / file names. */
+export function stripOyezSummaryLabel(source) {
+  return String(source || '')
+    .replace(/\s*\(Oyez summary\)\s*$/i, '')
+    .trim()
+}
+
+/**
+ * When Ask AI cites a bootstrap Oyez row, prefer a PDF already attached to that
+ * case card (Milligan / Youngstown / etc.) instead of nagging to re-attach.
+ *
+ * @returns {{ file: object, score: number, caseItem: object } | null}
+ */
+export function findAttachedPdfForOyezSource(filesMeta, cases, source) {
+  if (!isBootstrapOyezSource(source)) return null
+  const caseMatch = findCaseForSource(cases, stripOyezSummaryLabel(source) || source)
+  if (!caseMatch) return null
+  const caseId = caseMatch.caseItem.id
+  const attached = (filesMeta || []).filter((f) => f && f.caseId === caseId)
+  if (!attached.length) return null
+
+  const labels = [
+    stripOyezSummaryLabel(source),
+    caseMatch.caseItem.name,
+    caseMatch.caseItem.suggestedFile,
+  ].filter(Boolean)
+
+  let best = null
+  for (const file of attached) {
+    const score = Math.max(...labels.map((label) => scoreNameMatch(label, file.name)), 1)
+    if (!best || score > best.score) best = { file, score, caseItem: caseMatch.caseItem }
+  }
+  return best
+}
+
 /**
  * Open an Ask AI corpus evidence hit in the PDF viewer at page + quote.
  *
@@ -136,6 +171,28 @@ export async function openEvidencePdf({ evidence, lib, navigate, downloadIngestF
   const quote = (evidence.preview || evidence.text || '').trim()
 
   if (isBootstrapOyezSource(source)) {
+    // Case library already has the opinion PDF — open that instead of the
+    // "attach from YUMC" alert. Ask AI may still have cited the seeded Oyez
+    // text because that row is always in FAISS.
+    const attached = findAttachedPdfForOyezSource(lib.filesMeta, lib.cases, source)
+    if (attached?.file) {
+      const file = attached.file
+      if (!lib.blobs[file.id] && downloadIngestFile) {
+        try {
+          const blob = await downloadIngestFile(file.name || source)
+          await lib.attachBlob?.(file.caseId, file.name || source, blob)
+        } catch {
+          // Still navigate; empty state will ask the user to re-attach.
+        }
+      }
+      lib.setActiveFileId(file.id)
+      // Oyez rows have no real PDF page — jump to p.1 and let quote search run.
+      lib.setPage(file.id, 1)
+      const path = pathForLibraryFile(file, { page: 1, quote })
+      navigate(path)
+      return { ok: true, path }
+    }
+
     const caseMatch = findCaseForSource(lib.cases, source)
     if (caseMatch) {
       const path = `/library${buildSearch({

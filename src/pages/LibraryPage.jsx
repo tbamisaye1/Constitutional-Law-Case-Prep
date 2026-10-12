@@ -117,6 +117,16 @@ export function LibraryPage() {
 
   useEffect(() => {
     if (!missing || !selected?.id) return
+    // Ask AI cited the seeded Oyez row, but this case already has a PDF.
+    // Clear the nag and keep the attached opinion open.
+    if (isBootstrapOyezSource(missing) && caseFiles.length > 0) {
+      setPullError('')
+      const next = new URLSearchParams(params)
+      next.delete('missing')
+      if (!next.get('file') && activeId) next.set('file', activeId)
+      setParams(next, { replace: true })
+      return
+    }
     if (isBootstrapOyezSource(missing)) {
       setPullError(
         `Ask AI used a short Oyez summary here, not a PDF. Attach ${selected.suggestedFile || 'the opinion'} from YUMC/Year 2/Cases.`

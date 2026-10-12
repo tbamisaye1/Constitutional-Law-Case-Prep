@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  findAttachedPdfForOyezSource,
   findCaseForSource,
   findFileBySourceName,
   isBootstrapOyezSource,
   normalizePdfName,
   pathForLibraryFile,
   scoreNameMatch,
+  stripOyezSummaryLabel,
 } from './openEvidencePdf'
 
 describe('openEvidencePdf matching', () => {
@@ -18,6 +20,29 @@ describe('openEvidencePdf matching', () => {
       true
     )
     expect(isBootstrapOyezSource('Youngstown Sheet & Tube Co. v. Sawyer.pdf')).toBe(false)
+    expect(stripOyezSummaryLabel('Ex parte Milligan (Oyez summary)')).toBe('Ex parte Milligan')
+  })
+
+  it('opens an already-attached Milligan PDF when Ask AI cites the Oyez summary', () => {
+    const hit = findAttachedPdfForOyezSource(
+      [
+        {
+          id: 'pdf-milligan',
+          caseId: 'milligan',
+          name: 'Ex parte Milligan, 71 U.S. (4 Wall.) 2 (1866).pdf',
+        },
+      ],
+      [
+        {
+          id: 'milligan',
+          name: 'Ex parte Milligan',
+          suggestedFile: 'Ex parte Milligan.pdf',
+          cite: '71 U.S. 2 (1866)',
+        },
+      ],
+      'Ex parte Milligan (Oyez summary)'
+    )
+    expect(hit?.file.id).toBe('pdf-milligan')
   })
 
   it('matches Keith upload name to suggested library file', () => {
