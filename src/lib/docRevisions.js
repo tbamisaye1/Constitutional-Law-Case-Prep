@@ -5,10 +5,11 @@
  * localStorage so a wiped Arguments prong can be recovered without Neon PITR.
  */
 
-import { readJson, writeJson } from './persist'
+import { readJson, writeJsonResilient } from './persist'
 
 export const DOC_REVISIONS_KEY = 'case-prep-doc-revisions-v1'
-export const DOC_REVISIONS_KEEP = 20
+/** Full Arguments boards are large; keep a short rolling window only. */
+export const DOC_REVISIONS_KEEP = 5
 
 /**
  * Typing used to snapshot the full Arguments board on every keystroke (large
@@ -71,7 +72,7 @@ export function snapshotDocRevision(kind, data, reason = 'save') {
     serialized,
   }
   byKind[kind] = [entry, ...prev].slice(0, DOC_REVISIONS_KEEP)
-  writeJson(DOC_REVISIONS_KEY, { byKind })
+  writeJsonResilient(DOC_REVISIONS_KEY, { byKind })
   if (why === 'save') lastSaveSnapshotAt[kind] = entry.at
   return true
 }

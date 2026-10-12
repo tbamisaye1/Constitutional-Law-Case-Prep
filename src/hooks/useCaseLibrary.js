@@ -20,7 +20,7 @@ import {
   uploadDocumentDirect,
 } from '../api/client'
 import { idbDeleteFile, idbGetFile, idbPutFile } from '../lib/fileStore'
-import { onPageHide, readJson, writeJson } from '../lib/persist'
+import { onPageHide, readJson, writeJson, writeJsonResilient } from '../lib/persist'
 import {
   applyChanges,
   clearAccepted,
@@ -370,8 +370,26 @@ function getSnapshot() {
   return memory
 }
 
+/**
+ * Workspace docs already live on their own localStorage keys. Storing full
+ * Arguments / notebook copies again inside the library blob is what fills the
+ * ~5MB quota. Memory + Postgres still hold the live rows.
+ */
+function libraryCachePayload(store) {
+  return {
+    ...store,
+    notebook: [],
+    argumentsBoard: [],
+    guideEdits: [],
+    factsBoard: [],
+    openings: [],
+  }
+}
+
 function persistNow() {
-  const result = writeJson(KEY, memory.store)
+  // Slim write + auto-evict old local backups on QuotaExceeded. Postgres remains
+  // the source of truth; the user should not have to delete PDFs by hand.
+  const result = writeJsonResilient(KEY, libraryCachePayload(memory.store))
   if (result.ok) {
     memory = { ...memory, saveError: '', lastSavedAt: Date.now() }
   } else {
@@ -379,7 +397,7 @@ function persistNow() {
     memory = {
       ...memory,
       saveError: quota
-        ? 'Browser storage is full. Notes did not save. Remove a PDF or extra notes and try again.'
+        ? 'This browser could not refresh its local cache (storage full). Force save still pushes to the workspace database — do that, then hard-refresh once sync finishes.'
         : 'Could not save to this browser. Check you are not in private mode with storage blocked.',
     }
   }
@@ -1172,7 +1190,7 @@ async function indexFileForAskAi(meta, blob, options = {}) {
       saveError: `${meta.name} is readable, but Ask AI could not index it yet. ${detail}`.trim(),
     }
     emit()
-    writeJson(KEY, nextStore)
+    writeJsonResilient(KEY, libraryCachePayload(nextStore))
   } finally {
     askAiIndexingIds.delete(meta.id)
   }

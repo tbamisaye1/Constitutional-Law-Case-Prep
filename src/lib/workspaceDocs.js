@@ -6,7 +6,7 @@
  * View state like active PDF page stays local so two devices do not fight.
  */
 
-import { readJson, writeJson } from './persist'
+import { readJson, writeJson, writeJsonResilient } from './persist'
 import { SEED_FACTS } from '../data/factsSeed'
 import { normalizeArgumentsBoard, removedOutlineIdsByDraft } from './argumentsBoard'
 import { boardContent, mergeArgumentsBoards } from './argumentsMerge'
@@ -30,7 +30,7 @@ export const ARGUMENTS_BASE_KEY = 'case-prep-arguments-base-v1'
 
 export function rememberArgumentsBase(row) {
   if (!row || (!row.draftsBySide && !row.outlines)) return
-  writeJson(ARGUMENTS_BASE_KEY, boardContent(normalizeArgumentsBoard(row)))
+  writeJsonResilient(ARGUMENTS_BASE_KEY, boardContent(normalizeArgumentsBoard(row)))
 }
 
 export function readArgumentsBase() {
@@ -281,7 +281,8 @@ function writeWorkspaceDocLocal(kind, data) {
   if (!spec) return
   const payload = payloadForKind(kind, data)
   snapshotDocRevision(kind, spec.loadLocal(), 'save')
-  writeJson(spec.storageKey, payload)
+  // Still publish to Postgres even if this browser cache write fails after retry.
+  writeJsonResilient(spec.storageKey, payload)
 }
 
 function writeWorkspaceDocNow(kind, data, { sync = true } = {}) {
@@ -396,7 +397,7 @@ export function hydrateWorkspaceDocFromRemote(kind, row, { forceRemote = false }
     snapshotDocRevision(kind, local, 'hydrate')
     const payload =
       kind === 'guide_edits' ? data.edits : kind === 'facts' ? data.facts : data
-    writeJson(spec.storageKey, payload)
+    writeJsonResilient(spec.storageKey, payload)
   }
   try {
     window.dispatchEvent(new CustomEvent(spec.event, { detail: data }))
