@@ -11,7 +11,9 @@ import {
   WEB_SAMPLE_PROMPT_GROUPS,
   SELECTION_QUICK,
   WEB_SELECTION_QUICK,
+  extractCitedEvidenceIds,
   formatReplyForDisplay,
+  orderEvidenceForDisplay,
 } from '../../ai/samplePrompts'
 
 const EXPAND_KEY = 'case-prep-ask-ai-expanded'
@@ -438,11 +440,59 @@ export function AiSelectionBubble() {
 
   if (!open) return null
 
-  const noteEvidence = (reply?.evidence || []).filter(isNotebookEvidence)
-  const corpusEvidence = (reply?.evidence || []).filter(
+  const citedIds = extractCitedEvidenceIds(reply?.text || '')
+  const citedSet = new Set(citedIds)
+  const allEvidence = orderEvidenceForDisplay(reply?.evidence || [], citedIds)
+  const noteEvidence = allEvidence.filter(isNotebookEvidence)
+  const corpusEvidence = allEvidence.filter(
     (ev) => ev.source_type !== 'web' && !isNotebookEvidence(ev)
   )
-  const webEvidence = (reply?.evidence || []).filter((ev) => ev.source_type === 'web')
+  const webEvidence = allEvidence.filter((ev) => ev.source_type === 'web')
+  const evidenceById = new Map(
+    allEvidence.map((ev) => [String(ev.id || '').toLowerCase(), ev])
+  )
+  const missingCiteIds = citedIds.filter((id) => !evidenceById.has(id))
+
+  /** Show every cited card, plus a few extras (old UI capped at 4 and hid ev-8+). */
+  function takeEvidenceCards(list, extras = 4) {
+    const cited = list.filter((ev) => citedSet.has(String(ev.id || '').toLowerCase()))
+    const rest = list.filter((ev) => !citedSet.has(String(ev.id || '').toLowerCase()))
+    return [...cited, ...rest.slice(0, extras)]
+  }
+  const noteCards = takeEvidenceCards(noteEvidence, 5)
+  const corpusCards = takeEvidenceCards(corpusEvidence, 6)
+  const webCards = takeEvidenceCards(webEvidence, 4)
+
+  function renderReplyWithCites(text) {
+    const body = formatReplyForDisplay(text)
+    if (!body) return null
+    const parts = body.split(/(\[ev-\d+\])/gi)
+    return parts.map((part, i) => {
+      const match = part.match(/^\[(ev-\d+)\]$/i)
+      if (!match) return <span key={`t-${i}`}>{part}</span>
+      const id = match[1].toLowerCase()
+      const ev = evidenceById.get(id)
+      if (!ev) {
+        return (
+          <span key={`c-${i}`} className="ai-cite-missing" title="No retrieved passage for this cite">
+            [{match[1]}]
+          </span>
+        )
+      }
+      return (
+        <button
+          key={`c-${i}`}
+          type="button"
+          className="ai-cite-chip"
+          title={`Open ${ev.source}${ev.page != null ? ` p.${ev.page}` : ''}`}
+          disabled={Boolean(openingId)}
+          onClick={() => onOpenEvidence(ev)}
+        >
+          [{match[1]}]
+        </button>
+      )
+    })
+  }
 
   const className = [
     'ai-bubble',
@@ -816,17 +866,30 @@ export function AiSelectionBubble() {
             {prompt ? <p className="ai-bubble-asked">Q: {prompt}</p> : null}
             {reply.grounding_notes ? <p className="ai-bubble-notes">{reply.grounding_notes}</p> : null}
 
-            {noteEvidence.length ? (
+            {missingCiteIds.length ? (
+              <p className="ai-ev-error">
+                This answer cites {missingCiteIds.map((id) => `[${id}]`).join(', ')}, but those
+                passages are not in the retrieved list (model inventing cite numbers). Prefer
+                claims that match a card below.
+              </p>
+            ) : null}
+
+            {noteCards.length ? (
               <div className="ai-bubble-evidence ai-bubble-evidence-first">
                 <div className="ai-sample-label mono">From your notes & annotations</div>
                 <p className="ai-ev-hint mono">
-                  Click to open the notebook page or the PDF annotation in the library.
+                  Click a card or an [ev-N] chip in the answer to open the notebook page or PDF
+                  annotation.
                 </p>
-                {noteEvidence.slice(0, 5).map((ev) => (
+                {noteCards.map((ev) => (
                   <button
                     key={ev.id}
                     type="button"
-                    className="ai-ev-card"
+                    className={
+                      citedSet.has(String(ev.id || '').toLowerCase())
+                        ? 'ai-ev-card ai-ev-card-cited'
+                        : 'ai-ev-card'
+                    }
                     onClick={() => onOpenEvidence(ev)}
                     disabled={!ev.notes_path}
                   >
@@ -846,25 +909,29 @@ export function AiSelectionBubble() {
               </div>
             ) : null}
 
-            {corpusEvidence.length ? (
+            {corpusCards.length ? (
               <div
                 className={
-                  noteEvidence.length
+                  noteCards.length
                     ? 'ai-bubble-evidence'
                     : 'ai-bubble-evidence ai-bubble-evidence-first'
                 }
               >
                 <div className="ai-sample-label mono">Retrieved from Ask AI corpus</div>
                 <p className="ai-ev-hint mono">
-                  Click a PDF cite to open it. Oyez summaries are text-only until you attach the
-                  opinion.
+                  Cited [ev-N] chips open the matching passage. Oyez summaries are text-only until
+                  you attach the opinion.
                 </p>
                 {openError ? <p className="ai-ev-error">{openError}</p> : null}
-                {corpusEvidence.slice(0, 4).map((ev) => (
+                {corpusCards.map((ev) => (
                   <button
                     key={ev.id}
                     type="button"
-                    className="ai-ev-card"
+                    className={
+                      citedSet.has(String(ev.id || '').toLowerCase())
+                        ? 'ai-ev-card ai-ev-card-cited'
+                        : 'ai-ev-card'
+                    }
                     disabled={Boolean(openingId)}
                     onClick={() => onOpenEvidence(ev)}
                   >
@@ -881,11 +948,18 @@ export function AiSelectionBubble() {
               </div>
             ) : null}
 
-            {webEvidence.length ? (
+            {webCards.length ? (
               <div className="ai-bubble-evidence">
                 <div className="ai-sample-label mono">From the web</div>
-                {webEvidence.slice(0, 4).map((ev) => (
-                  <div key={ev.id} className="ai-ev-card ai-ev-card-static">
+                {webCards.map((ev) => (
+                  <div
+                    key={ev.id}
+                    className={
+                      citedSet.has(String(ev.id || '').toLowerCase())
+                        ? 'ai-ev-card ai-ev-card-static ai-ev-card-cited'
+                        : 'ai-ev-card ai-ev-card-static'
+                    }
+                  >
                     <div className="mono ai-ev-src">
                       [{ev.id}] {ev.source}
                     </div>
@@ -900,7 +974,7 @@ export function AiSelectionBubble() {
               </div>
             ) : null}
 
-            <pre className="ai-bubble-reply-text">{formatReplyForDisplay(reply.text)}</pre>
+            <div className="ai-bubble-reply-text">{renderReplyWithCites(reply.text)}</div>
           </div>
         ) : null}
       </div>

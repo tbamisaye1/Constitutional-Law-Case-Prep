@@ -105,3 +105,33 @@ export function formatReplyForDisplay(replyText) {
   text = text.replace(/\n*SOURCES:?\s*\n[\s\S]*$/i, '').trim()
   return text
 }
+
+/** Collect [ev-N] ids the model cited in the answer body. */
+export function extractCitedEvidenceIds(replyText) {
+  const ids = []
+  const seen = new Set()
+  const text = formatReplyForDisplay(replyText)
+  for (const match of text.matchAll(/\[(ev-\d+)\]/gi)) {
+    const id = String(match[1] || '').toLowerCase()
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    ids.push(id)
+  }
+  return ids
+}
+
+/**
+ * Put cited passages first so [ev-8] is not buried past a 4-card slice.
+ * @param {Array<{id?: string}>} evidence
+ * @param {string[]} citedIds
+ */
+export function orderEvidenceForDisplay(evidence, citedIds = []) {
+  const cited = new Set((citedIds || []).map((id) => String(id).toLowerCase()))
+  const list = Array.isArray(evidence) ? [...evidence] : []
+  if (!cited.size) return list
+  return list.sort((a, b) => {
+    const aCited = cited.has(String(a?.id || '').toLowerCase()) ? 0 : 1
+    const bCited = cited.has(String(b?.id || '').toLowerCase()) ? 0 : 1
+    return aCited - bCited
+  })
+}

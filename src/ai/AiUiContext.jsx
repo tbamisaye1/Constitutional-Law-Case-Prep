@@ -54,32 +54,49 @@ function evidenceFromClientNotes(notes) {
   })
 }
 
+/**
+ * Keep server [ev-N] ids (what the model cites). Enrich with local note deep
+ * links when the same chunk was also matched in this browser.
+ */
 function mergeEvidence(clientNotes, serverEvidence) {
   const fromNotes = evidenceFromClientNotes(clientNotes)
-  const seen = new Set(
-    fromNotes.map((e) => `${e.source_type}|${e.notes_path}|${e.preview}`)
+  const byPath = new Map(
+    fromNotes.filter((n) => n.notes_path).map((n) => [n.notes_path, n])
   )
-  const rest = []
+  const usedPaths = new Set()
+  const usedPreviews = new Set()
+  const merged = []
+
   for (const ev of serverEvidence || []) {
-    const key = `${ev.source_type}|${ev.notes_path || ''}|${ev.preview || ''}`
-    if (seen.has(key)) continue
-    // Prefer the local annotation card when the server echoed the same note.
-    if (
-      (ev.source_type === 'annotation' ||
-        ev.source_type === 'notebook' ||
-        ev.source_type === 'user_note') &&
-      fromNotes.some(
+    if (!ev) continue
+    const local =
+      (ev.notes_path && byPath.get(ev.notes_path)) ||
+      fromNotes.find(
         (n) =>
-          n.notes_path &&
-          ev.notes_path &&
-          n.notes_path === ev.notes_path
-      )
-    ) {
-      continue
-    }
-    rest.push(ev)
+          n.preview &&
+          ev.preview &&
+          n.preview === ev.preview &&
+          n.source_type === ev.source_type
+      ) ||
+      null
+    if (local?.notes_path) usedPaths.add(local.notes_path)
+    if (local?.preview) usedPreviews.add(local.preview)
+    if (ev.preview) usedPreviews.add(ev.preview)
+    merged.push({
+      ...ev,
+      id: ev.id || `ev-${merged.length}`,
+      notes_path: local?.notes_path || ev.notes_path || null,
+      preview: ev.preview || local?.preview || '',
+    })
   }
-  return [...fromNotes, ...rest]
+
+  // Local-only chunks the server never echoed (still useful to open).
+  for (const note of fromNotes) {
+    if (note.notes_path && usedPaths.has(note.notes_path)) continue
+    if (note.preview && usedPreviews.has(note.preview)) continue
+    merged.push(note)
+  }
+  return merged
 }
 
 /**
