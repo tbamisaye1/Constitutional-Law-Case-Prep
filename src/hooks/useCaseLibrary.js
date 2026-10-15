@@ -393,9 +393,14 @@ function publishWorkspaceDocToSync(kind, data) {
     [metaKey('library_records', spec.kind, DOC_ROW_ID)]
   )
   if (syncBootstrapDone) {
-    // Arguments: push immediately. A 900ms quiet period was enough for a
-    // hard refresh / tab close to destroy dirty before the first upload.
-    scheduleSync(kind === 'arguments' ? 0 : WORKSPACE_DOC_SYNC_MS)
+    // Arguments: push immediately, then ensure (forceOverwrite) if a stale
+    // base reject would otherwise leave the banner stuck.
+    if (kind === 'arguments') {
+      scheduleSync(0)
+      scheduleEnsureArgumentsSaved(WORKSPACE_DOC_SYNC_MS, 'publish')
+    } else {
+      scheduleSync(WORKSPACE_DOC_SYNC_MS)
+    }
   } else if (kind === 'arguments') {
     // Boot still running: keep the dirty flag (updateStore already set it).
     // The post-bootstrap drift check will schedule the push.
@@ -762,6 +767,57 @@ function argumentsNeedPush() {
   )
 }
 
+let ensureArgumentsInFlight = null
+let ensureArgumentsTimer = 0
+
+/**
+ * Keep trying until this browser's Arguments board is on Postgres.
+ *
+ * Normal stale-base rejects used to leave the red banner up forever. This
+ * path marks dirty, pushes with forceOverwrite, and retries a couple of times
+ * so the user does not have to click Force save.
+ */
+export function ensureArgumentsSaved(reason = 'ensure') {
+  if (ensureArgumentsInFlight) return ensureArgumentsInFlight
+  ensureArgumentsInFlight = (async () => {
+    if (memory.syncStatus === 'off' || !editorCanWrite()) {
+      return { ok: false, reason: memory.syncStatus === 'off' ? 'off' : 'readonly' }
+    }
+    if (!argumentsNeedPush()) return { ok: true, reason: 'already-synced' }
+    recordSyncDiagnostic('ensure_arguments_start', { reason })
+    markArgumentsDirtyIfLocalAhead()
+    await runSync({ forcePull: true, allowFollower: true })
+    if (!argumentsNeedPush()) {
+      recordSyncDiagnostic('ensure_arguments_ok', { reason, via: 'sync' })
+      return { ok: true, reason: 'sync' }
+    }
+    const first = await forceSaveArguments()
+    if (first.ok && !argumentsLocalAheadOfBase()) {
+      recordSyncDiagnostic('ensure_arguments_ok', { reason, via: 'force' })
+      return { ok: true, reason: 'force' }
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 400))
+    const second = await forceSaveArguments()
+    recordSyncDiagnostic(second.ok ? 'ensure_arguments_ok' : 'ensure_arguments_failed', {
+      reason,
+      via: 'force_retry',
+      result: second,
+    })
+    return second
+  })().finally(() => {
+    ensureArgumentsInFlight = null
+  })
+  return ensureArgumentsInFlight
+}
+
+/** Debounced ensure so typing does not fire three force-saves. */
+function scheduleEnsureArgumentsSaved(delayMs = 900, reason = 'schedule') {
+  window.clearTimeout(ensureArgumentsTimer)
+  ensureArgumentsTimer = window.setTimeout(() => {
+    void ensureArgumentsSaved(reason)
+  }, delayMs)
+}
+
 /** Push dirty rows and pull whatever else changed. */
 async function runSync({
   keepalive = false,
@@ -801,6 +857,13 @@ async function runSync({
   }
 
   const { changes, sent } = collectChanges(memory.store, memory.store.syncMeta)
+  // When Chrome is ahead, skip the stale-base reject loop. Last writer wins;
+  // server revision history still keeps the replaced board.
+  if (argumentsLocalAheadOfBase() || hasPendingArguments(memory.store.syncMeta)) {
+    changes.library_records = (changes.library_records || []).map((row) =>
+      row && row.kind === 'arguments' ? { ...row, forceOverwrite: true } : row
+    )
+  }
   // Without forcePull, a quiet tab never talks to Postgres. That is fine for
   // saving (this tab has nothing to push) and wrong for live windows: the
   // other browser already uploaded arguments. Heartbeat / visibility use
@@ -823,6 +886,17 @@ async function runSync({
   // its own push instead of waiting for the next edit to trigger one.
   if (ok && pendingCount(memory.store.syncMeta) > 0) {
     scheduleSync(SYNC_DEBOUNCE_MS, { forcePull: true })
+  }
+  // Still ahead after the exchange: resolve automatically (forceOverwrite).
+  // Skip if ensureArgumentsSaved is already driving the retry.
+  if (
+    ok &&
+    argumentsNeedPush() &&
+    editorCanWrite() &&
+    !keepalive &&
+    !ensureArgumentsInFlight
+  ) {
+    scheduleEnsureArgumentsSaved(300, 'after_sync')
   }
 }
 
@@ -1034,9 +1108,9 @@ async function bootstrapSync() {
         emit()
         persistSoon()
       }
-      scheduleSync(0, { forcePull: true })
+      void ensureArgumentsSaved('bootstrap_preserve')
     } else if (markArgumentsDirtyIfLocalAhead()) {
-      scheduleSync(0, { forcePull: true })
+      void ensureArgumentsSaved('bootstrap_ahead')
     }
   } finally {
     bootstrapInFlight = false
@@ -1486,11 +1560,11 @@ function startIdlePullHeartbeat() {
   heartbeatStarted = true
   window.setInterval(async () => {
     if (memory.syncStatus === 'off' || syncInFlight) return
-    // Arguments ahead: every tab (including followers) must push. A background
-    // leader alone used to freeze uploads while this tab showed the red banner.
+    // Arguments ahead: resolve (forceOverwrite), do not just hope a soft push
+    // clears the banner.
     if (argumentsNeedPush()) {
       window.clearTimeout(syncTimer)
-      void runSync({ forcePull: true, allowFollower: true })
+      void ensureArgumentsSaved('heartbeat')
       return
     }
     if (!isSyncLeader) return
@@ -1501,11 +1575,8 @@ function startIdlePullHeartbeat() {
   }, SYNC_HEARTBEAT_MS)
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      if (argumentsNeedPush()) {
-        void runSync({ forcePull: true, allowFollower: true })
-      } else {
-        requestFreshPull()
-      }
+      if (argumentsNeedPush()) void ensureArgumentsSaved('visible')
+      else requestFreshPull()
     }
   })
 }
@@ -1531,11 +1602,8 @@ function bootAsFollower() {
   void hydrateBlobs().then(() => uploadPendingServerFiles())
   startIdlePullHeartbeat()
   // Do not wait on a frozen leader to upload this tab's Arguments.
-  if (argumentsNeedPush()) {
-    void runSync({ forcePull: true, allowFollower: true })
-  } else {
-    requestFreshPull()
-  }
+  if (argumentsNeedPush()) void ensureArgumentsSaved('follower_boot')
+  else requestFreshPull()
 }
 
 function becomeLeaderAfterPreviousClosed() {
@@ -2551,6 +2619,7 @@ export function useCaseLibrary() {
     retryWorkspaceBootstrap,
     reloadFromDatabase,
     forceSaveArguments,
+    ensureArgumentsSaved,
     argumentsLocalAhead: () => argumentsLocalAheadOfBase(),
     /** Paste-ready forensic report for the next sync freeze. */
     getSyncDiagnosticsReport: () =>
