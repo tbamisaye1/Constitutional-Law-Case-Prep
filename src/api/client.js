@@ -303,10 +303,15 @@ export async function downloadIngestFile(filename) {
  * @returns {Promise<{serverTime: number, changes: object, written: object}>}
  */
 export async function syncChanges(since, changes, options = {}) {
+  const body = { since, changes };
+  // Optional Chrome forensic crumbs for sync_audit_log (pending keys, ahead).
+  if (options.clientHint && typeof options.clientHint === "object") {
+    body.clientHint = options.clientHint;
+  }
   const res = await apiFetch("/sync", {
     method: "POST",
     headers: workspaceHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ since, changes }),
+    body: JSON.stringify(body),
     keepalive: Boolean(options.keepalive),
   });
   if (!res.ok) throw new Error(await errorDetail(res, `sync failed: ${res.status}`));

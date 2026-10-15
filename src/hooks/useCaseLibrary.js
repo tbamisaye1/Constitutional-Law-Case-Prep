@@ -63,6 +63,10 @@ import {
 } from '../lib/workspaceDocs'
 import { snapshotDocRevision } from '../lib/docRevisions'
 import { editorCanWrite } from '../lib/editorGate'
+import {
+  formatSyncDiagnosticsReport,
+  recordSyncDiagnostic,
+} from '../lib/syncDiagnostics'
 
 const KEY = 'case-prep-library-v5'
 
@@ -509,6 +513,20 @@ function scheduleSync(delay = SYNC_DEBOUNCE_MS, options = {}) {
  * @param {object} sent Snapshot of what those rows looked like, from
  *   collectChanges(), used to decide which keys may stop being dirty.
  */
+function currentPendingKeys() {
+  return Object.keys(memory.store.syncMeta?.dirty || {})
+}
+
+function buildClientHint(extra = {}) {
+  return {
+    pendingKeys: currentPendingKeys().slice(0, 12),
+    pending: pendingCount(memory.store.syncMeta),
+    argumentsLocalAhead: argumentsLocalAheadOfBase(),
+    canEdit: editorCanWrite(),
+    ...extra,
+  }
+}
+
 async function exchange(changes, sent, { keepalive = false } = {}) {
   syncInFlight = true
   memory = { ...memory, syncStatus: 'syncing', syncError: '' }
@@ -518,8 +536,14 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
     // View-only sessions may pull (empty body) but must not push dirty rows.
     const outbound = editorCanWrite() ? changes : {}
     const outboundSent = editorCanWrite() ? sent : {}
+    const clientHint = buildClientHint({
+      reason: Object.keys(outboundSent).length ? 'push' : 'pull',
+      sentKeys: Object.keys(outboundSent).slice(0, 12),
+    })
+    recordSyncDiagnostic('sync_exchange_start', clientHint)
     const response = await syncChanges(memory.store.syncMeta.cursor, outbound, {
       keepalive,
+      clientHint,
     })
 
     const notebookBefore = memory.store.notebook?.[0]
@@ -616,6 +640,13 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
     }
     emit()
     persistSoon()
+    recordSyncDiagnostic('sync_exchange_ok', {
+      written: response.written || {},
+      rejected: (response.rejected || []).map((r) => r?.reason || r?.kind).slice(0, 8),
+      pendingAfter: pendingCount(syncMeta),
+      pendingKeysAfter: Object.keys(syncMeta.dirty || {}).slice(0, 12),
+      argumentsLocalAhead: argumentsLocalAheadOfBase(),
+    })
 
     // Only rewrite dedicated editor keys when applyChanges accepted a newer
     // remote row. Hydrating after every sync was wiping local Notes sections
@@ -643,6 +674,11 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
         : 'Sync failed; local cache kept, database unreachable',
       error
     )
+    recordSyncDiagnostic(needsLogin ? 'sync_401_login' : 'sync_error', {
+      message: String(message).slice(0, 240),
+      pendingKeys: currentPendingKeys().slice(0, 12),
+      argumentsLocalAhead: argumentsLocalAheadOfBase(),
+    })
     memory = {
       ...memory,
       syncStatus: 'error',
@@ -741,6 +777,10 @@ async function runSync({
   // stick forever while heartbeats stayed empty.
   const pruned = pruneUnpushableDirty(memory.store, memory.store.syncMeta)
   if (pruned.dropped.length) {
+    recordSyncDiagnostic('orphan_dirty_pruned', {
+      dropped: pruned.dropped.slice(0, 20),
+      count: pruned.dropped.length,
+    })
     memory = {
       ...memory,
       store: { ...memory.store, syncMeta: pruned.syncMeta },
@@ -1065,7 +1105,14 @@ export async function reloadFromDatabase() {
  */
 export async function forceSaveArguments() {
   if (memory.syncStatus === 'off') return { ok: false, reason: 'off' }
-  if (!editorCanWrite()) return { ok: false, reason: 'readonly' }
+  if (!editorCanWrite()) {
+    recordSyncDiagnostic('force_save_blocked_readonly', {})
+    return { ok: false, reason: 'readonly' }
+  }
+  recordSyncDiagnostic('force_save_start', {
+    argumentsLocalAhead: argumentsLocalAheadOfBase(),
+    pendingKeys: currentPendingKeys().slice(0, 12),
+  })
 
   // The page editor hands its unsent text to React, which saves it on the next
   // render. Give that render a moment before flushing the debounced save.
@@ -1096,13 +1143,22 @@ export async function forceSaveArguments() {
     row.kind === 'arguments' ? { ...row, forceOverwrite: true } : row
   )
   const ok = await exchange(changes, sent)
-  if (!ok) return { ok: false, reason: 'network' }
+  if (!ok) {
+    recordSyncDiagnostic('force_save_failed', { reason: 'network' })
+    return { ok: false, reason: 'network' }
+  }
   const refused = (memory.syncRejected || []).find((row) => row?.kind === 'arguments')
-  if (refused) return { ok: false, reason: refused.reason || 'rejected' }
+  if (refused) {
+    recordSyncDiagnostic('force_save_rejected', { reason: refused.reason || 'rejected' })
+    return { ok: false, reason: refused.reason || 'rejected' }
+  }
   // Force-overwrite landed: Chrome's board is what Postgres has now.
   rememberArgumentsBase(WORKSPACE_DOCS.arguments.loadLocal())
   memory = { ...memory, argumentsAckedAt: Date.now(), syncStatus: 'idle', syncError: '' }
   emit()
+  recordSyncDiagnostic('force_save_ok', {
+    argumentsLocalAhead: argumentsLocalAheadOfBase(),
+  })
   return { ok: true }
 }
 
@@ -2496,6 +2552,23 @@ export function useCaseLibrary() {
     reloadFromDatabase,
     forceSaveArguments,
     argumentsLocalAhead: () => argumentsLocalAheadOfBase(),
+    /** Paste-ready forensic report for the next sync freeze. */
+    getSyncDiagnosticsReport: () =>
+      formatSyncDiagnosticsReport({
+        workspaceId: WORKSPACE_ID,
+        status: snap.syncStatus,
+        error: snap.syncError,
+        pending: pendingCount(snap.store.syncMeta),
+        pendingKeys: Object.keys(snap.store.syncMeta?.dirty || {}),
+        pendingArguments:
+          hasPendingArguments(snap.store.syncMeta) || argumentsLocalAheadOfBase(),
+        argumentsLocalAhead: argumentsLocalAheadOfBase(),
+        canEdit: editorCanWrite(),
+        lastSyncedAt: snap.lastSyncedAt,
+        argumentsAckedAt: snap.argumentsAckedAt,
+        rejected: snap.syncRejected || [],
+      }),
+    pendingKeys: () => Object.keys(memory.store.syncMeta?.dirty || {}),
     recoverFromServer: () => {
       try {
         localStorage.removeItem(RECOVER_NOTES_FLAG)

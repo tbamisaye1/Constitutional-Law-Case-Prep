@@ -222,6 +222,8 @@ export function SyncBanner({
     }
   }
 
+  const pendingKeys =
+    typeof lib.pendingKeys === 'function' ? lib.pendingKeys() : []
   const detailBits = []
   if (sync.lastSyncedAt) detailBits.push(`Last sync ${clock(sync.lastSyncedAt)}`)
   if (lastSavedAt) detailBits.push(`Local cache write ${clock(lastSavedAt)}`)
@@ -230,12 +232,28 @@ export function SyncBanner({
       sync.pending === 1 ? '1 change still uploading' : `${sync.pending} changes still uploading`
     )
   }
+  if (pendingKeys.length) {
+    detailBits.push(`Pending keys: ${pendingKeys.slice(0, 6).join(', ')}`)
+  }
   if (sync.pendingArguments) detailBits.push('Arguments still uploading')
   if (sync.argumentsAckedAt) {
     detailBits.push(`Arguments confirmed ${clock(sync.argumentsAckedAt)}`)
   }
   if (sync.status === 'syncing') detailBits.push('Sync in progress')
   if (pinned) detailBits.push('Shared workspace pinned for this site')
+
+  async function copyDiagnostics() {
+    const report =
+      typeof lib.getSyncDiagnosticsReport === 'function'
+        ? lib.getSyncDiagnosticsReport()
+        : 'No diagnostics available.'
+    try {
+      await navigator.clipboard.writeText(report)
+      setNote('Sync diagnostics copied. Paste that into chat for the next freeze.')
+    } catch {
+      setNote('Could not copy diagnostics. Open the browser console and ask for sync diagnostics.')
+    }
+  }
 
   return (
     <>
@@ -357,10 +375,23 @@ export function SyncBanner({
           {detailBits.length ? (
             <p className="mono workspace-link-detail">{detailBits.join(' · ')}</p>
           ) : null}
+          <p className="workspace-link-detail">
+            If sync lies again (banner stuck, Arguments missing on another device), open Devices,
+            copy diagnostics, and paste them here. Server audit at /api/sync/audit still records
+            every round-trip (empty heartbeats vs Arguments snapshots).
+          </p>
           <p className="mono workspace-key">{sync.workspaceId}</p>
           <div className="workspace-link-actions">
             <button type="button" className="btn-soft" onClick={copyKey}>
               Copy key
+            </button>
+            <button
+              type="button"
+              className="btn-soft"
+              onClick={copyDiagnostics}
+              title="Copy pending keys, ahead flags, and recent client sync events"
+            >
+              Copy diagnostics
             </button>
             {!pinned ? (
               <>
