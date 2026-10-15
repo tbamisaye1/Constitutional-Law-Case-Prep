@@ -32,6 +32,166 @@
   font-weight: 400;
 }
 
+.topbar-auth {
+  margin-left: 4px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  height: 34px;
+  box-sizing: border-box;
+}
+
+.topbar .btn-ghost.topbar-auth {
+  color: #dde1e4;
+  border-color: #363b41;
+  background: #22262b;
+}
+
+.topbar .btn-ghost.topbar-auth:hover {
+  background: #2c3137;
+}
+
+.topbar .btn-ink.topbar-auth {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+.readonly-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  background: var(--gold-soft);
+  border-bottom: 1px solid var(--rule-soft);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.readonly-banner-btn {
+  margin-left: auto;
+  padding: 7px 12px;
+  height: auto;
+}
+
+.app-shell.is-readonly .main input:not([type='checkbox']):not([type='radio']),
+.app-shell.is-readonly .main textarea,
+.app-shell.is-readonly .main [contenteditable='true'] {
+  caret-color: transparent;
+}
+
+.login-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
+  cursor: pointer;
+}
+
+.login-modal {
+  position: relative;
+  width: min(420px, 100%);
+  padding: 22px 24px 24px;
+  background: var(--paper-3);
+  border: 1px solid var(--rule);
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--ink) 22%, transparent);
+}
+
+.login-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.login-modal-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  background: var(--gold-soft);
+  color: var(--gold);
+  border: 1px solid color-mix(in srgb, var(--gold) 35%, var(--rule-soft));
+}
+
+.login-modal-close {
+  width: 32px;
+  height: 32px;
+  border-color: var(--rule-soft);
+  background: var(--paper);
+  color: var(--ink-2);
+}
+
+.login-modal h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.login-modal-lede {
+  margin: 0 0 16px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.login-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login-modal-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.login-modal-form input {
+  font-family: var(--font-body);
+  font-size: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.login-modal-form input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold-soft);
+}
+
+.login-modal-error {
+  margin: 0;
+  color: var(--two);
+  font-size: 13px;
+}
+
+.login-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -466,17 +626,24 @@
 .notes-onenote {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .main:has(.notes-onenote) {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 58px);
-  padding-bottom: 24px;
+  /* Fixed height so react-arborist gets a real pane size (clicks need this). */
+  height: calc(100vh - 58px);
+  max-height: calc(100vh - 58px);
+  overflow: hidden;
+  padding: 10px 16px 12px;
 }
 
-.notes-onenote > .workspace-head {
+.notes-onenote > .save-banner,
+.notes-onenote > .workspace-link-panel,
+.notes-onenote > .workspace-link-note {
   flex-shrink: 0;
 }
 
@@ -487,8 +654,19 @@
   background: var(--paper-2);
   flex: 1;
   min-height: 0;
-  height: calc(100vh - 200px);
-  max-height: calc(100vh - 160px);
+  overflow: hidden;
+}
+
+.onenote-shell.hide-sections {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.onenote-shell.hide-pages {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
+.onenote-shell.hide-sections.hide-pages {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .onenote-pane-label {
@@ -879,6 +1057,86 @@
   gap: 6px;
   flex-shrink: 0;
   margin-top: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.notes-interchange {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notes-interchange-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 0.7fr);
+  gap: 14px;
+  min-width: min(520px, 92vw);
+  padding: 12px 14px;
+  background: var(--paper, #fff);
+  border: 1px solid var(--line, #d8d2c8);
+  box-shadow: 0 10px 28px rgba(30, 24, 16, 0.14);
+}
+
+.notes-interchange-heading {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3, #6b6358);
+}
+
+.notes-interchange-scope {
+  margin-bottom: 10px;
+}
+
+.notes-interchange-scope-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--ink, #1a1714);
+}
+
+.notes-interchange-formats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.notes-interchange-formats .btn-soft {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.notes-interchange-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink-3, #6b6358);
+}
+
+.notes-interchange-status {
+  font-size: 11px;
+  color: var(--ink-3, #6b6358);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .notes-interchange-menu {
+    grid-template-columns: 1fr;
+    right: auto;
+    left: 0;
+  }
 }
 
 .notes-add-subpage {
@@ -913,9 +1171,6 @@
 
 .onenote-shell.is-expanded {
   grid-template-columns: minmax(0, 1fr);
-  height: calc(100vh - 88px);
-  max-height: none;
-  min-height: calc(100vh - 88px);
 }
 
 .notes-onenote.is-expanded .onenote-canvas {
@@ -989,7 +1244,7 @@
 }
 
 .args-split {
-  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, min(52vw, 720px)) minmax(0, 1fr);
   /* Let the outline set the height; page scrolls instead of an inner box. */
   height: auto;
   min-height: 520px;

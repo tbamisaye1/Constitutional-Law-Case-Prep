@@ -4,6 +4,7 @@ import {
   downloadWorkspaceBackup,
   listWorkspaceBackups,
 } from '../api/client'
+import { useAuth } from '../auth/AuthContext'
 import { forceSaveArguments, useCaseLibrary } from '../hooks/useCaseLibrary'
 import {
   CONFLICTS_EVENT,
@@ -43,6 +44,7 @@ export function SyncBanner({
   onSyncNow: onSyncNowProp,
 }) {
   const lib = useCaseLibrary()
+  const { lockEnabled, canEdit, setLoginOpen } = useAuth()
   const sync = syncProp || lib.sync
   const lastSavedAt =
     typeof lastSavedAtProp === 'number' ? lastSavedAtProp : lib.lastSavedAt
@@ -52,7 +54,11 @@ export function SyncBanner({
       ? saveErrorOverride
       : lib.saveError
 
-  const { tone, text } = describeSyncStatus(sync)
+  const { tone, text } = describeSyncStatus({
+    ...sync,
+    lockEnabled,
+    canEdit,
+  })
   const pinned = isWorkspacePinned()
   const [open, setOpen] = useState(false)
   const [paste, setPaste] = useState('')
@@ -69,19 +75,38 @@ export function SyncBanner({
   }, [])
 
   // If Arguments stay ahead after the first paint, force-save from this tab
-  // instead of hoping a background leader wakes up.
+  // instead of hoping a background leader wakes up. Skip when logged out —
+  // the API editor lock rejects writes with 401 and a retry storm looks like
+  // "Saving…" forever.
   useEffect(() => {
     if (!sync.pendingArguments || sync.status === 'off' || busy) return undefined
+    if (lockEnabled && !canEdit) {
+      setLoginOpen(true)
+      return undefined
+    }
     const timer = window.setTimeout(() => {
       void forceSaveArguments().then((result) => {
         if (result?.ok) setNote(`Arguments saved to the database at ${clock(Date.now())}.`)
         else if (result?.reason === 'network') {
-          setNote('Could not reach the database. Your board is still on this device; retrying…')
+          const msg = String(result.reason || '')
+          if (/log in/i.test(sync.error || '')) setLoginOpen(true)
+          else setNote('Could not reach the database. Your board is still on this device; retrying…')
+          void msg
+        } else if (result?.reason === 'readonly') {
+          setLoginOpen(true)
         }
       })
     }, 800)
     return () => window.clearTimeout(timer)
-  }, [sync.pendingArguments, sync.status, busy])
+  }, [
+    sync.pendingArguments,
+    sync.status,
+    sync.error,
+    busy,
+    lockEnabled,
+    canEdit,
+    setLoginOpen,
+  ])
 
 
   async function copyKey() {

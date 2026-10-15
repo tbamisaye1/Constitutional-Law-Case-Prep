@@ -634,14 +634,24 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
     await hydrateBlobs()
     return true
   } catch (error) {
-    console.warn('Sync failed; local cache kept, database unreachable', error)
+    const message = error?.message || 'Could not reach the backend.'
+    const needsLogin = /log in to edit|401|unauthorized/i.test(message)
+    console.warn(
+      needsLogin
+        ? 'Sync blocked: editor lock requires login'
+        : 'Sync failed; local cache kept, database unreachable',
+      error
+    )
     memory = {
       ...memory,
       syncStatus: 'error',
-      syncError: error?.message || 'Could not reach the backend.',
+      syncError: needsLogin
+        ? 'Log in to save. The editor lock is on (viewing works without a password).'
+        : message,
     }
     emit()
-    scheduleSync(SYNC_RETRY_MS)
+    // Auth failures will not clear by retrying; wait for login instead.
+    if (!needsLogin) scheduleSync(SYNC_RETRY_MS)
     return false
   } finally {
     syncInFlight = false
@@ -1512,6 +1522,13 @@ if (typeof window !== 'undefined') {
   // straight away rather than waiting out the retry timer.
   window.addEventListener('online', () => {
     void runSync({ forcePull: true, allowFollower: true })
+  })
+  // Password gate just cleared: push anything that queued while view-only.
+  window.addEventListener('case-prep-editor-unlocked', () => {
+    window.clearTimeout(syncTimer)
+    void forceSaveArguments().finally(() => {
+      void runSync({ forcePull: true, allowFollower: true })
+    })
   })
   window.addEventListener('storage', (event) => {
     // Another tab wrote Arguments to the dedicated key. Adopt + dirty so the
@@ -2451,6 +2468,7 @@ export function useCaseLibrary() {
       argumentsAckedAt: snap.argumentsAckedAt,
       rejected: snap.syncRejected || [],
       workspaceId: WORKSPACE_ID,
+      canEdit: editorCanWrite(),
     },
     syncNow: () => {
       flushWorkspaceDocSaves()

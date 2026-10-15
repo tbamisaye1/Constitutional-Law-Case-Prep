@@ -48,6 +48,19 @@ describe('describeSyncStatus', () => {
     expect(status.text.toLowerCase()).toContain('saving arguments')
   })
 
+  it('asks for login instead of pretending to upload when the editor lock is on', () => {
+    const status = describeSyncStatus({
+      status: 'idle',
+      pending: 2,
+      pendingArguments: true,
+      lockEnabled: true,
+      canEdit: false,
+      lastSyncedAt: Date.now(),
+    })
+    expect(status.tone).toBe('warn')
+    expect(status.text.toLowerCase()).toContain('log in to save')
+  })
+
   it('names Arguments confirmation when the server ack is present', () => {
     const at = new Date('2026-10-06T12:15:00Z').getTime()
     const argsAt = new Date('2026-10-06T12:16:00Z').getTime()

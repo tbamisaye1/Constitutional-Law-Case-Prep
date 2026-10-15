@@ -11,6 +11,11 @@ import { getWorkspaceId } from "../lib/workspace";
 
 const BASE = import.meta.env.VITE_API_BASE || "/api";
 
+/** Same-origin /api proxy; include cookies so the editor session travels. */
+function apiFetch(path, options = {}) {
+  return fetch(`${BASE}${path}`, { credentials: "include", ...options });
+}
+
 /**
  * Headers that identify this browser's workspace to the API.
  *
@@ -51,13 +56,36 @@ async function errorDetail(res, fallback) {
 }
 
 export async function getHealth() {
-  const res = await fetch(`${BASE}/health`);
+  const res = await apiFetch("/health");
   if (!res.ok) throw new Error(`health failed: ${res.status}`);
   return res.json();
 }
 
+/** Whether this browser may edit (HttpOnly cookie session). */
+export async function fetchAuthMe() {
+  const res = await apiFetch("/auth/me");
+  if (!res.ok) throw new Error(await errorDetail(res, `auth me failed: ${res.status}`));
+  return res.json();
+}
+
+export async function loginEditor(password) {
+  const res = await apiFetch("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password: String(password || "") }),
+  });
+  if (!res.ok) throw new Error(await errorDetail(res, "Wrong password."));
+  return res.json();
+}
+
+export async function logoutEditor() {
+  const res = await apiFetch("/auth/logout", { method: "POST" });
+  if (!res.ok) throw new Error(await errorDetail(res, `logout failed: ${res.status}`));
+  return res.json();
+}
+
 export async function listMatters() {
-  const res = await fetch(`${BASE}/matters`, { headers: optionalWorkspaceHeaders() });
+  const res = await apiFetch("/matters", { headers: optionalWorkspaceHeaders() });
   if (!res.ok) throw new Error(`matters failed: ${res.status}`);
   return res.json();
 }
@@ -122,7 +150,7 @@ export async function chatPrep(
     body.side = side;
   }
 
-  const res = await fetch(`${BASE}/chat`, {
+  const res = await apiFetch("/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -152,7 +180,7 @@ export async function ingestPdf(file) {
   try {
     const form = new FormData();
     form.append("file", file);
-    const res = await fetch(`${BASE}/ingest/pdf`, {
+    const res = await apiFetch("/ingest/pdf", {
       method: "POST",
       body: form,
     });
@@ -183,7 +211,7 @@ export async function ingestPdf(file) {
 export async function ingestPdfDirect(file) {
   const name = file.name || "upload.pdf";
   const tokenBody = await withNetworkRetries("Ask AI index token", async () => {
-    const tokenRes = await fetch(`${BASE}/ingest/blob-client-upload`, {
+    const tokenRes = await apiFetch("/ingest/blob-client-upload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -217,7 +245,7 @@ export async function ingestPdfDirect(file) {
   const blobUrl = stored.url || stored.downloadUrl || "";
 
   return withNetworkRetries("Ask AI index from Blob", async () => {
-    const completeRes = await fetch(`${BASE}/ingest/from-blob`, {
+    const completeRes = await apiFetch("/ingest/from-blob", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -237,14 +265,14 @@ export async function ingestPdfDirect(file) {
 }
 
 export async function listIngestSources() {
-  const res = await fetch(`${BASE}/ingest/sources`);
+  const res = await apiFetch("/ingest/sources");
   if (!res.ok) throw new Error(await errorDetail(res, `list sources failed: ${res.status}`));
   return res.json();
 }
 
 /** Remove a source (PDF filename or full bootstrap label) from the FAISS index. */
 export async function removeIngestSource(source) {
-  const res = await fetch(`${BASE}/ingest/source`, {
+  const res = await apiFetch("/ingest/source", {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ source }),
@@ -260,7 +288,7 @@ export async function removeIngestSource(source) {
  */
 export async function downloadIngestFile(filename) {
   const safe = String(filename || "").split(/[/\\]/).pop();
-  const res = await fetch(`${BASE}/ingest/file/${encodeURIComponent(safe)}`);
+  const res = await apiFetch(`/ingest/file/${encodeURIComponent(safe)}`);
   if (!res.ok) throw new Error(await errorDetail(res, `Could not open ${safe}`));
   return res.blob();
 }
@@ -275,7 +303,7 @@ export async function downloadIngestFile(filename) {
  * @returns {Promise<{serverTime: number, changes: object, written: object}>}
  */
 export async function syncChanges(since, changes, options = {}) {
-  const res = await fetch(`${BASE}/sync`, {
+  const res = await apiFetch("/sync", {
     method: "POST",
     headers: workspaceHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ since, changes }),
@@ -287,21 +315,21 @@ export async function syncChanges(since, changes, options = {}) {
 
 /** Row counts for this workspace, used by the sync status line. */
 export async function getSyncStatus() {
-  const res = await fetch(`${BASE}/sync/status`, { headers: workspaceHeaders() });
+  const res = await apiFetch("/sync/status", { headers: workspaceHeaders() });
   if (!res.ok) throw new Error(await errorDetail(res, `sync status failed: ${res.status}`));
   return res.json();
 }
 
 /** List durable Postgres backups for this workspace (no payload bodies). */
 export async function listWorkspaceBackups() {
-  const res = await fetch(`${BASE}/sync/backups`, { headers: workspaceHeaders() });
+  const res = await apiFetch("/sync/backups", { headers: workspaceHeaders() });
   if (!res.ok) throw new Error(await errorDetail(res, `list backups failed: ${res.status}`));
   return res.json();
 }
 
 /** Snapshot the live workspace into Postgres. Survives hard refresh. */
 export async function createWorkspaceBackup(label = "Manual backup") {
-  const res = await fetch(`${BASE}/sync/backups`, {
+  const res = await apiFetch("/sync/backups", {
     method: "POST",
     headers: workspaceHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ label }),
@@ -315,7 +343,7 @@ export async function createWorkspaceBackup(label = "Manual backup") {
  * This is the competition safety net: file on disk + row in Postgres.
  */
 export async function downloadWorkspaceBackup(backupId) {
-  const res = await fetch(`${BASE}/sync/backups/${backupId}/download`, {
+  const res = await apiFetch(`/sync/backups/${backupId}/download`, {
     headers: workspaceHeaders(),
   });
   if (!res.ok) throw new Error(await errorDetail(res, `download backup failed: ${res.status}`));
@@ -350,7 +378,7 @@ export async function uploadDocument(file, { documentId, caseId, name }) {
   form.append("document_id", documentId);
   form.append("case_id", caseId);
 
-  const res = await fetch(`${BASE}/documents`, {
+  const res = await apiFetch("/documents", {
     method: "POST",
     headers: workspaceHeaders(),
     body: form,
@@ -369,7 +397,7 @@ export async function uploadDocument(file, { documentId, caseId, name }) {
  */
 export async function uploadDocumentDirect(file, { documentId, caseId, name }) {
   const tokenBody = await withNetworkRetries("Backend storage token", async () => {
-    const tokenRes = await fetch(`${BASE}/documents/blob-client-upload`, {
+    const tokenRes = await apiFetch("/documents/blob-client-upload", {
       method: "POST",
       headers: workspaceHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
@@ -400,7 +428,7 @@ export async function uploadDocumentDirect(file, { documentId, caseId, name }) {
   const blobUrl = stored.url || stored.downloadUrl || "";
 
   return withNetworkRetries("Backend storage complete", async () => {
-    const completeRes = await fetch(`${BASE}/documents/complete`, {
+    const completeRes = await apiFetch("/documents/complete", {
       method: "POST",
       headers: workspaceHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
@@ -433,7 +461,7 @@ export async function uploadDocumentDirect(file, { documentId, caseId, name }) {
  */
 export async function downloadDocument(documentId) {
   const id = encodeURIComponent(documentId);
-  const res = await fetch(`${BASE}/documents/${id}/url`, { headers: workspaceHeaders() });
+  const res = await apiFetch(`/documents/${id}/url`, { headers: workspaceHeaders() });
 
   if (res.ok) {
     const { url } = await res.json();
@@ -450,7 +478,7 @@ export async function downloadDocument(documentId) {
   if (res.status === 404 || res.status === 405) {
     const detail = await errorDetail(res, "");
     if (!/No such document/i.test(detail)) {
-      const legacy = await fetch(`${BASE}/documents/${id}/file`, { headers: workspaceHeaders() });
+      const legacy = await apiFetch(`/documents/${id}/file`, { headers: workspaceHeaders() });
       if (!legacy.ok) throw new Error(await errorDetail(legacy, `download failed: ${legacy.status}`));
       return legacy.blob();
     }
@@ -461,10 +489,99 @@ export async function downloadDocument(documentId) {
 
 /** Tombstone a document and delete its bytes. */
 export async function deleteDocument(documentId) {
-  const res = await fetch(`${BASE}/documents/${encodeURIComponent(documentId)}`, {
+  const res = await apiFetch(`/documents/${encodeURIComponent(documentId)}`, {
     method: "DELETE",
     headers: workspaceHeaders(),
   });
   if (!res.ok) throw new Error(await errorDetail(res, `delete failed: ${res.status}`));
+  return res.json();
+}
+
+function filenameFromDisposition(header, fallback) {
+  if (!header) return fallback;
+  const match = /filename="([^"]+)"/i.exec(header);
+  return match?.[1] || fallback;
+}
+
+async function postNotesExport(path, payload) {
+  const res = await apiFetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...optionalWorkspaceHeaders() },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await errorDetail(res, `export failed: ${res.status}`));
+  return res;
+}
+
+/** Export notes scope as a downloadable Word file. */
+export async function exportNotesDocx(payload) {
+  const res = await postNotesExport("/export/notes.docx", payload);
+  const blob = await res.blob();
+  return {
+    blob,
+    filename: filenameFromDisposition(res.headers.get("Content-Disposition"), "notes.docx"),
+  };
+}
+
+export async function exportNotesHtml(payload) {
+  const res = await postNotesExport("/export/notes.html", payload);
+  const blob = await res.blob();
+  return {
+    blob,
+    filename: filenameFromDisposition(res.headers.get("Content-Disposition"), "notes.html"),
+  };
+}
+
+export async function exportNotesMd(payload) {
+  const res = await postNotesExport("/export/notes.md", payload);
+  const blob = await res.blob();
+  return {
+    blob,
+    filename: filenameFromDisposition(res.headers.get("Content-Disposition"), "notes.md"),
+  };
+}
+
+/**
+ * PDF when LibreOffice is on the API host; otherwise JSON with print-ready HTML.
+ * @returns {Promise<{kind:'pdf', blob: Blob, filename: string}|{kind:'print_html', html: string, filename: string, message?: string}>}
+ */
+export async function exportNotesPdf(payload) {
+  const res = await postNotesExport("/export/notes.pdf", payload);
+  const type = (res.headers.get("content-type") || "").toLowerCase();
+  if (type.includes("application/pdf")) {
+    const blob = await res.blob();
+    return {
+      kind: "pdf",
+      blob,
+      filename: filenameFromDisposition(res.headers.get("Content-Disposition"), "notes.pdf"),
+    };
+  }
+  const body = await res.json();
+  return {
+    kind: "print_html",
+    html: body.html || "",
+    filename: body.filename || "notes.html",
+    message: body.message,
+  };
+}
+
+/** DOCX + Drive open hint (no Google OAuth on this API). */
+export async function exportNotesDrive(payload) {
+  const res = await postNotesExport("/export/notes.drive", payload);
+  if (!res.ok) throw new Error(await errorDetail(res, `drive export failed: ${res.status}`));
+  return res.json();
+}
+
+/** Upload DOCX/HTML/MD; returns TipTap HTML (+ optional pages[]). */
+export async function importNotesFile(file, { splitOnH1 = false } = {}) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("split_on_h1", splitOnH1 ? "1" : "0");
+  const res = await apiFetch("/import/notes", {
+    method: "POST",
+    headers: optionalWorkspaceHeaders(),
+    body: form,
+  });
+  if (!res.ok) throw new Error(await errorDetail(res, `import failed: ${res.status}`));
   return res.json();
 }

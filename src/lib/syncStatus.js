@@ -34,9 +34,29 @@ export function describeSyncStatus(sync) {
   }
 
   if (sync.status === 'error') {
+    const err = String(sync.error || '')
+    if (/log in/i.test(err)) {
+      return {
+        tone: 'warn',
+        text: err,
+      }
+    }
     return {
       tone: 'warn',
-      text: `Database unreachable (retrying). ${sync.error || ''}`.trim(),
+      text: `Database unreachable (retrying). ${err}`.trim(),
+    }
+  }
+
+  // Locked / logged-out: dirty rows stay queued on purpose. Do not pretend
+  // we are uploading them.
+  if (sync.lockEnabled && sync.canEdit === false) {
+    const pending = Number(sync.pending) || 0
+    return {
+      tone: 'warn',
+      text:
+        pending > 0 || sync.pendingArguments
+          ? 'Log in to save your changes to the workspace database. Work is still on this device.'
+          : 'Viewing only. Log in to edit and save to the database.',
     }
   }
 

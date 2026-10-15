@@ -423,11 +423,20 @@ export function AiUiProvider({ children }) {
 
   const clearReply = useCallback(() => {
     // Let the empty composer stay empty; Recent thread can reopen any turn.
+    // Drop sticky PDF highlight / source so a Milligan/Hamdi selection cannot
+    // keep starving Instant Case follow-ups on the next ask.
     skipAutoRestoreRef.current = true
     setReply(null)
     clearAskAiLastView()
     setLoading(false)
     setPrompt('')
+    setCtx((prev) => ({
+      ...prev,
+      selection: '',
+      source_file: '',
+      file_id: null,
+      page: null,
+    }))
   }, [])
 
   /** One-shot: New question / clear memory should not instantly reopen the last answer. */

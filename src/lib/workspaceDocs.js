@@ -349,15 +349,16 @@ export function stageWorkspaceDocLocal(kind, data) {
  */
 export function saveWorkspaceDoc(kind, data, { immediate = false, sync = true } = {}) {
   if (!WORKSPACE_DOCS[kind]) return
-  // View-only browsers must not overwrite localStorage or mark Postgres dirty.
-  if (sync && !editorCanWrite()) return
+  // Always write Chrome localStorage so a locked / logged-out tab does not
+  // eat keystrokes. Only the Postgres publish path requires editorCanWrite.
+  const wantSync = Boolean(sync) && editorCanWrite()
   const prevPending = pendingSaves[kind]
   // A chrome-only save must not cancel a pending content push.
-  if (prevPending && !sync && prevPending.sync) {
+  if (prevPending && !wantSync && prevPending.sync) {
     writeWorkspaceDocLocal(kind, data)
     return
   }
-  pendingSaves[kind] = { data, sync: Boolean(sync) }
+  pendingSaves[kind] = { data, sync: wantSync }
   globalThis.clearTimeout(saveTimers[kind])
   if (immediate) {
     const pending = pendingSaves[kind]

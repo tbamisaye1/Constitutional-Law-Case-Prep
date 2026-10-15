@@ -3,7 +3,10 @@ import { TopBar } from './TopBar'
 import { SideRail } from './SideRail'
 import { CommandPalette } from '../components/CommandPalette'
 import { WorkspaceBootScreen } from '../components/WorkspaceBootScreen'
+import { LoginModal } from '../components/LoginModal'
+import { ReadonlyBanner } from '../components/ReadonlyBanner'
 import { AiUiProvider } from '../ai/AiUiContext'
+import { AuthProvider, useAuth } from '../auth/AuthContext'
 import { AiSelectionBubble } from '../components/ai/AiSelectionBubble'
 import { AiFab } from '../components/ai/AiFab'
 import { RELOADED_FROM_DATABASE_EVENT, useCaseLibrary } from '../hooks/useCaseLibrary'
@@ -11,6 +14,7 @@ import { MATTER } from '../data/seed'
 
 function ShellBody({ children }) {
   const { workspaceReady } = useCaseLibrary()
+  const { canEdit, lockEnabled } = useAuth()
   const [railOpen, setRailOpen] = useState(true)
   const [cmdOpen, setCmdOpen] = useState(false)
   // Bumped by Reload from database: remounts the open page so every editor
@@ -23,8 +27,16 @@ function ShellBody({ children }) {
     return () => window.removeEventListener(RELOADED_FROM_DATABASE_EVENT, bump)
   }, [])
 
+  const shellClass = [
+    'app-shell',
+    railOpen ? 'rail-open' : 'rail-closed',
+    lockEnabled && !canEdit ? 'is-readonly' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <div className={`app-shell ${railOpen ? 'rail-open' : 'rail-closed'}`}>
+    <div className={shellClass}>
       <TopBar
         matterTitle="Bronner"
         season={MATTER.season}
@@ -32,6 +44,7 @@ function ShellBody({ children }) {
         onToggleRail={() => setRailOpen((v) => !v)}
         onSearchClick={() => setCmdOpen(true)}
       />
+      <ReadonlyBanner />
       <div className="shell-body">
         <SideRail open={railOpen} />
         <main className="main">
@@ -45,18 +58,25 @@ function ShellBody({ children }) {
       {workspaceReady ? (
         <>
           <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} />
-          <AiSelectionBubble />
-          <AiFab />
+          {canEdit ? (
+            <>
+              <AiSelectionBubble />
+              <AiFab />
+            </>
+          ) : null}
         </>
       ) : null}
+      <LoginModal />
     </div>
   )
 }
 
 export function Shell({ children }) {
   return (
-    <AiUiProvider>
-      <ShellBody>{children}</ShellBody>
-    </AiUiProvider>
+    <AuthProvider>
+      <AiUiProvider>
+        <ShellBody>{children}</ShellBody>
+      </AiUiProvider>
+    </AuthProvider>
   )
 }
