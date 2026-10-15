@@ -134,6 +134,29 @@ describe('argumentsLocalAheadOfBase', () => {
     )
     expect(argumentsLocalAheadOfBase()).toBe(true)
   })
+
+  it('ignores which draft is selected when notes match the base', () => {
+    const board = {
+      draftsBySide: {
+        petitioner: [{ id: 'petitioner-main', name: 'Main', notes: '', sections: [] }],
+        respondent: [
+          { id: 'respondent-main', name: 'Main', notes: '', sections: [] },
+          { id: 'draft-exec', name: 'Executive', notes: '<p>ok</p>', sections: [] },
+        ],
+      },
+      activeDraftBySide: { respondent: 'respondent-main' },
+      practiceLog: [],
+    }
+    rememberArgumentsBase(board)
+    memory.set(
+      'case-prep-arguments-v1',
+      JSON.stringify({
+        ...board,
+        activeDraftBySide: { respondent: 'draft-exec' },
+      })
+    )
+    expect(argumentsLocalAheadOfBase()).toBe(false)
+  })
 })
 
 describe('arguments fromRow', () => {

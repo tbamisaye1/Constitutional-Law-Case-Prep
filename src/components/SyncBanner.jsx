@@ -4,7 +4,7 @@ import {
   downloadWorkspaceBackup,
   listWorkspaceBackups,
 } from '../api/client'
-import { useCaseLibrary } from '../hooks/useCaseLibrary'
+import { forceSaveArguments, useCaseLibrary } from '../hooks/useCaseLibrary'
 import {
   CONFLICTS_EVENT,
   readPendingConflicts,
@@ -67,6 +67,21 @@ export function SyncBanner({
     window.addEventListener(CONFLICTS_EVENT, onConflicts)
     return () => window.removeEventListener(CONFLICTS_EVENT, onConflicts)
   }, [])
+
+  // If Arguments stay ahead after the first paint, force-save from this tab
+  // instead of hoping a background leader wakes up.
+  useEffect(() => {
+    if (!sync.pendingArguments || sync.status === 'off' || busy) return undefined
+    const timer = window.setTimeout(() => {
+      void forceSaveArguments().then((result) => {
+        if (result?.ok) setNote(`Arguments saved to the database at ${clock(Date.now())}.`)
+        else if (result?.reason === 'network') {
+          setNote('Could not reach the database. Your board is still on this device; retrying…')
+        }
+      })
+    }, 800)
+    return () => window.clearTimeout(timer)
+  }, [sync.pendingArguments, sync.status, busy])
 
 
   async function copyKey() {

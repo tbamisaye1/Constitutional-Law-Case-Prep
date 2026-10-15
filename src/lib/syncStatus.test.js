@@ -45,7 +45,7 @@ describe('describeSyncStatus', () => {
       lastSyncedAt: Date.now() - 60_000,
     })
     expect(status.tone).toBe('warn')
-    expect(status.text.toLowerCase()).toContain('ahead of the database')
+    expect(status.text.toLowerCase()).toContain('saving arguments')
   })
 
   it('names Arguments confirmation when the server ack is present', () => {

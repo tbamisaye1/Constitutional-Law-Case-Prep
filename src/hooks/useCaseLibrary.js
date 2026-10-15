@@ -588,14 +588,11 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
         // writer added", which wiped scratch and edits made elsewhere.
         // hydrateWorkspaceDocFromRemote records the base after merging.
         if (!rejectedArgs.length) {
-          // The push was accepted, so the server row now equals the board we
-          // SENT. That is the base. A pulled row in the same response is then
-          // merged against it: equal to what we sent -> our newer typing wins;
-          // carries another writer's change -> that change is kept.
-          const sentArgs = (changes?.library_records || []).find(
-            (row) => row && row.kind === 'arguments'
-          )
-          rememberArgumentsBase(sentArgs?.data || applied.store.argumentsBoard?.[0])
+          // Prefer the board Chrome actually holds. Matching base to
+          // localStorage is what clears "ahead of the database"; the sent
+          // payload can differ in mirrors (outlines/notes) that same() ignores
+          // but json compare of full rows used to leave the banner stuck.
+          rememberArgumentsBase(WORKSPACE_DOCS.arguments.loadLocal())
         }
       }
     } else if (
@@ -708,6 +705,16 @@ function requestFreshPull() {
   else void askLeaderToSync()
 }
 
+/**
+ * Any tab may push when Arguments are ahead of Postgres. A frozen background
+ * leader used to leave the visible follower on "ahead of the database" forever.
+ */
+function argumentsNeedPush() {
+  return (
+    hasPendingArguments(memory.store.syncMeta) || argumentsLocalAheadOfBase()
+  )
+}
+
 /** Push dirty rows and pull whatever else changed. */
 async function runSync({
   keepalive = false,
@@ -717,20 +724,19 @@ async function runSync({
   allowFollower = false,
 } = {}) {
   if (memory.syncStatus === 'off') return
-  if (!isSyncLeader && !allowFollower) return
-  if (!syncBootstrapDone && !allowBeforeBootstrap && !forcePull && !allowFollower) return
+  // Catch drift before the leader gate so followers can decide to push.
+  markArgumentsDirtyIfLocalAhead()
+  const followerMayPush = allowFollower || argumentsNeedPush()
+  if (!isSyncLeader && !followerMayPush) return
+  if (!syncBootstrapDone && !allowBeforeBootstrap && !forcePull && !followerMayPush) return
 
   // An edit that lands mid-request must not be dropped. Come back once the
   // current exchange is done rather than returning and waiting for either
   // another edit or the retry timer.
   if (syncInFlight) {
-    if (!allowFollower) scheduleSync(SYNC_DEBOUNCE_MS, { forcePull })
+    if (!allowFollower && isSyncLeader) scheduleSync(SYNC_DEBOUNCE_MS, { forcePull })
     return
   }
-
-  // Catch "localStorage has Executive notes, dirty flag was never set / was
-  // cleared without a push". Heartbeats alone used to report Synced forever.
-  markArgumentsDirtyIfLocalAhead()
 
   const { changes, sent } = collectChanges(memory.store, memory.store.syncMeta)
   // Without forcePull, a quiet tab never talks to Postgres. That is fine for
@@ -739,19 +745,30 @@ async function runSync({
   // forcePull so idle clients still pull.
   if (
     !forcePull &&
-    !allowFollower &&
+    !followerMayPush &&
     !Object.keys(sent).length &&
     memory.syncStatus !== 'error'
   ) {
     return
   }
-  if (allowFollower && !Object.keys(sent).length) return
+  // Followers only take the network path when they have something to upload
+  // (usually Arguments). Pull-only stays on the leader.
+  if (!isSyncLeader && !Object.keys(sent).length) return
 
   const ok = await exchange(changes, sent, { keepalive })
 
   // A row re-edited while the request was in flight stays dirty, so give it
   // its own push instead of waiting for the next edit to trigger one.
-  if (ok && isSyncLeader && pendingCount(memory.store.syncMeta) > 0) scheduleSync()
+  if (ok && pendingCount(memory.store.syncMeta) > 0) {
+    scheduleSync(SYNC_DEBOUNCE_MS, { forcePull: true })
+  }
+  // Still ahead after a "successful" exchange (stale-base clear without write,
+  // or base/local shape drift): force-overwrite so the banner cannot stick.
+  if (ok && argumentsLocalAheadOfBase() && editorCanWrite()) {
+    window.setTimeout(() => {
+      void forceSaveArguments()
+    }, 250)
+  }
 }
 
 const MERGE_BACKUP_KEY = 'case-prep-merge-backup-v1'
@@ -1067,6 +1084,10 @@ export async function forceSaveArguments() {
   if (!ok) return { ok: false, reason: 'network' }
   const refused = (memory.syncRejected || []).find((row) => row?.kind === 'arguments')
   if (refused) return { ok: false, reason: refused.reason || 'rejected' }
+  // Force-overwrite landed: Chrome's board is what Postgres has now.
+  rememberArgumentsBase(WORKSPACE_DOCS.arguments.loadLocal())
+  memory = { ...memory, argumentsAckedAt: Date.now(), syncStatus: 'idle', syncError: '' }
+  emit()
   return { ok: true }
 }
 
@@ -1393,14 +1414,28 @@ function startIdlePullHeartbeat() {
   if (memory.syncStatus === 'off' || heartbeatStarted) return
   heartbeatStarted = true
   window.setInterval(async () => {
-    if (!isSyncLeader || memory.syncStatus === 'off' || syncInFlight) return
+    if (memory.syncStatus === 'off' || syncInFlight) return
+    // Arguments ahead: every tab (including followers) must push. A background
+    // leader alone used to freeze uploads while this tab showed the red banner.
+    if (argumentsNeedPush()) {
+      window.clearTimeout(syncTimer)
+      void runSync({ forcePull: true, allowFollower: true })
+      return
+    }
+    if (!isSyncLeader) return
     // A hidden leader still pulls when another tab may be on screen and
     // waiting on it for changes from other devices.
     if (document.visibilityState === 'hidden' && !(await hasFollowerTabs())) return
     scheduleSync(0, { forcePull: true })
   }, SYNC_HEARTBEAT_MS)
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') requestFreshPull()
+    if (document.visibilityState === 'visible') {
+      if (argumentsNeedPush()) {
+        void runSync({ forcePull: true, allowFollower: true })
+      } else {
+        requestFreshPull()
+      }
+    }
   })
 }
 
@@ -1424,7 +1459,12 @@ function bootAsFollower() {
   syncStatusChannel?.postMessage({ type: 'status-request' })
   void hydrateBlobs().then(() => uploadPendingServerFiles())
   startIdlePullHeartbeat()
-  requestFreshPull()
+  // Do not wait on a frozen leader to upload this tab's Arguments.
+  if (argumentsNeedPush()) {
+    void runSync({ forcePull: true, allowFollower: true })
+  } else {
+    requestFreshPull()
+  }
 }
 
 function becomeLeaderAfterPreviousClosed() {
@@ -1463,20 +1503,22 @@ if (typeof window !== 'undefined') {
     // push now with keepalive so the browser can finish after unload.
     // Followers used to return early here, so closing a non-leader tab left
     // Arguments only in Chrome while the leader never saw a dirty flag.
-    if (WORKSPACE_ID && pendingCount(memory.store.syncMeta) > 0) {
+    if (WORKSPACE_ID && (pendingCount(memory.store.syncMeta) > 0 || argumentsLocalAheadOfBase())) {
       window.clearTimeout(syncTimer)
-      void runSync({ keepalive: true, allowFollower: !isSyncLeader })
+      void runSync({ keepalive: true, allowFollower: true })
     }
   })
   // Coming back online is the common case for a laptop that was shut, so retry
   // straight away rather than waiting out the retry timer.
-  window.addEventListener('online', () => scheduleSync(0, { forcePull: true }))
+  window.addEventListener('online', () => {
+    void runSync({ forcePull: true, allowFollower: true })
+  })
   window.addEventListener('storage', (event) => {
     // Another tab wrote Arguments to the dedicated key. Adopt + dirty so the
-    // leader pushes; previously only the library mirror key was watched.
+    // board uploads even when this tab is not the sync leader.
     if (event.key === WORKSPACE_DOCS.arguments.storageKey && event.newValue) {
-      if (markArgumentsDirtyIfLocalAhead() && isSyncLeader) {
-        scheduleSync(0, { forcePull: true })
+      if (markArgumentsDirtyIfLocalAhead()) {
+        void runSync({ forcePull: true, allowFollower: true })
       }
       return
     }

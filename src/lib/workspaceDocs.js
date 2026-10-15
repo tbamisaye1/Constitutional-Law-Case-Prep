@@ -50,8 +50,12 @@ export function forgetArgumentsBase() {
 }
 
 /**
- * True when this browser's Arguments localStorage board differs from the last
- * board we know Postgres held (the three-way-merge base).
+ * True when this browser's Arguments *notes* differ from the last board we
+ * know Postgres held (the three-way-merge base).
+ *
+ * Compares drafts + practice log only. Which draft is selected
+ * (activeDraftBySide) is browser chrome and must not keep the red banner up
+ * forever after a draft click.
  *
  * Used to catch "saved locally, never marked dirty / never pushed" drift:
  * heartbeats still return 200, Backup now still snapshots Postgres, and the
@@ -64,7 +68,14 @@ export function argumentsLocalAheadOfBase() {
   const local = WORKSPACE_DOCS.arguments.loadLocal()
   const base = readArgumentsBase()
   if (!base) return true
-  return !WORKSPACE_DOCS.arguments.same(local, base)
+  const contentOf = (board) => {
+    const n = normalizeArgumentsBoard(board)
+    return {
+      draftsBySide: n.draftsBySide,
+      practiceLog: n.practiceLog || [],
+    }
+  }
+  return !jsonSame(contentOf(local), contentOf(base))
 }
 
 /**

@@ -55,7 +55,9 @@ export function describeSyncStatus(sync) {
       return {
         tone: 'warn',
         text:
-          'Arguments on this device are ahead of the database (or still uploading). Do not trust Backup until this clears.',
+          sync.status === 'syncing'
+            ? 'Saving Arguments to the workspace database…'
+            : 'Saving Arguments to the workspace database (retrying if needed). Do not trust Backup until this clears.',
       }
     }
     return {
