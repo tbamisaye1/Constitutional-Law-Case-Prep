@@ -30,6 +30,7 @@ import {
   markDirty,
   metaKey,
   pendingCount,
+  pruneUnpushableDirty,
   rejectedArgumentsEcho,
   rebaseAcceptedArguments,
 } from '../lib/sync'
@@ -736,6 +737,17 @@ async function runSync({
   if (memory.syncStatus === 'off') return
   // Catch drift before the leader gate so followers can decide to push.
   markArgumentsDirtyIfLocalAhead()
+  // Orphan dirty flags (stripped workspace mirrors) made "Saving N changes"
+  // stick forever while heartbeats stayed empty.
+  const pruned = pruneUnpushableDirty(memory.store, memory.store.syncMeta)
+  if (pruned.dropped.length) {
+    memory = {
+      ...memory,
+      store: { ...memory.store, syncMeta: pruned.syncMeta },
+    }
+    emit()
+    persistSoon()
+  }
   const followerMayPush = allowFollower || argumentsNeedPush()
   if (!isSyncLeader && !followerMayPush) return
   if (!syncBootstrapDone && !allowBeforeBootstrap && !forcePull && !followerMayPush) return
@@ -771,13 +783,6 @@ async function runSync({
   // its own push instead of waiting for the next edit to trigger one.
   if (ok && pendingCount(memory.store.syncMeta) > 0) {
     scheduleSync(SYNC_DEBOUNCE_MS, { forcePull: true })
-  }
-  // Still ahead after a "successful" exchange (stale-base clear without write,
-  // or base/local shape drift): force-overwrite so the banner cannot stick.
-  if (ok && argumentsLocalAheadOfBase() && editorCanWrite()) {
-    window.setTimeout(() => {
-      void forceSaveArguments()
-    }, 250)
   }
 }
 

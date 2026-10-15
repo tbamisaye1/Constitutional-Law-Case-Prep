@@ -17,6 +17,7 @@ import {
   markSeedRowsDirty,
   metaKey,
   pendingCount,
+  pruneUnpushableDirty,
   rebaseAcceptedArguments,
   rejectedArgumentsEcho,
 } from './sync'
@@ -510,5 +511,36 @@ describe('rebaseAcceptedArguments', () => {
     ).toEqual([])
     const meta = typedDuringPush()
     expect(rebaseAcceptedArguments(meta, undefined, undefined).syncMeta).toBe(meta)
+  })
+})
+
+describe('pruneUnpushableDirty', () => {
+  it('drops dirty flags for workspace docs that are not in the store and are not tombstones', () => {
+    const argsKey = metaKey('library_records', 'arguments', 'main')
+    const noteKey = metaKey('library_records', 'notebook', 'main')
+    const syncMeta = {
+      ...emptySyncMeta(),
+      rows: {
+        [argsKey]: { updatedAt: 1, deleted: false },
+        [noteKey]: { updatedAt: 1, deleted: false },
+      },
+      dirty: { [argsKey]: true, [noteKey]: true },
+    }
+    // Empty mirrors (as after libraryCachePayload strip) — nothing to push.
+    const { syncMeta: next, dropped } = pruneUnpushableDirty(store(), syncMeta)
+    expect(dropped.sort()).toEqual([argsKey, noteKey].sort())
+    expect(pendingCount(next)).toBe(0)
+  })
+
+  it('keeps tombstones that still need a delete push', () => {
+    const key = metaKey('annotations', 'a-gone')
+    const syncMeta = {
+      ...emptySyncMeta(),
+      rows: { [key]: { updatedAt: 5, deleted: true } },
+      dirty: { [key]: true },
+    }
+    const { syncMeta: next, dropped } = pruneUnpushableDirty(store(), syncMeta)
+    expect(dropped).toEqual([])
+    expect(next.dirty[key]).toBe(true)
   })
 })

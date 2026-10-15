@@ -74,39 +74,26 @@ export function SyncBanner({
     return () => window.removeEventListener(CONFLICTS_EVENT, onConflicts)
   }, [])
 
-  // If Arguments stay ahead after the first paint, force-save from this tab
-  // instead of hoping a background leader wakes up. Skip when logged out —
-  // the API editor lock rejects writes with 401 and a retry storm looks like
-  // "Saving…" forever.
+  // One quiet force-save when Arguments are ahead. Do not re-arm on every
+  // pending flicker — that fought stale-base rejects and kept the red banner up.
   useEffect(() => {
     if (!sync.pendingArguments || sync.status === 'off' || busy) return undefined
     if (lockEnabled && !canEdit) {
       setLoginOpen(true)
       return undefined
     }
+    if (sync.status === 'syncing' || sync.status === 'error') return undefined
     const timer = window.setTimeout(() => {
       void forceSaveArguments().then((result) => {
         if (result?.ok) setNote(`Arguments saved to the database at ${clock(Date.now())}.`)
-        else if (result?.reason === 'network') {
-          const msg = String(result.reason || '')
-          if (/log in/i.test(sync.error || '')) setLoginOpen(true)
-          else setNote('Could not reach the database. Your board is still on this device; retrying…')
-          void msg
-        } else if (result?.reason === 'readonly') {
-          setLoginOpen(true)
-        }
+        else if (result?.reason === 'readonly') setLoginOpen(true)
+        else if (/log in/i.test(sync.error || '')) setLoginOpen(true)
       })
-    }, 800)
+    }, 1200)
     return () => window.clearTimeout(timer)
-  }, [
-    sync.pendingArguments,
-    sync.status,
-    sync.error,
-    busy,
-    lockEnabled,
-    canEdit,
-    setLoginOpen,
-  ])
+    // Intentionally only when pendingArguments flips true, not on every status tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sync.pendingArguments])
 
 
   async function copyKey() {

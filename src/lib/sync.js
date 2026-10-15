@@ -609,7 +609,36 @@ export function keepNewerLocalEdits(local, incoming) {
 }
 
 export function pendingCount(syncMeta) {
-  return Object.keys(syncMeta.dirty).length
+  return Object.keys(syncMeta?.dirty || {}).length
+}
+
+/**
+ * Drop dirty flags that collectChanges will never send.
+ *
+ * Happens when the library cache strips Arguments / notebook / guide mirrors
+ * (empty arrays in the saved blob) but leaves syncMeta.dirty behind. Those
+ * orphans make the banner say "Saving 2 changes…" forever while every /sync
+ * is an empty heartbeat.
+ *
+ * Tombstones (deleted: true) stay — they still need a delete push.
+ *
+ * @returns {{syncMeta: object, dropped: string[]}}
+ */
+export function pruneUnpushableDirty(store, syncMeta) {
+  if (!syncMeta?.dirty || !Object.keys(syncMeta.dirty).length) {
+    return { syncMeta, dropped: [] }
+  }
+  const { sent } = collectChanges(store, syncMeta)
+  const dirty = { ...syncMeta.dirty }
+  const dropped = []
+  for (const key of Object.keys(dirty)) {
+    if (sent[key] !== undefined) continue
+    if (syncMeta.rows?.[key]?.deleted) continue
+    delete dirty[key]
+    dropped.push(key)
+  }
+  if (!dropped.length) return { syncMeta, dropped }
+  return { syncMeta: { ...syncMeta, dirty }, dropped }
 }
 
 export const SYNC_ENTITY_KEYS = { LIBRARY_KINDS, SEP }
