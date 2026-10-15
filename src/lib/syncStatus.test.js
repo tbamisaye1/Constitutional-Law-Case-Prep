@@ -45,7 +45,7 @@ describe('describeSyncStatus', () => {
       lastSyncedAt: Date.now() - 60_000,
     })
     expect(status.tone).toBe('warn')
-    expect(status.text.toLowerCase()).toContain('saving arguments')
+    expect(status.text.toLowerCase()).toContain('ahead of the database')
   })
 
   it('names Arguments confirmation when the server ack is present', () => {
@@ -80,7 +80,7 @@ describe('describeSyncStatus', () => {
       rejected: [{ kind: 'arguments', reason: 'arguments_rejected_stale_base' }],
     })
     expect(status.tone).toBe('warn')
-    expect(status.text).toContain('scratch')
+    expect(status.text.toLowerCase()).toContain('review conflicting')
   })
 
   it('keeps error and off states honest', () => {

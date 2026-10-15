@@ -48,9 +48,11 @@ import {
 } from '../lib/notebookWorkspace'
 import {
   allWorkspaceDocKinds,
+  argumentsLocalAheadOfBase,
   DOC_ROW_ID,
   flushWorkspaceDocSaves,
   discardWorkspaceDocSaves,
+  hasPersistedArgumentsSave,
   hydrateWorkspaceDocFromRemote,
   forgetArgumentsBase,
   rememberArgumentsBase,
@@ -58,6 +60,8 @@ import {
   WORKSPACE_DOCS,
   workspaceDocRowsFromLocal,
 } from '../lib/workspaceDocs'
+import { snapshotDocRevision } from '../lib/docRevisions'
+import { editorCanWrite } from '../lib/editorGate'
 
 const KEY = 'case-prep-library-v5'
 
@@ -304,6 +308,41 @@ function hasPendingArguments(syncMeta) {
   return Object.keys(dirty).some(isArgumentsMetaKey)
 }
 
+/**
+ * If Chrome holds an Arguments board ahead of the last known server base but
+ * syncMeta is not dirty (follower never transferred dirty, debounce lost the
+ * publish, or dirty was cleared without a push), mark it dirty and mirror the
+ * local board into the sync store so the next exchange uploads it.
+ *
+ * @returns {boolean} true when a new dirty flag was set
+ */
+function markArgumentsDirtyIfLocalAhead() {
+  if (!WORKSPACE_ID || !editorCanWrite()) return false
+  if (!argumentsLocalAheadOfBase()) return false
+  const [board] = workspaceDocRowsFromLocal('arguments')
+  if (!board) return false
+  const key = metaKey('library_records', 'arguments', DOC_ROW_ID)
+  if (memory.store.syncMeta?.dirty?.[key]) {
+    // Already dirty; still refresh the mirrored row so collectChanges sends
+    // the latest localStorage board, not a stale in-memory copy.
+    const prev = memory.store.argumentsBoard?.[0]
+    if (prev && WORKSPACE_DOCS.arguments.same(prev, board)) return false
+    memory = {
+      ...memory,
+      store: { ...memory.store, argumentsBoard: [board] },
+    }
+    return false
+  }
+  const syncMeta = markDirty(memory.store.syncMeta, [key], Date.now())
+  memory = {
+    ...memory,
+    store: { ...memory.store, argumentsBoard: [board], syncMeta },
+  }
+  emit()
+  persistSoon()
+  return true
+}
+
 // Local-only browsers may push a notebook that raced the library mirror.
 // Synced workspaces wait for Postgres on boot instead.
 if (!WORKSPACE_ID) {
@@ -349,7 +388,12 @@ function publishWorkspaceDocToSync(kind, data) {
     [metaKey('library_records', spec.kind, DOC_ROW_ID)]
   )
   if (syncBootstrapDone) {
+    // Arguments: push immediately. A 900ms quiet period was enough for a
+    // hard refresh / tab close to destroy dirty before the first upload.
     scheduleSync(kind === 'arguments' ? 0 : WORKSPACE_DOC_SYNC_MS)
+  } else if (kind === 'arguments') {
+    // Boot still running: keep the dirty flag (updateStore already set it).
+    // The post-bootstrap drift check will schedule the push.
   }
 }
 
@@ -470,7 +514,12 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
   emit()
 
   try {
-    const response = await syncChanges(memory.store.syncMeta.cursor, changes, { keepalive })
+    // View-only sessions may pull (empty body) but must not push dirty rows.
+    const outbound = editorCanWrite() ? changes : {}
+    const outboundSent = editorCanWrite() ? sent : {}
+    const response = await syncChanges(memory.store.syncMeta.cursor, outbound, {
+      keepalive,
+    })
 
     const notebookBefore = memory.store.notebook?.[0]
     const docsBefore = Object.fromEntries(
@@ -501,7 +550,7 @@ async function exchange(changes, sent, { keepalive = false } = {}) {
     }
 
     const applied = applyChanges(memory.store, memory.store.syncMeta, pullChanges)
-    let syncMeta = clearAccepted(applied.syncMeta, sent, response.serverTime)
+    let syncMeta = clearAccepted(applied.syncMeta, outboundSent, response.serverTime)
     if (rejectedArgs.length) {
       const dirty = { ...syncMeta.dirty }
       for (const row of rejectedArgs) {
@@ -660,38 +709,57 @@ function requestFreshPull() {
 }
 
 /** Push dirty rows and pull whatever else changed. */
-async function runSync({ keepalive = false, forcePull = false, allowBeforeBootstrap = false } = {}) {
+async function runSync({
+  keepalive = false,
+  forcePull = false,
+  allowBeforeBootstrap = false,
+  /** Follower keepalive on tab close: push pending Arguments without the leader. */
+  allowFollower = false,
+} = {}) {
   if (memory.syncStatus === 'off') return
-  if (!isSyncLeader) return
-  if (!syncBootstrapDone && !allowBeforeBootstrap && !forcePull) return
+  if (!isSyncLeader && !allowFollower) return
+  if (!syncBootstrapDone && !allowBeforeBootstrap && !forcePull && !allowFollower) return
 
   // An edit that lands mid-request must not be dropped. Come back once the
   // current exchange is done rather than returning and waiting for either
   // another edit or the retry timer.
   if (syncInFlight) {
-    scheduleSync(SYNC_DEBOUNCE_MS, { forcePull })
+    if (!allowFollower) scheduleSync(SYNC_DEBOUNCE_MS, { forcePull })
     return
   }
+
+  // Catch "localStorage has Executive notes, dirty flag was never set / was
+  // cleared without a push". Heartbeats alone used to report Synced forever.
+  markArgumentsDirtyIfLocalAhead()
 
   const { changes, sent } = collectChanges(memory.store, memory.store.syncMeta)
   // Without forcePull, a quiet tab never talks to Postgres. That is fine for
   // saving (this tab has nothing to push) and wrong for live windows: the
   // other browser already uploaded arguments. Heartbeat / visibility use
   // forcePull so idle clients still pull.
-  if (!forcePull && !Object.keys(sent).length && memory.syncStatus !== 'error') return
+  if (
+    !forcePull &&
+    !allowFollower &&
+    !Object.keys(sent).length &&
+    memory.syncStatus !== 'error'
+  ) {
+    return
+  }
+  if (allowFollower && !Object.keys(sent).length) return
 
   const ok = await exchange(changes, sent, { keepalive })
 
   // A row re-edited while the request was in flight stays dirty, so give it
   // its own push instead of waiting for the next edit to trigger one.
-  if (ok && pendingCount(memory.store.syncMeta) > 0) scheduleSync()
+  if (ok && isSyncLeader && pendingCount(memory.store.syncMeta) > 0) scheduleSync()
 }
 
 const MERGE_BACKUP_KEY = 'case-prep-merge-backup-v1'
 // Bump the suffix when a one-shot server restore must run again after deploy.
 const RECOVER_NOTES_FLAG = 'case-prep-recover-notes-2026-10-05-askai'
 // Force Postgres arguments to win once after seed/localStorage wipe bugs.
-const RECOVER_ARGUMENTS_FLAG = 'case-prep-recover-args-2026-10-06-user-pitr-not-ai'
+// Bump when a stale tab may hold fewer respondent drafts than Postgres.
+const RECOVER_ARGUMENTS_FLAG = 'case-prep-recover-args-2026-10-12-respondent-drafts'
 
 function pickMergedText(keepVal, dropVal) {
   const keep = String(keepVal || '').trim()
@@ -838,23 +906,66 @@ async function bootstrapSync() {
       return
     }
 
-    // Rewrite every editor cache from the API response. forceRemote so a
-    // leftover seed arguments file cannot merge on top of Postgres.
+    // Rewrite editor caches from the API response. Arguments are special: a
+    // hard refresh used to forceRemote-wipe Chrome notes that never uploaded,
+    // then clear dirty, so the only copy of yesterday's prongs died on boot.
+    // If local Arguments differ from the pulled server row, three-way merge
+    // and mark dirty so unique local text uploads instead of being erased.
+    let argumentsNeedUpload = false
     for (const kind of allWorkspaceDocKinds()) {
       const spec = WORKSPACE_DOCS[kind]
       const row = memory.store[spec.collection]?.[0]
-      if (row) hydrateWorkspaceDocFromRemote(kind, row, { forceRemote: true })
+      if (!row) continue
+      if (kind === 'arguments') {
+        const rawLocal = readJson(spec.storageKey, null)
+        const localBoard = hasPersistedArgumentsSave(rawLocal)
+          ? spec.loadLocal()
+          : null
+        const remoteShape = {
+          draftsBySide: row.draftsBySide,
+          activeDraftBySide: row.activeDraftBySide,
+          practiceLog: row.practiceLog || [],
+        }
+        const localDiffers =
+          localBoard && !spec.same(localBoard, remoteShape)
+        if (localDiffers) {
+          snapshotDocRevision(kind, localBoard, 'boot_preserve')
+          hydrateWorkspaceDocFromRemote(kind, row, { forceRemote: false })
+          argumentsNeedUpload = true
+        } else {
+          hydrateWorkspaceDocFromRemote(kind, row, { forceRemote: true })
+        }
+      } else {
+        hydrateWorkspaceDocFromRemote(kind, row, { forceRemote: true })
+      }
     }
     const notebookRow = memory.store.notebook?.[0]
     if (notebookRow) hydrateNotebookFromRemote(notebookRow)
 
-    // Server-owned boot: no seed upload, no "unsynced local invent" push.
-    // Only edits the user makes after ready may mark dirty and upload.
+    // Server-owned boot: no seed upload. Clear stale dirty, then re-dirty
+    // Arguments when this browser still holds text Postgres does not.
     setSyncMeta({
       ...(memory.store.syncMeta || emptySyncMeta()),
       dirty: {},
     })
     markWorkspaceReady()
+    if (argumentsNeedUpload) {
+      // Merged board is ahead of Postgres; dirty even if base seed races.
+      const [board] = workspaceDocRowsFromLocal('arguments')
+      if (board) {
+        const key = metaKey('library_records', 'arguments', DOC_ROW_ID)
+        const syncMeta = markDirty(memory.store.syncMeta, [key], Date.now())
+        memory = {
+          ...memory,
+          store: { ...memory.store, argumentsBoard: [board], syncMeta },
+        }
+        emit()
+        persistSoon()
+      }
+      scheduleSync(0, { forcePull: true })
+    } else if (markArgumentsDirtyIfLocalAhead()) {
+      scheduleSync(0, { forcePull: true })
+    }
   } finally {
     bootstrapInFlight = false
   }
@@ -922,6 +1033,7 @@ export async function reloadFromDatabase() {
  */
 export async function forceSaveArguments() {
   if (memory.syncStatus === 'off') return { ok: false, reason: 'off' }
+  if (!editorCanWrite()) return { ok: false, reason: 'readonly' }
 
   // The page editor hands its unsent text to React, which saves it on the next
   // render. Give that render a moment before flushing the debounced save.
@@ -1343,20 +1455,31 @@ if (typeof window !== 'undefined') {
     // push, or the last keystrokes never leave this tab.
     flushWorkspaceDocSaves()
     flushNotebookSnapshotSave()
+    markArgumentsDirtyIfLocalAhead()
     window.clearTimeout(persistTimer)
     persistNow()
     // Local persist alone is not enough for phone / friend's laptop. Do not
     // wait on the debounce timer (setTimeout can die with the tab). Fire the
     // push now with keepalive so the browser can finish after unload.
+    // Followers used to return early here, so closing a non-leader tab left
+    // Arguments only in Chrome while the leader never saw a dirty flag.
     if (WORKSPACE_ID && pendingCount(memory.store.syncMeta) > 0) {
       window.clearTimeout(syncTimer)
-      void runSync({ keepalive: true })
+      void runSync({ keepalive: true, allowFollower: !isSyncLeader })
     }
   })
   // Coming back online is the common case for a laptop that was shut, so retry
   // straight away rather than waiting out the retry timer.
   window.addEventListener('online', () => scheduleSync(0, { forcePull: true }))
   window.addEventListener('storage', (event) => {
+    // Another tab wrote Arguments to the dedicated key. Adopt + dirty so the
+    // leader pushes; previously only the library mirror key was watched.
+    if (event.key === WORKSPACE_DOCS.arguments.storageKey && event.newValue) {
+      if (markArgumentsDirtyIfLocalAhead() && isSyncLeader) {
+        scheduleSync(0, { forcePull: true })
+      }
+      return
+    }
     if (event.key !== KEY || !event.newValue) return
     try {
       const parsed = JSON.parse(event.newValue)
@@ -1373,7 +1496,8 @@ if (typeof window !== 'undefined') {
       memory = { ...memory, store: merged }
       emit()
       if (merged !== incoming) persistSoon()
-      if (isSyncLeader && pendingCount(merged.syncMeta) > 0) scheduleSync()
+      markArgumentsDirtyIfLocalAhead()
+      if (isSyncLeader && pendingCount(memory.store.syncMeta) > 0) scheduleSync()
       hydrateBlobs()
       // Same-profile extra tabs get the library key via storage events, but
       // Arguments / Notes still live in dedicated keys until hydrate runs.
@@ -2280,7 +2404,8 @@ export function useCaseLibrary() {
       error: snap.syncError,
       lastSyncedAt: snap.lastSyncedAt,
       pending: pendingCount(snap.store.syncMeta),
-      pendingArguments: hasPendingArguments(snap.store.syncMeta),
+      pendingArguments:
+        hasPendingArguments(snap.store.syncMeta) || argumentsLocalAheadOfBase(),
       argumentsAckedAt: snap.argumentsAckedAt,
       rejected: snap.syncRejected || [],
       workspaceId: WORKSPACE_ID,
@@ -2288,10 +2413,16 @@ export function useCaseLibrary() {
     syncNow: () => {
       flushWorkspaceDocSaves()
       flushNotebookSnapshotSave()
+      markArgumentsDirtyIfLocalAhead()
       window.clearTimeout(syncTimer)
       if (!isSyncLeader) {
         window.clearTimeout(persistTimer)
         persistNow()
+        // If this tab's board is ahead of Postgres and the leader is asleep,
+        // push from here instead of hoping the leader notices.
+        if (hasPendingArguments(memory.store.syncMeta)) {
+          return runSync({ forcePull: true, allowFollower: true })
+        }
         return askLeaderToSync()
       }
       return runSync({ forcePull: true })
@@ -2299,6 +2430,7 @@ export function useCaseLibrary() {
     retryWorkspaceBootstrap,
     reloadFromDatabase,
     forceSaveArguments,
+    argumentsLocalAhead: () => argumentsLocalAheadOfBase(),
     recoverFromServer: () => {
       try {
         localStorage.removeItem(RECOVER_NOTES_FLAG)

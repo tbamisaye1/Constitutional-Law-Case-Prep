@@ -8,14 +8,20 @@
 import { readJson, writeJsonResilient } from './persist'
 
 export const DOC_REVISIONS_KEY = 'case-prep-doc-revisions-v1'
-/** Full Arguments boards are large; keep a short rolling window only. */
-export const DOC_REVISIONS_KEEP = 5
+/**
+ * Full Arguments boards are large. Keep enough history that a wiped prong can
+ * still be recovered after a few hours of editing (was 5; too easy to rotate
+ * out the only copy that still had quotes).
+ */
+export const DOC_REVISIONS_KEEP = 20
 
 /**
  * Typing used to snapshot the full Arguments board on every keystroke (large
  * HTML notes × rolling history). Keep recovery snapshots, but not mid-burst.
+ * 8s is short enough that a pasted quote block usually lands in history before
+ * the next hydrate can replace the live key.
  */
-export const DOC_REVISION_SAVE_THROTTLE_MS = 15_000
+export const DOC_REVISION_SAVE_THROTTLE_MS = 8_000
 
 /** @type {Record<string, number>} */
 const lastSaveSnapshotAt = {}

@@ -100,12 +100,27 @@ describe('Arguments pull merge (fromRow)', () => {
 })
 
 describe('hydrateWorkspaceDocFromRemote', () => {
-  it('records the pulled row as the new merge base', () => {
+  it('records the pulled row as the new merge base without wiping local-only notes', () => {
     memory.set(spec.storageKey, JSON.stringify(boardWith('<p>old</p>')))
     hydrateWorkspaceDocFromRemote('arguments', boardWith('<p>new from server</p>'))
     expect(memory.has(ARGUMENTS_BASE_KEY)).toBe(true)
     expect(notesOf(readArgumentsBase())).toBe('<p>new from server</p>')
-    expect(notesOf(JSON.parse(memory.get(spec.storageKey)))).toBe('<p>new from server</p>')
+    // No prior base used to mean "server wins wholesale", which erased Chrome
+    // notes that never uploaded. Seed base + three-way keeps local-only text.
+    expect(notesOf(JSON.parse(memory.get(spec.storageKey)))).toBe('<p>old</p>')
+  })
+
+  it('forceRemote still replaces localStorage with the pulled board', () => {
+    memory.set(spec.storageKey, JSON.stringify(boardWith('<p>old</p>')))
+    hydrateWorkspaceDocFromRemote(
+      'arguments',
+      boardWith('<p>new from server</p>'),
+      { forceRemote: true }
+    )
+    expect(notesOf(readArgumentsBase())).toBe('<p>new from server</p>')
+    expect(notesOf(JSON.parse(memory.get(spec.storageKey)))).toBe(
+      '<p>new from server</p>'
+    )
   })
 
   it('merges a pull into a still-debounced local save instead of overwriting either', () => {

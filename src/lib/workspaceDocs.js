@@ -9,8 +9,10 @@
 import { readJson, writeJson, writeJsonResilient } from './persist'
 import { SEED_FACTS } from '../data/factsSeed'
 import { normalizeArgumentsBoard, removedOutlineIdsByDraft } from './argumentsBoard'
+import { recordConflicts } from './argumentsConflicts'
 import { boardContent, mergeArgumentsBoards } from './argumentsMerge'
 import { snapshotDocRevision } from './docRevisions'
+import { editorCanWrite } from './editorGate'
 import { getWorkspaceId } from './workspace'
 
 /** When a workspace key exists, Postgres is the source of truth. Never invent seed. */
@@ -45,6 +47,24 @@ export function forgetArgumentsBase() {
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * True when this browser's Arguments localStorage board differs from the last
+ * board we know Postgres held (the three-way-merge base).
+ *
+ * Used to catch "saved locally, never marked dirty / never pushed" drift:
+ * heartbeats still return 200, Backup now still snapshots Postgres, and the
+ * banner can say Synced while Executive drafts only live in Chrome.
+ */
+export function argumentsLocalAheadOfBase() {
+  if (!hasPersistedArgumentsSave(readJson(WORKSPACE_DOCS.arguments.storageKey, null))) {
+    return false
+  }
+  const local = WORKSPACE_DOCS.arguments.loadLocal()
+  const base = readArgumentsBase()
+  if (!base) return true
+  return !WORKSPACE_DOCS.arguments.same(local, base)
 }
 
 /**
@@ -149,7 +169,10 @@ export const WORKSPACE_DOCS = {
       // no base (first run after this change, cleared storage) the server wins:
       // never guess by note length, that is what pushed stale text back.
       const base = readArgumentsBase()
-      const { board: merged } = mergeArgumentsBoards(base, local, remote)
+      const { board: merged, conflicts } = mergeArgumentsBoards(base, local, remote)
+      if (conflicts.length) {
+        recordConflicts({ conflicts, local, remote, merged })
+      }
       return {
         ...remote,
         draftsBySide: merged.draftsBySide,
@@ -315,6 +338,8 @@ export function stageWorkspaceDocLocal(kind, data) {
  */
 export function saveWorkspaceDoc(kind, data, { immediate = false, sync = true } = {}) {
   if (!WORKSPACE_DOCS[kind]) return
+  // View-only browsers must not overwrite localStorage or mark Postgres dirty.
+  if (sync && !editorCanWrite()) return
   const prevPending = pendingSaves[kind]
   // A chrome-only save must not cancel a pending content push.
   if (prevPending && !sync && prevPending.sync) {
@@ -374,6 +399,20 @@ export function hydrateWorkspaceDocFromRemote(kind, row, { forceRemote = false }
     globalThis.clearTimeout(saveTimers.arguments)
     delete pendingSaves.arguments
     if (!forceRemote) writeWorkspaceDocLocal(kind, pending.data)
+  }
+  // mergeArgumentsBoards(!base) returns remote wholesale. If Chrome already
+  // holds a different board and we never recorded a base (cleared storage,
+  // older client, first visit after this guard), seed base to the pulled row
+  // so local-only Executive notes count as the changed side instead of dying.
+  if (kind === 'arguments' && !forceRemote && !readArgumentsBase()) {
+    const rawLocal = readJson(spec.storageKey, null)
+    if (hasPersistedArgumentsSave(rawLocal)) {
+      const localBoard = normalizeArgumentsBoard(rawLocal)
+      const remoteBoard = normalizeArgumentsBoard(row)
+      if (!spec.same(localBoard, remoteBoard)) {
+        rememberArgumentsBase(row)
+      }
+    }
   }
   const data =
     kind === 'arguments' ? spec.fromRow(row, { forceRemote }) : spec.fromRow(row)

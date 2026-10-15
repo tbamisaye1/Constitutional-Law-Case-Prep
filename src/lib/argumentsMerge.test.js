@@ -208,6 +208,42 @@ describe('mergeArgumentsBoards', () => {
     expect(out.activeDraftBySide.petitioner).toBe('d2')
     expect(out.draftsBySide.petitioner.map((d) => d.id)).toEqual(['d1', 'd2'])
   })
+
+  it('rescues a contentful draft a stale tab dropped while keeping empty stubs deletable', () => {
+    const rich = {
+      id: 'draft-youngstown',
+      name: 'Draft',
+      notes: '',
+      sections: [
+        {
+          id: 'sY',
+          title: 'Youngstown',
+          notes: '',
+          prongs: [
+            {
+              id: 'pY',
+              title: 'Category One',
+              notes: '<p>Quirin and Mathews board notes that must survive sync</p>',
+            },
+          ],
+        },
+      ],
+    }
+    const base = board([clone(BASE).draftsBySide.petitioner[0], rich])
+    // Stale tab never had the Youngstown draft and pushes only Main.
+    const local = board([clone(BASE).draftsBySide.petitioner[0]])
+    const remote = clone(base)
+    const { board: out } = mergeArgumentsBoards(base, local, remote)
+    expect(out.draftsBySide.petitioner.map((d) => d.id)).toContain('draft-youngstown')
+
+    // Empty stub deleted on both sides stays gone.
+    const empty = { id: 'stub', name: 'logical dragy', notes: '<p></p>', sections: [] }
+    const base2 = board([clone(BASE).draftsBySide.petitioner[0], empty])
+    const local2 = board([clone(BASE).draftsBySide.petitioner[0]])
+    const remote2 = board([clone(BASE).draftsBySide.petitioner[0]])
+    const { board: out2 } = mergeArgumentsBoards(base2, local2, remote2)
+    expect(out2.draftsBySide.petitioner.map((d) => d.id)).not.toContain('stub')
+  })
 })
 
 describe('mergeDrafts (page editor)', () => {

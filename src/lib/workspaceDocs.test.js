@@ -10,7 +10,9 @@ vi.stubGlobal('localStorage', {
 
 const {
   WORKSPACE_DOCS,
+  argumentsLocalAheadOfBase,
   hasPersistedArgumentsSave,
+  rememberArgumentsBase,
   registerWorkspaceDocPublisher,
   saveWorkspaceDoc,
   workspaceDocRowsFromLocal,
@@ -47,6 +49,90 @@ describe('workspaceDocRowsFromLocal', () => {
     expect(workspaceDocRowsFromLocal('facts')).toEqual([])
     expect(workspaceDocRowsFromLocal('openings')).toEqual([])
     expect(workspaceDocRowsFromLocal('guide_edits')).toEqual([])
+  })
+})
+
+describe('argumentsLocalAheadOfBase', () => {
+  beforeEach(() => {
+    memory.clear()
+  })
+
+  it('is false with no local Arguments save', () => {
+    expect(argumentsLocalAheadOfBase()).toBe(false)
+  })
+
+  it('is true when local has a board and there is no server base yet', () => {
+    memory.set(
+      'case-prep-arguments-v1',
+      JSON.stringify({
+        draftsBySide: {
+          petitioner: [{ id: 'petitioner-main', name: 'Main', notes: '', sections: [] }],
+          respondent: [
+            {
+              id: 'draft-exec',
+              name: 'Executive',
+              notes: '',
+              sections: [{ id: 's1', title: 'Zone of Twilight', notes: '<p>local only</p>', prongs: [] }],
+            },
+          ],
+        },
+        activeDraftBySide: {},
+        practiceLog: [],
+      })
+    )
+    expect(argumentsLocalAheadOfBase()).toBe(true)
+  })
+
+  it('is false when local matches the remembered server base', () => {
+    const board = {
+      draftsBySide: {
+        petitioner: [{ id: 'petitioner-main', name: 'Main', notes: '', sections: [] }],
+        respondent: [{ id: 'respondent-main', name: 'Main', notes: '', sections: [] }],
+      },
+      activeDraftBySide: {},
+      practiceLog: [],
+    }
+    memory.set('case-prep-arguments-v1', JSON.stringify(board))
+    rememberArgumentsBase(board)
+    expect(argumentsLocalAheadOfBase()).toBe(false)
+  })
+
+  it('is true when local gained a draft the base does not have', () => {
+    const base = {
+      draftsBySide: {
+        petitioner: [{ id: 'petitioner-main', name: 'Main', notes: '', sections: [] }],
+        respondent: [{ id: 'respondent-main', name: 'Main', notes: '', sections: [] }],
+      },
+      activeDraftBySide: {},
+      practiceLog: [],
+    }
+    rememberArgumentsBase(base)
+    memory.set(
+      'case-prep-arguments-v1',
+      JSON.stringify({
+        ...base,
+        draftsBySide: {
+          ...base.draftsBySide,
+          respondent: [
+            ...base.draftsBySide.respondent,
+            {
+              id: 'draft-exec',
+              name: 'Executive',
+              notes: '',
+              sections: [
+                {
+                  id: 's-twilight',
+                  title: 'Under the Zone of Twilight is authorised',
+                  notes: '<p>Implied posture</p>',
+                  prongs: [],
+                },
+              ],
+            },
+          ],
+        },
+      })
+    )
+    expect(argumentsLocalAheadOfBase()).toBe(true)
   })
 })
 

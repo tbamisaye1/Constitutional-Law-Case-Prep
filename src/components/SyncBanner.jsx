@@ -1,10 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   createWorkspaceBackup,
   downloadWorkspaceBackup,
   listWorkspaceBackups,
 } from '../api/client'
 import { useCaseLibrary } from '../hooks/useCaseLibrary'
+import {
+  CONFLICTS_EVENT,
+  readPendingConflicts,
+} from '../lib/argumentsConflicts'
 import { describeSyncStatus } from '../lib/syncStatus'
 import { isWorkspacePinned, setWorkspaceId } from '../lib/workspace'
 
@@ -26,6 +30,11 @@ export function SyncBanner({
   saveError: saveErrorOverride,
   onRetrySaveError,
   retrySaveLabel = 'Retry',
+  /**
+   * Quiet strip for Notes: status + one Workspace control. Backup / reload /
+   * devices live in the panel so the editor keeps the vertical space.
+   */
+  compact = false,
   /** @deprecated Prefer letting SyncBanner read the store itself. */
   sync: syncProp,
   /** @deprecated */
@@ -49,6 +58,16 @@ export function SyncBanner({
   const [paste, setPaste] = useState('')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
+  const [hasConflicts, setHasConflicts] = useState(() => Boolean(readPendingConflicts()))
+
+  useEffect(() => {
+    function onConflicts(event) {
+      setHasConflicts(Boolean(event?.detail?.conflicts?.length || readPendingConflicts()))
+    }
+    window.addEventListener(CONFLICTS_EVENT, onConflicts)
+    return () => window.removeEventListener(CONFLICTS_EVENT, onConflicts)
+  }, [])
+
 
   async function copyKey() {
     if (!sync.workspaceId) return
@@ -74,7 +93,18 @@ export function SyncBanner({
     setBusy(true)
     setNote('')
     try {
-      // Flush debounced editor writes and push before snapshotting Postgres.
+      // Backup snapshots Postgres. If this tab's Arguments never got marked
+      // dirty, a plain sync leaves the server stale and the backup lies.
+      // Force-save the board on screen first, then snapshot.
+      const pushed = await lib.forceSaveArguments()
+      if (!pushed.ok && pushed.reason !== 'nothing-to-save') {
+        setNote(
+          pushed.reason === 'network'
+            ? 'Could not reach the database, so no backup was taken. Your board is still on this device.'
+            : `Arguments did not reach Postgres (${pushed.reason}). Backup skipped so it would not freeze a stale copy.`
+        )
+        return
+      }
       if (typeof onSyncNow === 'function') await Promise.resolve(onSyncNow())
       const created = await createWorkspaceBackup(
         `Manual ${new Date().toISOString().slice(0, 16)}`
@@ -84,7 +114,7 @@ export function SyncBanner({
         ? created.includes.join(', ')
         : 'arguments, notes, guide, facts, openings, cases, PDFs'
       setNote(
-        `Backup #${created.id} saved in Postgres and downloaded (${bits}). Hard refresh cannot erase that file.`
+        `Backup #${created.id} saved in Postgres and downloaded (${bits}). Arguments were force-saved first.`
       )
       setOpen(true)
     } catch (error) {
@@ -194,7 +224,7 @@ export function SyncBanner({
           ) : null}
         </p>
       ) : null}
-      <p className={`save-banner mono sync-${tone}`}>
+      <p className={`save-banner mono sync-${tone}${compact ? ' is-compact' : ''}`}>
         <span className="save-banner-text" title={text}>
           {text}
         </span>
@@ -204,7 +234,21 @@ export function SyncBanner({
               Retry now
             </button>
           ) : null}
-          {sync.workspaceId && sync.status !== 'off' ? (
+          {hasConflicts ? (
+            <button
+              type="button"
+              className="anno-jump"
+              onClick={() => {
+                document
+                  .querySelector('.args-conflict-review')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+              }}
+              title="Compare your version with the other one and choose which text to keep"
+            >
+              Review conflicts
+            </button>
+          ) : null}
+          {!compact && sync.workspaceId && sync.status !== 'off' ? (
             <>
               <button
                 type="button"
@@ -234,16 +278,53 @@ export function SyncBanner({
           ) : null}
           {sync.workspaceId ? (
             <button type="button" className="anno-jump" onClick={() => setOpen((v) => !v)}>
-              {open ? 'Hide devices' : 'Devices'}
+              {open ? 'Hide' : compact ? 'Workspace' : 'Devices'}
             </button>
           ) : null}
         </span>
       </p>
       {open && sync.workspaceId ? (
         <div className="workspace-link-panel">
+          {compact ? (
+            <div className="workspace-link-actions workspace-link-actions-row">
+              {sync.status !== 'off' ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn-soft"
+                    disabled={busy}
+                    onClick={reloadFromDb}
+                    title="Discard this device's copy and show exactly what the database holds"
+                  >
+                    Reload from database
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-soft"
+                    disabled={busy}
+                    onClick={forceSave}
+                    title="Save this tab's Arguments board to the database, replacing the copy there"
+                  >
+                    Force save
+                  </button>
+                  <button type="button" className="btn-soft" disabled={busy} onClick={backupNow}>
+                    {busy ? 'Backing up…' : 'Backup now'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-soft"
+                    disabled={busy}
+                    onClick={downloadLatest}
+                  >
+                    Download backup
+                  </button>
+                </>
+              ) : null}
+            </div>
+          ) : null}
           <p>
             {pinned
-              ? 'This build uses one shared workspace. After a hard refresh, the app reloads from the database for arguments, notes, guide, facts, openings, and Instant Case PDFs. Backup now saves all of that (including every Arguments draft and prong note) to Postgres and a JSON file on your laptop.'
+              ? 'This build uses one shared workspace. After a hard refresh, the app reloads from the database for arguments, notes, guide, facts, openings, and Instant Case PDFs. Backup now force-saves this tab\'s Arguments board to Postgres first, then snapshots the workspace and downloads a JSON file.'
               : 'Each browser keeps its own workspace key unless you link them. Copy this key into the other device, then reload. Use Backup now so arguments, notes, and the rest exist outside the browser.'}
           </p>
           {detailBits.length ? (

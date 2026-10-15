@@ -19,7 +19,7 @@ function rejectedMessage(rejected) {
     return 'Server blocked seed outline text from overwriting your Arguments notes.'
   }
   if (reasons.some((r) => r.includes('stale_base') || r.includes('missing_base'))) {
-    return 'Arguments changed somewhere else (another tab, device, or the assistant) while you edited. Both versions were merged; any text that clashed is at the end of the draft scratch.'
+    return 'Arguments changed somewhere else (another tab, device, or the assistant) while you edited. Review conflicting fields and choose which text to keep.'
   }
   return 'Server rejected part of your last Arguments sync. Check the board against another device.'
 }
@@ -54,7 +54,8 @@ export function describeSyncStatus(sync) {
     if (pendingArguments) {
       return {
         tone: 'warn',
-        text: 'Saving Arguments to the workspace database…',
+        text:
+          'Arguments on this device are ahead of the database (or still uploading). Do not trust Backup until this clears.',
       }
     }
     return {

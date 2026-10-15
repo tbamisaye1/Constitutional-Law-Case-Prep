@@ -195,6 +195,41 @@ function draftChanged(base, item) {
   return !deepSame(base, item)
 }
 
+/** True when a draft still carries real notes (not an empty chip). */
+export function draftHasNotes(draft) {
+  if (!draft || typeof draft !== 'object') return false
+  const texts = [draft.notes, draft.scratch]
+  for (const section of draft.sections || []) {
+    texts.push(section?.notes)
+    for (const prong of section?.prongs || []) texts.push(prong?.notes)
+  }
+  for (const html of texts) {
+    const plain = String(html || '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (plain.length >= 12) return true
+  }
+  return false
+}
+
+/**
+ * Re-add drafts that still have notes when a wipe-style merge dropped them.
+ * Empty stubs stay gone so intentional trash of blank chips still works.
+ */
+function rescueContentfulDrafts(merged, localList, remoteList) {
+  const seen = new Set(ids(merged))
+  const out = [...(merged || [])]
+  for (const draft of [...(remoteList || []), ...(localList || [])]) {
+    if (!draft || typeof draft.id !== 'string' || seen.has(draft.id)) continue
+    if (!draftHasNotes(draft)) continue
+    seen.add(draft.id)
+    out.push(draft)
+  }
+  return out
+}
+
 function mergeProng(base, local, remote, path, conflicts, opts) {
   return mergeFields(PRONG_FIELDS, base, local, remote, path, conflicts, opts)
 }
@@ -322,22 +357,25 @@ export function mergeArgumentsBoards(base, local, remote, { now = Date.now() } =
   const conflicts = []
   const draftsBySide = {}
   for (const side of SIDES) {
+    const localList = local.draftsBySide?.[side]
+    const remoteList = remote.draftsBySide?.[side]
     const merged = mergeList(
       base.draftsBySide?.[side],
-      local.draftsBySide?.[side],
-      remote.draftsBySide?.[side],
+      localList,
+      remoteList,
       mergeDraft,
       draftChanged,
       `/${side}`,
       conflicts
     )
-    draftsBySide[side] = merged.map((draft) => {
+    const rescued = rescueContentfulDrafts(merged, localList, remoteList)
+    draftsBySide[side] = rescued.map((draft) => {
       const stashed = stashConflicts({ ...draft, __side: side }, conflicts, now)
       delete stashed.__side
       return stashed
     })
     if (!draftsBySide[side].length) {
-      draftsBySide[side] = remote.draftsBySide?.[side] || local.draftsBySide?.[side] || []
+      draftsBySide[side] = remoteList || localList || []
     }
   }
   const activeDraftBySide = {}
