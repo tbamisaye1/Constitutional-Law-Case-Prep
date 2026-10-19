@@ -46,6 +46,7 @@ const LIBRARY_KINDS = {
   guideEdits: 'guide_edits',
   factsBoard: 'facts',
   openings: 'openings',
+  cardsBoard: 'cards',
 }
 
 export function metaKey(entity, ...parts) {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { formatSourceLabel, SEED_FACTS } from '../data/factsSeed'
+import { formatSourceLabel, mergeAppendSeedFacts, SEED_FACTS } from '../data/factsSeed'
 import { onPageHide, readJson } from '../lib/persist'
 import { saveWorkspaceDoc, WORKSPACE_DOCS } from '../lib/workspaceDocs'
 
@@ -7,7 +7,7 @@ const KEY = 'case-prep-facts-v3'
 
 function load() {
   const saved = readJson(KEY, null)
-  if (Array.isArray(saved)) return saved
+  if (Array.isArray(saved)) return mergeAppendSeedFacts(saved)
   return SEED_FACTS
 }
 
@@ -21,6 +21,18 @@ export function useFacts() {
   const [view, setView] = useState('record') // record | browse | timeline | memorise
   const skipFirstWrite = useRef(true)
   const applyingRemote = useRef(false)
+  const mergedAppend = useRef(false)
+
+  // Persist newly appended seed facts once after load so sync picks them up.
+  useEffect(() => {
+    if (mergedAppend.current) return
+    mergedAppend.current = true
+    const saved = readJson(KEY, null)
+    if (!Array.isArray(saved)) return
+    const merged = mergeAppendSeedFacts(saved)
+    if (merged.length === saved.length) return
+    setFacts(merged)
+  }, [])
 
   useEffect(() => {
     if (skipFirstWrite.current) {
@@ -44,7 +56,13 @@ export function useFacts() {
       const next = event?.detail
       if (!Array.isArray(next?.facts)) return
       applyingRemote.current = true
-      setFacts(next.facts)
+      const merged = mergeAppendSeedFacts(next.facts)
+      setFacts(merged)
+      // If we appended seed facts onto a remote board, push the merge.
+      if (merged.length !== next.facts.length) {
+        applyingRemote.current = false
+        skipFirstWrite.current = false
+      }
     }
     window.addEventListener(WORKSPACE_DOCS.facts.event, onHydrate)
     return () => window.removeEventListener(WORKSPACE_DOCS.facts.event, onHydrate)
@@ -71,6 +89,32 @@ export function useFacts() {
       return hay.includes(q)
     })
   }, [facts, query, subsection, side, argumentTag])
+
+  const memorisePool = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return facts.filter((f) => {
+      const isMemo = (f.argumentTags || []).includes('memorise') || Boolean(f.memoriseLine)
+      if (!isMemo) return false
+      if (!q) return true
+      const hay = [f.text, f.memoriseLine, formatSourceLabel(f.source), f.side]
+        .join(' ')
+        .toLowerCase()
+      return hay.includes(q)
+    })
+  }, [facts, query])
+
+  const sideCounts = useMemo(() => {
+    const counts = { all: memorisePool.length, neutral: 0, petitioner: 0, respondent: 0 }
+    for (const f of memorisePool) {
+      if (counts[f.side] != null) counts[f.side] += 1
+    }
+    return counts
+  }, [memorisePool])
+
+  const memoriseDeck = useMemo(() => {
+    if (side === 'all') return memorisePool
+    return memorisePool.filter((f) => f.side === side)
+  }, [memorisePool, side])
 
   const selected = facts.find((f) => f.id === selectedId) || filtered[0] || null
 
@@ -145,6 +189,8 @@ export function useFacts() {
   return {
     facts,
     filtered,
+    memoriseDeck,
+    sideCounts,
     selected,
     selectedId: selected?.id || null,
     setSelectedId,

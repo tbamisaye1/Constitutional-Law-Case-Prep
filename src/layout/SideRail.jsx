@@ -11,6 +11,7 @@ import {
   Bot,
   BookOpen,
   Gavel,
+  Layers,
 } from 'lucide-react'
 import { NAV } from '../data/seed'
 import * as ScrollArea from '@radix-ui/react-scroll-area'
@@ -27,6 +28,7 @@ const ICONS = {
   Bot,
   BookOpen,
   Gavel,
+  Layers,
 }
 
 /**

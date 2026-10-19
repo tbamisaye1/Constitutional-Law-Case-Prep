@@ -16,6 +16,7 @@ export const NAV = [
       { to: '/', text: 'Home', icon: 'Home' },
       { to: '/guide', text: 'Bronner guide', icon: 'BookOpen' },
       { to: '/facts', text: 'Instant Case [Bronner v. USA]', icon: 'ListChecks' },
+      { to: '/cards', text: 'Cards', icon: 'Layers' },
       { to: '/library', text: 'Case library', icon: 'Library' },
       { to: '/authorities', text: 'Table of authorities', icon: 'Gavel' },
       { to: '/articles', text: 'Articles', icon: 'FileText' },

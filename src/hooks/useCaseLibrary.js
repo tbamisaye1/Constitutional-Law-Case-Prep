@@ -159,6 +159,7 @@ function emptyStore() {
       guideEdits: [],
       factsBoard: [],
       openings: [],
+      cardsBoard: [],
       activeFileId: null,
       pageByFile: {},
       syncMeta: emptySyncMeta(),
@@ -181,6 +182,7 @@ function emptyStore() {
     guideEdits: workspaceDocRowsFromLocal('guide_edits'),
     factsBoard: workspaceDocRowsFromLocal('facts'),
     openings: workspaceDocRowsFromLocal('openings'),
+    cardsBoard: workspaceDocRowsFromLocal('cards'),
     activeFileId: null,
     pageByFile: {},
     syncMeta: emptySyncMeta(),
@@ -213,6 +215,7 @@ function load() {
       guideEdits: Array.isArray(parsed.guideEdits) ? parsed.guideEdits : [],
       factsBoard: Array.isArray(parsed.factsBoard) ? parsed.factsBoard : [],
       openings: Array.isArray(parsed.openings) ? parsed.openings : [],
+      cardsBoard: Array.isArray(parsed.cardsBoard) ? parsed.cardsBoard : [],
       activeFileId: parsed.activeFileId || null,
       pageByFile: parsed.pageByFile || {},
       syncMeta: parsed.syncMeta || emptySyncMeta(),
@@ -249,6 +252,10 @@ function load() {
       Array.isArray(parsed.openings) && parsed.openings[0]
         ? parsed.openings
         : workspaceDocRowsFromLocal('openings'),
+    cardsBoard:
+      Array.isArray(parsed.cardsBoard) && parsed.cardsBoard[0]
+        ? parsed.cardsBoard
+        : workspaceDocRowsFromLocal('cards'),
     activeFileId: parsed.activeFileId || null,
     pageByFile: parsed.pageByFile || {},
     syncMeta: parsed.syncMeta || base.syncMeta,
@@ -437,6 +444,7 @@ function libraryCachePayload(store) {
     guideEdits: [],
     factsBoard: [],
     openings: [],
+    cardsBoard: [],
   }
 }
 

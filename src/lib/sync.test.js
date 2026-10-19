@@ -169,12 +169,13 @@ describe('collectChanges', () => {
     expect(changes.library_records[0].data.pagesBySection['sec-1'][0].title).toBe('NDAA')
   })
 
-  it('pushes arguments / guide / facts / openings snapshot docs', () => {
+  it('pushes arguments / guide / facts / openings / cards snapshot docs', () => {
     const base = store({
       argumentsBoard: [{ id: 'main', outlines: { petitioner: [] }, notes: { petitioner: '<p>x</p>' } }],
       guideEdits: [{ id: 'main', edits: { intro: '<p>hi</p>' } }],
       factsBoard: [{ id: 'main', facts: [{ id: 'f1', text: 'Ring cameras' }] }],
       openings: [{ id: 'main', petitioner: '<p>P</p>', respondent: '<p>R</p>' }],
+      cardsBoard: [{ id: 'main', cards: [{ id: 'c1', front: 'Carpenter holding?' }] }],
     })
     const meta = markDirty(
       base.syncMeta,
@@ -183,12 +184,13 @@ describe('collectChanges', () => {
         metaKey('library_records', 'guide_edits', 'main'),
         metaKey('library_records', 'facts', 'main'),
         metaKey('library_records', 'openings', 'main'),
+        metaKey('library_records', 'cards', 'main'),
       ],
       1_000
     )
     const { changes } = collectChanges(base, meta)
     const kinds = changes.library_records.map((r) => r.kind).sort()
-    expect(kinds).toEqual(['arguments', 'facts', 'guide_edits', 'openings'])
+    expect(kinds).toEqual(['arguments', 'cards', 'facts', 'guide_edits', 'openings'])
   })
 
   it('sends baseUpdatedAt on dirty Arguments pushes', () => {

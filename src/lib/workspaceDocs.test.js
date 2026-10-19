@@ -44,10 +44,11 @@ describe('workspaceDocRowsFromLocal', () => {
     memory.clear()
   })
 
-  it('does not invent arguments / facts / openings rows with no local save', () => {
+  it('does not invent arguments / facts / openings / cards rows with no local save', () => {
     expect(workspaceDocRowsFromLocal('arguments')).toEqual([])
     expect(workspaceDocRowsFromLocal('facts')).toEqual([])
     expect(workspaceDocRowsFromLocal('openings')).toEqual([])
+    expect(workspaceDocRowsFromLocal('cards')).toEqual([])
     expect(workspaceDocRowsFromLocal('guide_edits')).toEqual([])
   })
 })

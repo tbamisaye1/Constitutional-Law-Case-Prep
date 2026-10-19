@@ -2,7 +2,16 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Callout, Tag } from '../components/CaseCard'
 import { getHealth } from '../api/client'
-import { ArrowRight, NotebookPen, Library, Scale, ListChecks, BookOpen, Gavel } from 'lucide-react'
+import {
+  ArrowRight,
+  NotebookPen,
+  Library,
+  Scale,
+  ListChecks,
+  BookOpen,
+  Gavel,
+  Layers,
+} from 'lucide-react'
 import { GUIDE_ORIENT, GUIDE_META } from '../data/bronnerGuideSeed'
 import { GUIDE_HOME_BASELINE } from '../data/guideCopy'
 
@@ -73,6 +82,12 @@ export function MatterHome() {
           icon={ListChecks}
           title="Instant Case [Bronner v. USA]"
           body="Record facts, posture, memorise lines — from the guide timeline and orientation."
+        />
+        <QuickLink
+          to="/cards"
+          icon={Layers}
+          title="Cards"
+          body="Case-law flashcards and judge Q&A drills — cite back under pressure."
         />
         <QuickLink
           to="/library"

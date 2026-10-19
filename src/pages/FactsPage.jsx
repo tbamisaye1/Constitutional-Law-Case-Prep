@@ -110,7 +110,34 @@ export function FactsPage() {
               />
             </div>
           </div>
-          <MemoriseDeck facts={f.filtered} />
+          <div className="memo-side-filters" role="tablist" aria-label="Fact side">
+            {[
+              { id: 'all', label: 'All sides' },
+              ...FACT_SIDES.map((s) => ({ id: s.id, label: s.label })),
+            ].map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                role="tab"
+                aria-selected={f.side === opt.id}
+                className={f.side === opt.id ? 'memo-side-chip on' : 'memo-side-chip'}
+                onClick={() => f.setSide(opt.id)}
+              >
+                {opt.label}
+                <span className="mono">{f.sideCounts[opt.id] ?? 0}</span>
+              </button>
+            ))}
+          </div>
+          <p className="memo-side-hint">
+            Drill neutral record facts (charges, national security labels), then facts framed for
+            petitioner or respondent. Set Side frame on each Fact card when you add one.
+          </p>
+          <MemoriseDeck
+            facts={f.memoriseDeck}
+            sideLabel={
+              f.side === 'all' ? null : FACT_SIDES.find((s) => s.id === f.side)?.label || f.side
+            }
+          />
         </>
       ) : null}
 

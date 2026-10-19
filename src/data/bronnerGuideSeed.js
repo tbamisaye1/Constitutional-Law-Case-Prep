@@ -793,7 +793,8 @@ export const GUIDE_FACTS = [
     },
     "argumentTags": [
       "q1-search",
-      "rebuttal"
+      "rebuttal",
+      "memorise"
     ],
     "memoriseLine": "Exterior only · no penetration · already exposed"
   },
@@ -810,7 +811,8 @@ export const GUIDE_FACTS = [
     "argumentTags": [
       "q1-search",
       "q1-duration",
-      "rebuttal"
+      "rebuttal",
+      "memorise"
     ],
     "memoriseLine": "Similar to a stakeout · not a search"
   },
@@ -875,7 +877,8 @@ export const GUIDE_FACTS = [
     "argumentTags": [
       "q1-search",
       "q2-youngstown",
-      "rebuttal"
+      "rebuttal",
+      "memorise"
     ],
     "memoriseLine": "Footage → warrants → fentanyl / dirty bomb docs"
   },
@@ -939,9 +942,62 @@ export const GUIDE_FACTS = [
       "note": "Record wrinkle"
     },
     "argumentTags": [
-      "rebuttal"
+      "rebuttal",
+      "memorise"
     ],
     "memoriseLine": "Treat 93 as stipulated"
+  },
+  {
+    "id": "f-charges",
+    "text": "Warrants from the footage produced fentanyl evidence (patches, lollipops, spray, a sales log, and lozenges in the car) and, at a warehouse, sealed documents the government says show a radiological dirty-bomb plot.",
+    "subsection": "timeline",
+    "side": "neutral",
+    "source": {
+      "page": "7",
+      "footnote": "",
+      "note": "Search results / charge foundation (both sides need cold)"
+    },
+    "argumentTags": [
+      "opening",
+      "memorise",
+      "q1-search",
+      "q2-youngstown"
+    ],
+    "memoriseLine": "Fentanyl haul · sealed dirty-bomb docs · R. 7"
+  },
+  {
+    "id": "f-natsec",
+    "text": "Attorney General Comerford ordered Bronner's removal under EO 15,000 as a non-citizen whose presence was deemed detrimental to national security. The order reaches non-citizens with criminal records or pending criminal charges; Bronner had pending charges but no convictions.",
+    "subsection": "q2",
+    "side": "neutral",
+    "source": {
+      "page": "8",
+      "footnote": "",
+      "note": "National security / EO 15,000 classification"
+    },
+    "argumentTags": [
+      "opening",
+      "memorise",
+      "q2-youngstown"
+    ],
+    "memoriseLine": "EO 15,000 · national security · pending charges, no convictions"
+  },
+  {
+    "id": "f-material-support",
+    "text": "After arraignment and release on bond, Bronner was immediately re-arrested for material support of a foreign terrorist organization, a twenty-year felony.",
+    "subsection": "timeline",
+    "side": "neutral",
+    "source": {
+      "page": "8",
+      "footnote": "7",
+      "note": "Material-support re-arrest (neutral charge fact)"
+    },
+    "argumentTags": [
+      "opening",
+      "memorise",
+      "q2-youngstown"
+    ],
+    "memoriseLine": "Bond · immediate material-support re-arrest · R. 8 n.7"
   }
 ]
 

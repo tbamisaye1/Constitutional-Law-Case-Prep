@@ -12,6 +12,7 @@ import {
   Mic,
   BookOpen,
   ListChecks,
+  Layers,
 } from 'lucide-react'
 import { NAV } from '../data/seed'
 import { guideSections } from '../data/guideCopy'
@@ -29,6 +30,7 @@ const ICONS = {
   Bot,
   FileText,
   BookOpen,
+  Layers,
 }
 
 /**

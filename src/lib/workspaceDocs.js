@@ -7,6 +7,7 @@
  */
 
 import { readJson, writeJson, writeJsonResilient } from './persist'
+import { SEED_CARDS } from '../data/cardsSeed'
 import { SEED_FACTS } from '../data/factsSeed'
 import { normalizeArgumentsBoard, removedOutlineIdsByDraft } from './argumentsBoard'
 import { recordConflicts } from './argumentsConflicts'
@@ -290,6 +291,27 @@ export const WORKSPACE_DOCS = {
     },
     same: jsonSame,
   },
+
+  cards: {
+    collection: 'cardsBoard',
+    kind: 'cards',
+    storageKey: 'case-prep-cards-v1',
+    event: 'case-prep-cards-hydrated',
+    loadLocal() {
+      const saved = readJson(this.storageKey, null)
+      if (Array.isArray(saved?.cards)) return { cards: saved.cards }
+      if (Array.isArray(saved)) return { cards: saved }
+      return { cards: serverOwnedWorkspace() ? [] : structuredClone(SEED_CARDS) }
+    },
+    toRow(data) {
+      return { id: DOC_ROW_ID, cards: data.cards || [] }
+    },
+    fromRow(row) {
+      if (!Array.isArray(row?.cards)) return null
+      return { cards: row.cards }
+    },
+    same: jsonSame,
+  },
 }
 
 /** @type {Record<string, (data: object) => void>} */
@@ -310,6 +332,7 @@ export function registerWorkspaceDocPublisher(kind, fn) {
 function payloadForKind(kind, data) {
   if (kind === 'guide_edits') return data.edits
   if (kind === 'facts') return data.facts
+  if (kind === 'cards') return data.cards
   return data
 }
 
@@ -450,7 +473,13 @@ export function hydrateWorkspaceDocFromRemote(kind, row, { forceRemote = false }
   if (forceRemote || !spec.same(local, data)) {
     snapshotDocRevision(kind, local, 'hydrate')
     const payload =
-      kind === 'guide_edits' ? data.edits : kind === 'facts' ? data.facts : data
+      kind === 'guide_edits'
+        ? data.edits
+        : kind === 'facts'
+          ? data.facts
+          : kind === 'cards'
+            ? data.cards
+            : data
     writeJsonResilient(spec.storageKey, payload)
   }
   try {
@@ -491,6 +520,9 @@ export function workspaceDocRowsFromLocal(kind) {
     if (!hasPersistedArgumentsSave(readJson(spec.storageKey, null))) return []
   } else if (kind === 'facts') {
     if (!Array.isArray(readJson(spec.storageKey, null))) return []
+  } else if (kind === 'cards') {
+    const saved = readJson(spec.storageKey, null)
+    if (!Array.isArray(saved) && !Array.isArray(saved?.cards)) return []
   } else if (kind === 'openings') {
     const saved = readJson(spec.storageKey, null)
     if (!saved || typeof saved !== 'object') return []

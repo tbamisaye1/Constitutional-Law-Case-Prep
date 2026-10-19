@@ -29,6 +29,21 @@ export const FACT_SIDES = [
   { id: 'respondent', label: 'Respondent' },
 ]
 
+/** Seed facts appended for Memorise side decks; merge into existing boards once. */
+export const APPEND_SEED_FACT_IDS = ['f-charges', 'f-natsec', 'f-material-support']
+
+/**
+ * Keep existing edits, but drop in new seed facts the board does not have yet.
+ */
+export function mergeAppendSeedFacts(facts) {
+  if (!Array.isArray(facts)) return structuredClone(SEED_FACTS)
+  const have = new Set(facts.map((f) => f.id))
+  const missing = SEED_FACTS.filter(
+    (f) => APPEND_SEED_FACT_IDS.includes(f.id) && !have.has(f.id)
+  )
+  return missing.length ? [...facts, ...missing] : facts
+}
+
 export const ARGUMENT_TAGS = [
   { id: 'opening', label: 'Opening' },
   { id: 'q1-search', label: 'Q1 · search' },

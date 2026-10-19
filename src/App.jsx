@@ -4,6 +4,7 @@ import { MatterHome } from './pages/MatterHome'
 import { GuidePage } from './pages/GuidePage'
 import { NotesPage } from './pages/NotesPage'
 import { FactsPage } from './pages/FactsPage'
+import { CardsPage } from './pages/CardsPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { AuthoritiesPage } from './pages/AuthoritiesPage'
 import { ArticlesPage } from './pages/ArticlesPage'
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/" element={<MatterHome />} />
           <Route path="/guide" element={<GuidePage />} />
           <Route path="/facts" element={<FactsPage />} />
+          <Route path="/cards" element={<CardsPage />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/authorities" element={<AuthoritiesPage />} />
           <Route path="/articles" element={<ArticlesPage />} />
