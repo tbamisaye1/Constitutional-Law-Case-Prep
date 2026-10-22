@@ -64,4 +64,14 @@ describe('mergeSeedCards', () => {
       true
     )
   })
+
+  it('pulls Case Summaries sheet quotes and side-use notes', () => {
+    expect(SEED_CARDS.some((c) => c.id === 'c-sheet-said-milligan-1')).toBe(true)
+    expect(SEED_CARDS.some((c) => c.id === 'c-sheet-brief-what-costanzo')).toBe(true)
+    expect(SEED_CARDS.some((c) => c.id === 'c-sheet-q-prize-cases')).toBe(true)
+    expect(SEED_CARDS.some((c) => c.tags?.includes('bank'))).toBe(true)
+    // Sheet facts should win over thinner guide text for Costanzo.
+    const costanzo = SEED_CARDS.find((c) => c.id === 'c-facts-costanzo')
+    expect(costanzo?.back?.toLowerCase()).toContain('section 19')
+  })
 })

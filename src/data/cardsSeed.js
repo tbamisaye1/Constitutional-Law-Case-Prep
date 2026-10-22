@@ -7,9 +7,12 @@
  * Most case-ref cards are generated from GUIDE_LIBRARY_CASES so every authority
  * in the library gets facts / holding / reasoning coverage. Specialty prompts
  * and Instant Case page drills are hand-authored on top.
+ *
+ * Article II case briefs are enriched from Case Summaries in Brief (Google Doc).
  */
 
 import { GUIDE_FACTS, GUIDE_LIBRARY_CASES } from './bronnerGuideSeed'
+import caseSummariesSheet from './caseSummariesSheet.json'
 
 export const CARD_KINDS = [
   { id: 'case_ref', label: 'Case reference' },
@@ -29,7 +32,7 @@ export const CARD_SIDES = [
  * Bump when seed Q/A text changes so boards refresh those ids once.
  * User-authored cards (ids not in SEED_CARDS) are kept.
  */
-export const SEED_CARDS_REVISION = 3
+export const SEED_CARDS_REVISION = 4
 
 /** Prior seed ids dropped by the learning rewrite — strip them on refresh. */
 export const LEGACY_SEED_CARD_IDS = [
@@ -114,6 +117,185 @@ function cardsFromLibraryCases() {
       },
     ]
   })
+}
+
+/**
+ * Cards from Case Summaries in Brief: richer facts/holding/reasoning, the
+ * question decided, key quotes, and government vs Bronner use notes.
+ */
+function cardsFromCaseSummariesSheet() {
+  const cards = []
+  const sheetCases = caseSummariesSheet.cases || []
+  const briefs = caseSummariesSheet.briefs || []
+  const bank = caseSummariesSheet.quoteBank || []
+
+  const shortFromTitle = (title) => {
+    const head = String(title || '').split(',')[0].trim()
+    return shortName(head)
+  }
+
+  for (const c of sheetCases) {
+    const short = shortFromTitle(c.title)
+    const cite = c.title
+    const tags = ['q2', 'sheet']
+
+    if (c.Facts) {
+      cards.push({
+        id: `c-facts-${c.id}`,
+        kind: 'case_ref',
+        side: 'either',
+        label: `Facts · ${short}`,
+        cite,
+        front: `What were the facts surrounding ${short}?`,
+        back: c.Facts,
+        tags: [...tags, 'facts'],
+      })
+    }
+    if (c.Holding) {
+      cards.push({
+        id: `c-hold-${c.id}`,
+        kind: 'case_ref',
+        side: 'either',
+        label: `Holding · ${short}`,
+        cite,
+        front: `What did ${short} hold?`,
+        back: c.Holding,
+        tags: [...tags, 'holding'],
+      })
+    }
+    if (c.Reasoning) {
+      cards.push({
+        id: `c-why-${c.id}`,
+        kind: 'case_ref',
+        side: 'either',
+        label: `Reasoning · ${short}`,
+        cite,
+        front: `Why did the court reason as it did in ${short}?`,
+        back: c.Reasoning,
+        tags: [...tags, 'reasoning'],
+      })
+    }
+    if (c.Question) {
+      cards.push({
+        id: `c-sheet-q-${c.id}`,
+        kind: 'case_ref',
+        side: 'either',
+        label: `Question · ${short}`,
+        cite,
+        front: `What question did ${short} decide?`,
+        back: c.Question,
+        tags: [...tags, 'question'],
+      })
+    }
+    if (c.Government || c.Bronner) {
+      cards.push({
+        id: `c-use-${c.id}`,
+        kind: 'case_ref',
+        side: 'either',
+        label: `Bronner use · ${short}`,
+        cite,
+        front: `How does each side use ${short} in Bronner?`,
+        back: [
+          c.Government ? `Government:\n${c.Government}` : null,
+          c.Bronner ? `Bronner:\n${c.Bronner}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+        tags: [...tags, 'use'],
+      })
+    }
+
+    const quotes = Array.isArray(c.quotes) ? c.quotes : []
+    quotes.forEach((q, i) => {
+      const cleaned = String(q || '').replace(/\s+/g, ' ').trim()
+      if (cleaned.length < 40) return
+      // Prefer a mid-length stem for "which case said"
+      const stem =
+        cleaned.length > 220 ? `${cleaned.slice(0, 200).trim()}…` : cleaned
+      cards.push({
+        id: `c-sheet-said-${c.id}-${i + 1}`,
+        kind: 'quote',
+        side: 'either',
+        label: `Which case said · ${short} #${i + 1}`,
+        cite,
+        front: `Which case said this?\n\n${stem}`,
+        back: `${c.title}\n\n${cleaned}`,
+        tags: [...tags, 'quote', 'which-case'],
+      })
+    })
+  }
+
+  const briefSlug = (title) => {
+    const t = String(title || '').toLowerCase()
+    const pairs = [
+      ['prize', 'prize-cases'],
+      ['milligan', 'milligan'],
+      ['costanzo', 'costanzo'],
+      ['curtiss', 'curtiss-wright'],
+      ['quirin', 'quirin'],
+      ['youngstown', 'youngstown'],
+      ['mathews', 'mathews'],
+      ['hamdi', 'hamdi'],
+      ['banyee', 'banyee'],
+    ]
+    for (const [needle, slug] of pairs) {
+      if (t.includes(needle)) return slug
+    }
+    return shortName(title)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+  }
+
+  for (const b of briefs) {
+    const title = b.shortTitle || ''
+    const slug = briefSlug(title)
+    const short = shortName(title.split('(')[0])
+    if (b.what) {
+      cards.push({
+        id: `c-sheet-brief-what-${slug}`,
+        kind: 'case_ref',
+        side: 'either',
+        label: `Brief · ${short} facts`,
+        cite: title,
+        front: `In one breath: what happened in ${short}?`,
+        back: b.what,
+        tags: ['q2', 'sheet', 'brief', 'facts'],
+      })
+    }
+    if (b.ruling) {
+      cards.push({
+        id: `c-sheet-brief-hold-${slug}`,
+        kind: 'case_ref',
+        side: 'either',
+        label: `Brief · ${short} ruling`,
+        cite: title,
+        front: `In one breath: what did ${short} hold?`,
+        back: [b.rulingBy, b.ruling].filter(Boolean).join(' '),
+        tags: ['q2', 'sheet', 'brief', 'holding'],
+      })
+    }
+  }
+
+  // Quote bank: "which opinion / case is this line from?"
+  bank.forEach((item, i) => {
+    const text = String(item?.text || '').replace(/\s+/g, ' ').trim()
+    const cite = String(item?.cite || '').trim()
+    if (text.length < 50 || !cite) return
+    const stem = text.length > 220 ? `${text.slice(0, 200).trim()}…` : text
+    cards.push({
+      id: `c-sheet-bank-${i + 1}`,
+      kind: 'quote',
+      side: 'either',
+      label: `Quote bank · ${i + 1}`,
+      cite,
+      front: `Which case / opinion is this line from?\n\n${stem}`,
+      back: `${cite}\n\n${text}`,
+      tags: ['q2', 'sheet', 'quote', 'bank'],
+    })
+  })
+
+  return cards
 }
 
 /** Instant Case cards from structured Case facts (memorise atoms). */
@@ -745,6 +927,8 @@ function buildSeedCards() {
 
   // Library coverage first (facts / holding / reasoning / Bronner use).
   for (const card of cardsFromLibraryCases()) add(card)
+  // Case Summaries sheet overlays (richer Article II briefs + quotes).
+  for (const card of cardsFromCaseSummariesSheet()) add(card)
   // Specialty “which case says X” overlays.
   for (const card of WHICH_CASE_CARDS) add(card)
   for (const card of HOLDING_DRILL_CARDS) add(card)
