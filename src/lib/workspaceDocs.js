@@ -7,7 +7,7 @@
  */
 
 import { readJson, writeJson, writeJsonResilient } from './persist'
-import { SEED_CARDS } from '../data/cardsSeed'
+import { mergeSeedCards, SEED_CARDS } from '../data/cardsSeed'
 import { SEED_FACTS } from '../data/factsSeed'
 import { normalizeArgumentsBoard, removedOutlineIdsByDraft } from './argumentsBoard'
 import { recordConflicts } from './argumentsConflicts'
@@ -299,8 +299,8 @@ export const WORKSPACE_DOCS = {
     event: 'case-prep-cards-hydrated',
     loadLocal() {
       const saved = readJson(this.storageKey, null)
-      if (Array.isArray(saved?.cards)) return { cards: saved.cards }
-      if (Array.isArray(saved)) return { cards: saved }
+      if (Array.isArray(saved?.cards)) return { cards: mergeSeedCards(saved.cards) }
+      if (Array.isArray(saved)) return { cards: mergeSeedCards(saved) }
       return { cards: serverOwnedWorkspace() ? [] : structuredClone(SEED_CARDS) }
     },
     toRow(data) {
@@ -308,7 +308,7 @@ export const WORKSPACE_DOCS = {
     },
     fromRow(row) {
       if (!Array.isArray(row?.cards)) return null
-      return { cards: row.cards }
+      return { cards: mergeSeedCards(row.cards) }
     },
     same: jsonSame,
   },

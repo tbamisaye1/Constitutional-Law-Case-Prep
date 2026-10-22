@@ -87,7 +87,7 @@ export function MatterHome() {
           to="/cards"
           icon={Layers}
           title="Cards"
-          body="Case-law flashcards and judge Q&A drills — cite back under pressure."
+          body="Case-law recall and Instant Case page drills — which case, what facts, why they reasoned it."
         />
         <QuickLink
           to="/library"

@@ -1,0 +1,65 @@
+import { describe, expect, it } from 'vitest'
+import {
+  LEGACY_SEED_CARD_IDS,
+  mergeSeedCards,
+  SEED_CARDS,
+} from './cardsSeed'
+
+describe('mergeSeedCards', () => {
+  it('returns a full seed deck for empty or missing boards', () => {
+    expect(mergeSeedCards([])).toHaveLength(SEED_CARDS.length)
+    expect(mergeSeedCards(null)).toHaveLength(SEED_CARDS.length)
+  })
+
+  it('replaces legacy seed cards with the learning rewrite', () => {
+    const legacy = LEGACY_SEED_CARD_IDS.map((id) => ({
+      id,
+      kind: 'case_ref',
+      side: 'either',
+      label: 'old',
+      front: 'Cite the pin?',
+      back: 'old',
+      tags: [],
+    }))
+    const merged = mergeSeedCards(legacy)
+    for (const id of LEGACY_SEED_CARD_IDS) {
+      expect(merged.some((c) => c.id === id)).toBe(false)
+    }
+    expect(merged.some((c) => c.id === 'c-which-carpenter-csli')).toBe(true)
+    expect(merged.some((c) => c.id === 'c-facts-costanzo')).toBe(true)
+    expect(merged.some((c) => c.id === 'c-inst-ndaa-1022-page')).toBe(true)
+    expect(merged).toHaveLength(SEED_CARDS.length)
+  })
+
+  it('keeps user-authored cards and refreshes seed ids', () => {
+    const custom = {
+      id: 'c-my-custom',
+      kind: 'judge_qa',
+      side: 'petitioner',
+      label: 'Mine',
+      front: 'Custom prompt',
+      back: 'Custom answer',
+      tags: [],
+    }
+    const staleSeed = {
+      ...SEED_CARDS[0],
+      front: 'Stale question that should be overwritten',
+    }
+    const merged = mergeSeedCards([custom, staleSeed])
+    expect(merged.find((c) => c.id === 'c-my-custom')?.front).toBe('Custom prompt')
+    expect(merged.find((c) => c.id === SEED_CARDS[0].id)?.front).toBe(SEED_CARDS[0].front)
+    expect(merged).toHaveLength(SEED_CARDS.length + 1)
+  })
+
+  it('puts page / R. drills on Instant Case cards, not case-law prompts', () => {
+    const instant = SEED_CARDS.filter((c) => c.kind === 'instant')
+    const caseLaw = SEED_CARDS.filter((c) => c.kind !== 'instant')
+    expect(instant.length).toBeGreaterThan(10)
+    expect(caseLaw.every((c) => !/\bon what page\b/i.test(c.front))).toBe(true)
+    expect(instant.some((c) => /on what page/i.test(c.front))).toBe(true)
+    expect(instant.some((c) => /1022/i.test(c.front) || /1022/i.test(c.back))).toBe(true)
+    expect(instant.some((c) => /fentanyl|dirty-bomb|crimes|search haul/i.test(c.front + c.back))).toBe(
+      true
+    )
+  })
+})

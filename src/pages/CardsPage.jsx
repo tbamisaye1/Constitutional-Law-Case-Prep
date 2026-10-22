@@ -16,9 +16,9 @@ export function CardsPage() {
         <div>
           <h1>Cards</h1>
           <p className="lede">
-            Drill case references, quotations, and judge questions. Put the prompt on the front
-            (what the Court might ask) and the cites you answer with on the back. Instant Case
-            record facts stay under Instant Case → Memorise.
+            Drill recall: which case says X, what were the facts, why the court reasoned Y. Instant
+            Case cards are the ones that ask for page numbers in the Bronner record. Add your own
+            prompts anytime; Instant Case → Memorise still holds cold fact lines.
           </p>
         </div>
         <div className="head-actions">
@@ -196,22 +196,22 @@ function CardDetail({ card, onChange, onDelete }) {
         placeholder="585 U.S. 296 (2018) or R. 7"
       />
 
-      <label className="field-label mono">Front · prompt / judge question</label>
+      <label className="field-label mono">Front · prompt</label>
       <textarea
         className="fact-textarea"
         rows={4}
         value={card.front || ''}
         onChange={(e) => onChange({ front: e.target.value })}
-        placeholder="If the judge asks you this on respondent, what can you say back?"
+        placeholder="Which case says…? / What were the facts in…? / Why did the court reason…? / (Instant) On what page…?"
       />
 
-      <label className="field-label mono">Back · answer / cases to cite</label>
+      <label className="field-label mono">Back · answer</label>
       <textarea
         className="fact-textarea"
         rows={6}
         value={card.back || ''}
         onChange={(e) => onChange({ back: e.target.value })}
-        placeholder="Cases and lines you would cite in response…"
+        placeholder="Case name + holding in context, facts, or reasoning. Instant cards: page + what it says."
       />
     </div>
   )

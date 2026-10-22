@@ -1,14 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { blankCard, SEED_CARDS } from '../data/cardsSeed'
+import { blankCard, mergeSeedCards, SEED_CARDS } from '../data/cardsSeed'
 import { onPageHide, readJson } from '../lib/persist'
 import { saveWorkspaceDoc, WORKSPACE_DOCS } from '../lib/workspaceDocs'
 
 const KEY = 'case-prep-cards-v1'
 
+function cardsSeedChanged(before, after) {
+  if (!Array.isArray(before) || before.length !== after.length) return true
+  const prev = new Map(before.map((c) => [c.id, c]))
+  for (const card of after) {
+    const old = prev.get(card.id)
+    if (!old || old.front !== card.front || old.back !== card.back) return true
+  }
+  return false
+}
+
 function load() {
   const saved = readJson(KEY, null)
-  if (Array.isArray(saved?.cards)) return saved.cards
-  if (Array.isArray(saved)) return saved
+  if (Array.isArray(saved?.cards)) return mergeSeedCards(saved.cards)
+  if (Array.isArray(saved)) return mergeSeedCards(saved)
   return structuredClone(SEED_CARDS)
 }
 
@@ -44,10 +54,26 @@ export function useCards() {
       const next = event?.detail
       if (!Array.isArray(next?.cards)) return
       applyingRemote.current = true
-      setCards(next.cards)
+      const merged = mergeSeedCards(next.cards)
+      setCards(merged)
+      // If learning seed refreshed or appended, push so Postgres picks it up.
+      if (cardsSeedChanged(next.cards, merged)) {
+        applyingRemote.current = false
+        skipFirstWrite.current = false
+      }
     }
     window.addEventListener(WORKSPACE_DOCS.cards.event, onHydrate)
     return () => window.removeEventListener(WORKSPACE_DOCS.cards.event, onHydrate)
+  }, [])
+
+  // One-shot: refresh learning seed into an existing local board, then persist.
+  useEffect(() => {
+    const saved = readJson(KEY, null)
+    const raw = Array.isArray(saved?.cards) ? saved.cards : Array.isArray(saved) ? saved : null
+    if (!raw) return
+    const merged = mergeSeedCards(raw)
+    if (!cardsSeedChanged(raw, merged)) return
+    setCards(merged)
   }, [])
 
   const filtered = useMemo(() => {

@@ -11,8 +11,8 @@ function sideLabel(id) {
 }
 
 /**
- * Flip deck for case-law / judge-Q flashcards.
- * Front = prompt; back = cites and answer.
+ * Flip deck for case-law / Instant Case flashcards.
+ * Front = recall prompt; back = answer (case name + substance, or page for Instant).
  */
 export function CardDeck({ cards }) {
   const [i, setI] = useState(0)
@@ -59,7 +59,7 @@ export function CardDeck({ cards }) {
             {card.cite ? <p className="cards-cite mono">{card.cite}</p> : null}
           </div>
         ) : (
-          <p className="cards-flip-hint mono">Reveal for the answer / cites</p>
+          <p className="cards-flip-hint mono">Reveal for the answer</p>
         )}
       </div>
       <div className="memo-actions">
