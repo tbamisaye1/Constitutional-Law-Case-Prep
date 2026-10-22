@@ -3,7 +3,13 @@
  *
  * Case-law cards test recall: which case said X, what were the facts, why the
  * court reasoned Y. Page / line drills belong only on Instant Case cards.
+ *
+ * Most case-ref cards are generated from GUIDE_LIBRARY_CASES so every authority
+ * in the library gets facts / holding / reasoning coverage. Specialty prompts
+ * and Instant Case page drills are hand-authored on top.
  */
+
+import { GUIDE_FACTS, GUIDE_LIBRARY_CASES } from './bronnerGuideSeed'
 
 export const CARD_KINDS = [
   { id: 'case_ref', label: 'Case reference' },
@@ -23,7 +29,7 @@ export const CARD_SIDES = [
  * Bump when seed Q/A text changes so boards refresh those ids once.
  * User-authored cards (ids not in SEED_CARDS) are kept.
  */
-export const SEED_CARDS_REVISION = 2
+export const SEED_CARDS_REVISION = 3
 
 /** Prior seed ids dropped by the learning rewrite — strip them on refresh. */
 export const LEGACY_SEED_CARD_IDS = [
@@ -35,15 +41,120 @@ export const LEGACY_SEED_CARD_IDS = [
   'c-quote-katz',
 ]
 
-export const SEED_CARDS = [
-  // ─── Which case says X ───────────────────────────────────────────────────
+const ISSUE_TAG = { 1: 'q1', 2: 'q2' }
+
+/** Short name for prompts: "Costanzo" from "Costanzo v. Tillinghast". */
+function shortName(name) {
+  const base = String(name || '').replace(/\s*\(.*\)\s*$/, '').trim()
+  const parts = base.split(/\s+v\.?\s+/i)
+  return (parts[0] || base).replace(/^The\s+/i, '') || base
+}
+
+function issueTags(issue) {
+  const t = ISSUE_TAG[issue]
+  return t ? [t] : ['q1', 'q2']
+}
+
+/** One facts / holding / reasoning card per library case. */
+function cardsFromLibraryCases() {
+  return GUIDE_LIBRARY_CASES.flatMap((c) => {
+    const short = shortName(c.name)
+    const tags = [...issueTags(c.issue)]
+    const cite = c.cite || ''
+    return [
+      {
+        id: `c-facts-${c.id}`,
+        kind: 'case_ref',
+        side: 'either',
+        label: `Facts · ${short}`,
+        cite,
+        front: `What were the facts surrounding ${c.name}?`,
+        back: c.guideFacts || c.holding || 'See case library notes.',
+        tags: [...tags, 'facts'],
+      },
+      {
+        id: `c-hold-${c.id}`,
+        kind: 'case_ref',
+        side: 'either',
+        label: `Holding · ${short}`,
+        cite,
+        front: `What did ${c.name} hold — and what rule do you take from it?`,
+        back: `Holding: ${c.holding || '—'}\n\nRule: ${c.rule || '—'}`,
+        tags: [...tags, 'holding'],
+      },
+      {
+        id: `c-why-${c.id}`,
+        kind: 'case_ref',
+        side: 'either',
+        label: `Reasoning · ${short}`,
+        cite,
+        front: `Why did the court reason as it did in ${c.name}?`,
+        back: c.guideReasoning || c.rule || c.holding || 'See case library notes.',
+        tags: [...tags, 'reasoning'],
+      },
+      {
+        id: `c-use-${c.id}`,
+        kind: 'case_ref',
+        side: 'either',
+        label: `Bronner use · ${short}`,
+        cite,
+        front: `How does ${short} get used in Bronner — petitioner frame and/or government frame?`,
+        back: [
+          c.usePetitioner || c.guideUse
+            ? `Petitioner / Bronner: ${c.usePetitioner || c.guideUse}`
+            : null,
+          c.useRespondent ? `Respondent / government: ${c.useRespondent}` : null,
+          !c.usePetitioner && !c.guideUse && !c.useRespondent
+            ? 'See case library Both sides notes.'
+            : null,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+        tags: [...tags, 'use'],
+      },
+    ]
+  })
+}
+
+/** Instant Case cards from structured Case facts (memorise atoms). */
+function cardsFromGuideFacts() {
+  return GUIDE_FACTS.map((f) => {
+    const page = String(f.source?.page || '').trim()
+    const fn = String(f.source?.footnote || '').trim()
+    const cite = page
+      ? fn
+        ? `R. ${page} n.${fn}`
+        : `R. ${page}`
+      : f.source?.note || ''
+    const hook = f.memoriseLine || f.text.slice(0, 72)
+    return {
+      id: `c-inst-fact-${f.id}`,
+      kind: 'instant',
+      side: f.side === 'petitioner' || f.side === 'respondent' ? f.side : 'either',
+      label: `Instant · ${hook}`,
+      cite,
+      front: `What does the instant case say about this, and on what page?\n\n${hook}`,
+      back: `${f.text}${cite ? ` — ${cite}` : ''}${
+        f.source?.note ? ` (${f.source.note})` : ''
+      }`,
+      tags: ['instant', 'page', ...(f.argumentTags || []).filter((t) => t !== 'memorise')],
+    }
+  })
+}
+
+/**
+ * “Which case says X” prompts — proposition on the front, case name on the back.
+ * These are the high-value recall drills beyond generic holding cards.
+ */
+const WHICH_CASE_CARDS = [
   {
     id: 'c-which-carpenter-csli',
     kind: 'case_ref',
     side: 'either',
     label: 'Which case · CSLI warrant',
     cite: 'Carpenter v. United States, 585 U.S. 296 (2018)',
-    front: 'Which case says the government needs a warrant to obtain a comprehensive historical cell-site location record?',
+    front:
+      'Which case says the government needs a warrant to obtain a comprehensive historical cell-site location record?',
     back: 'Carpenter v. United States. Holding: accessing at least seven days of historical CSLI is a search. The Court framed the harm as compiling a “comprehensive chronicle” of a person’s movements; it expressly left shorter periods undecided.',
     tags: ['q1', 'which-case'],
   },
@@ -53,7 +164,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · people not places',
     cite: 'Katz v. United States, 389 U.S. 347 (1967)',
-    front: 'Which case says the Fourth Amendment protects people, not places — and that what you seek to preserve as private can be protected even in a public area?',
+    front:
+      'Which case says the Fourth Amendment protects people, not places — and that what you seek to preserve as private can be protected even in a public area?',
     back: 'Katz v. United States. Agents bugged the outside of a glass phone booth; no physical entry. Still a search: Katz justifiably relied on privacy. Harlan’s concurrence supplies the two-step test (subjective expectation + one society recognizes as reasonable).',
     tags: ['q1', 'which-case'],
   },
@@ -63,7 +175,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · duration alone',
     cite: 'United States v. Tuggle, 4 F.4th 505 (7th Cir. 2021)',
-    front: 'Which case is the go-to line that “duration alone does not transform lawful observation into a search” for pole cameras on public poles?',
+    front:
+      'Which case is the go-to line that “duration alone does not transform lawful observation into a search” for pole cameras on public poles?',
     back: 'United States v. Tuggle (7th Cir.). Three cameras ~18 months; public utility poles; areas exposed to public view. Not a search under existing Supreme Court doctrine. Bronner’s majority cites it for the duration-alone point — even though Tuggle itself invited Congress or the Court to revisit the rule.',
     tags: ['q1', 'which-case'],
   },
@@ -73,7 +186,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · pole camera search',
     cite: 'People v. Tafoya, 494 P.3d 613 (Colo. 2021)',
-    front: 'Which pole-camera case held that long-term continuous surveillance of curtilage was a Fourth Amendment search?',
+    front:
+      'Which pole-camera case held that long-term continuous surveillance of curtilage was a Fourth Amendment search?',
     back: 'People v. Tafoya (Colorado). Camera on a utility pole recorded a backyard behind a six-foot privacy fence for 3+ months, with pan/tilt/zoom and indefinite storage. Held: warrantless search. Bronner uses its duration + capacity reasoning; the government distinguishes the fenced curtilage from Bronner’s street-visible porch and driveway.',
     tags: ['q1', 'which-case'],
   },
@@ -83,7 +197,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · public vantage',
     cite: 'California v. Ciraolo, 476 U.S. 207 (1986)',
-    front: 'Which case says naked-eye observation from a lawful public vantage point is not a search — even of curtilage?',
+    front:
+      'Which case says naked-eye observation from a lawful public vantage point is not a search — even of curtilage?',
     back: 'California v. Ciraolo. Officers flew at 1,000 feet over a fenced backyard and spotted marijuana with the naked eye. Subjective expectation (fences) lost on the societal-reasonableness prong: any member of the public in that airspace could have seen the same thing. Foundation of every “visible from the street” argument.',
     tags: ['q1', 'which-case'],
   },
@@ -93,7 +208,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · sense-enhancing tech',
     cite: 'Kyllo v. United States, 533 U.S. 27 (2001)',
-    front: 'Which case says using sense-enhancing technology not in general public use to learn details of the home’s interior is a search?',
+    front:
+      'Which case says using sense-enhancing technology not in general public use to learn details of the home’s interior is a search?',
     back: 'Kyllo v. United States. Thermal imaging from across the street revealed heat consistent with grow lamps. Scalia: technology that “shrinks the realm of guaranteed privacy” must not erase the privacy that existed when the Amendment was adopted. Both Bronner opinions fight over “general public use” and whether aggregate camera features reveal intimate household details.',
     tags: ['q1', 'which-case'],
   },
@@ -103,7 +219,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · GPS trespass',
     cite: 'United States v. Jones, 565 U.S. 400 (2012)',
-    front: 'Which case held that installing a GPS tracker on a vehicle was a search because of a physical trespass on an “effect”?',
+    front:
+      'Which case held that installing a GPS tracker on a vehicle was a search because of a physical trespass on an “effect”?',
     back: 'United States v. Jones. Unanimous result, multiple theories. Majority: physical intrusion on a constitutionally protected effect to obtain information is a search; Katz supplemented, did not displace, the trespass rule. The Jones concurrences are the seed of duration / mosaic arguments that later feed Carpenter.',
     tags: ['q1', 'which-case'],
   },
@@ -113,7 +230,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · courts open',
     cite: 'Ex parte Milligan, 71 U.S. (4 Wall.) 2 (1866)',
-    front: 'Which case says military tribunals cannot try a civilian who is not part of enemy forces when the ordinary courts are open and functioning?',
+    front:
+      'Which case says military tribunals cannot try a civilian who is not part of enemy forces when the ordinary courts are open and functioning?',
     back: 'Ex parte Milligan. Indiana civilian sentenced to hang by military commission; federal courts were open throughout. Commission had no jurisdiction. Bronner’s structural best case: he was arraigned in Article III court, released on bond, then pulled into military custody. Majority distinguishes: Milligan was not supporting enemy forces.',
     tags: ['q2', 'which-case'],
   },
@@ -123,7 +241,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · unlawful belligerent',
     cite: 'Ex parte Quirin, 317 U.S. 1 (1942)',
-    front: 'Which case says an unlawful belligerent may be tried by military commission even if captured in the United States — and even if a U.S. citizen?',
+    front:
+      'Which case says an unlawful belligerent may be tried by military commission even if captured in the United States — and even if a U.S. citizen?',
     back: 'Ex parte Quirin. German saboteurs landed from U-boats, buried uniforms, and planned attacks in civilian clothes. Military commission upheld. Citizenship and U.S. soil did not defeat military trial. Government’s strongest Article II case; Bronner stresses Quirin rested on proven saboteur conduct in a declared war, not an untested executive label.',
     tags: ['q2', 'which-case'],
   },
@@ -133,7 +252,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · three categories',
     cite: 'Youngstown Sheet & Tube Co. v. Sawyer, 343 U.S. 579 (1952)',
-    front: 'Which case supplies Jackson’s three categories measuring presidential power by Congress’s position (authorization, silence, or opposition)?',
+    front:
+      'Which case supplies Jackson’s three categories measuring presidential power by Congress’s position (authorization, silence, or opposition)?',
     back: 'Youngstown Sheet & Tube Co. v. Sawyer. Truman seized the steel mills during the Korean War after Congress had declined seizure authority. Held unconstitutional. Jackson’s concurrence: Cat 1 (Congress authorized — max), Cat 2 (twilight — silence), Cat 3 (Congress opposed — lowest ebb). The battlefield for Bronner’s detention fight.',
     tags: ['q2', 'which-case'],
   },
@@ -143,7 +263,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · notice and rebuttal',
     cite: 'Hamdi v. Rumsfeld, 542 U.S. 507 (2004)',
-    front: 'Which case says the AUMF can authorize detention of an enemy combatant, but a citizen detainee still gets notice of the factual basis and a fair chance to rebut it before a neutral decisionmaker?',
+    front:
+      'Which case says the AUMF can authorize detention of an enemy combatant, but a citizen detainee still gets notice of the factual basis and a fair chance to rebut it before a neutral decisionmaker?',
     back: 'Hamdi v. Rumsfeld. Battlefield capture in Afghanistan; Mobbs Declaration as the government’s evidence. AUMF covers detention as a fundamental incident of war, but war powers are “not a blank check.” Process rule (via Mathews) is what Bronner presses even though he was not yet a citizen and was seized far from a combat zone.',
     tags: ['q2', 'which-case'],
   },
@@ -153,7 +274,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · duration ≠ new hearing',
     cite: 'Banyee v. Garland, 115 F.4th 928 (8th Cir. 2024)',
-    front: 'Which case (as the Bronner opinions characterize it) says prolonged immigration detention does not automatically require a new bond hearing just because time has passed?',
+    front:
+      'Which case (as the Bronner opinions characterize it) says prolonged immigration detention does not automatically require a new bond hearing just because time has passed?',
     back: 'Banyee v. Garland (8th Cir.). Persuasive only — not binding on the Supreme Court. Context: ordinary immigration detention under established removal procedures. Government: elapsed time alone is not enough. Bronner: distinguish — military custody at Guantanamo on an untested belligerency label with sealed evidence is a different liberty interest and error risk than Banyee’s setting.',
     tags: ['q2', 'which-case'],
   },
@@ -163,7 +285,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · legislative acquiescence',
     cite: 'Costanzo v. Tillinghast, 287 U.S. 341 (1932)',
-    front: 'Which case does the Fourteenth Circuit majority use for the idea that long legislative inaction can support a presumption of congressional acquiescence in executive practice?',
+    front:
+      'Which case does the Fourteenth Circuit majority use for the idea that long legislative inaction can support a presumption of congressional acquiescence in executive practice?',
     back: 'Costanzo v. Tillinghast. Actually an immigration-deportation statutory-construction case (five-year limit did not carry to every clause of § 19). The majority borrows an acquiescence principle and concedes Costanzo “involved immigration administration” but says it “equally applies.” Bronner: that is a narrow agency-construction canon stretched into a war-powers argument.',
     tags: ['q2', 'which-case'],
   },
@@ -173,7 +296,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · domestic security warrant',
     cite: 'United States v. U.S. District Court (Keith), 407 U.S. 297 (1972)',
-    front: 'Which case says a statutory disclaimer is not a grant of presidential surveillance power, and domestic-security wiretaps of that type need prior judicial approval?',
+    front:
+      'Which case says a statutory disclaimer is not a grant of presidential surveillance power, and domestic-security wiretaps of that type need prior judicial approval?',
     back: 'United States v. U.S. District Court (Keith). Title III § 2511(3) was a disclaimer, not authority. “The Fourth Amendment does not contemplate the executive officers of Government as neutral and disinterested magistrates.” Bridges Q1 and Q2: the deference the government wants on Article II is the deference Keith refused on the Fourth.',
     tags: ['q1', 'q2', 'which-case'],
   },
@@ -183,7 +307,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · due process balance',
     cite: 'Mathews v. Eldridge, 424 U.S. 319 (1976)',
-    front: 'Which case sets the three-factor due process balance (private interest, risk of error / value of safeguards, government burden)?',
+    front:
+      'Which case sets the three-factor due process balance (private interest, risk of error / value of safeguards, government burden)?',
     back: 'Mathews v. Eldridge. Disability-benefits termination without a pre-termination evidentiary hearing. Hamdi adapts the same balance to military detention. In Bronner, factor one (physical liberty) is weighty; the fight is whether national-security secrecy justifies withholding the sealed dirty-bomb evidence from him.',
     tags: ['q2', 'which-case'],
   },
@@ -193,7 +318,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · war thrust upon',
     cite: 'The Prize Cases, 67 U.S. (2 Black) 635 (1863)',
-    front: 'Which case says the President may meet an armed rebellion without waiting for Congress to “baptize it with a name”?',
+    front:
+      'Which case says the President may meet an armed rebellion without waiting for Congress to “baptize it with a name”?',
     back: 'The Prize Cases. Lincoln’s blockade before Congress declared war; prize seizures upheld. President cannot initiate war but must resist force by force when war is thrust upon the nation. Majority extends the “incident of war” idea to terrorism; dissent: open hostilities between organized forces, not indefinite detention of a resident far from any battlefield.',
     tags: ['q2', 'which-case'],
   },
@@ -203,7 +329,8 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · sole organ',
     cite: 'United States v. Curtiss-Wright, 299 U.S. 304 (1936)',
-    front: 'Which case is famous for calling the President the “sole organ” of the nation in foreign relations — and what does Jackson later say that phrase does not mean?',
+    front:
+      'Which case is famous for calling the President the “sole organ” of the nation in foreign relations — and what does Jackson later say that phrase does not mean?',
     back: 'United States v. Curtiss-Wright. Arms-embargo delegation in the Chaco War upheld. Majority below cites “plenary and exclusive” / “sole organ.” Jackson’s Youngstown footnote: Curtiss-Wright was presidential action under an Act of Congress, not action without or against Congress. It is not a blank check for unilateral detention power.',
     tags: ['q2', 'which-case'],
   },
@@ -213,318 +340,16 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Which case · pole-camera split',
     cite: 'United States v. Moore-Bush, 36 F.4th 320 (1st Cir. 2022)',
-    front: 'Which en banc decision split evenly on whether months of pole-camera surveillance is a search, while agreeing suppression was unavailable under good faith?',
+    front:
+      'Which en banc decision split evenly on whether months of pole-camera surveillance is a search, while agreeing suppression was unavailable under good faith?',
     back: 'United States v. Moore-Bush (1st Cir. en banc). Eight months of footage of driveway / side of house. Lynch: prolonged observation of exposed areas ≠ search. Barron: aggregated searchable record is a search under Carpenter’s logic. Bronner majority tracks Lynch; dissent tracks Barron. Best evidence the constitutional question is unsettled.',
     tags: ['q1', 'which-case'],
   },
+]
 
-  // ─── Facts surrounding the case ──────────────────────────────────────────
+const HOLDING_DRILL_CARDS = [
   {
-    id: 'c-facts-costanzo',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Costanzo',
-    cite: 'Costanzo v. Tillinghast, 287 U.S. 341 (1932)',
-    front: 'What were the facts surrounding Costanzo v. Tillinghast?',
-    back: 'An Italian national was ordered deported under § 19 of the Immigration Act of 1917 for managing a house of prostitution — more than five years after entry. Section 19 was one enormous sentence with eleven subject-clauses. He argued the opening clause’s “within five years after entry” carried over to his clause. Held: it did not; deportation on that ground may occur at any time after entry.',
-    tags: ['q2', 'facts'],
-  },
-  {
-    id: 'c-facts-carpenter',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Carpenter',
-    cite: 'Carpenter v. United States, 585 U.S. 296 (2018)',
-    front: 'What were the facts surrounding Carpenter?',
-    back: 'After a string of Radio Shack and T-Mobile robberies, prosecutors obtained Timothy Carpenter’s CSLI from wireless carriers under the Stored Communications Act (below probable cause). They received 12,898 location points across 127 days — roughly 101 per day. Held: a search; warrant required for that kind of historical haul.',
-    tags: ['q1', 'facts'],
-  },
-  {
-    id: 'c-facts-milligan',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Milligan',
-    cite: 'Ex parte Milligan, 71 U.S. (4 Wall.) 2 (1866)',
-    front: 'What were the facts surrounding Ex parte Milligan?',
-    back: 'Lambdin Milligan, an Indiana civilian and Confederate sympathizer, was arrested during the Civil War, tried by military commission, and sentenced to hang for conspiring to free Confederate prisoners. Indiana was never a theater of war; its courts stayed open and operating. Held: the commission had no jurisdiction; he was entitled to release.',
-    tags: ['q2', 'facts'],
-  },
-  {
-    id: 'c-facts-quirin',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Quirin',
-    cite: 'Ex parte Quirin, 317 U.S. 1 (1942)',
-    front: 'What were the facts surrounding Ex parte Quirin?',
-    back: 'June 1942: eight German-trained saboteurs landed from submarines (Long Island and Florida), buried their uniforms, changed into civilian clothes, and set out to destroy war industries. All but one were German citizens; Herbert Haupt was a U.S. citizen. Roosevelt appointed a military commission; six were executed. Commission upheld.',
-    tags: ['q2', 'facts'],
-  },
-  {
-    id: 'c-facts-hamdi',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Hamdi',
-    cite: 'Hamdi v. Rumsfeld, 542 U.S. 507 (2004)',
-    front: 'What were the facts surrounding Hamdi v. Rumsfeld?',
-    back: 'Yaser Hamdi (U.S. citizen) was seized in Afghanistan by the Northern Alliance, turned over to U.S. forces as an alleged Taliban fighter, held at Guantanamo, then moved to a naval brig in Virginia once citizenship was discovered. No charge, no counsel, no hearing. The government’s evidence was the short Mobbs Declaration from a Defense Department official.',
-    tags: ['q2', 'facts'],
-  },
-  {
-    id: 'c-facts-youngstown',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Youngstown',
-    cite: 'Youngstown Sheet & Tube Co. v. Sawyer, 343 U.S. 579 (1952)',
-    front: 'What were the facts surrounding Youngstown?',
-    back: 'Korean War steel strike threatened war production. Truman ordered the Secretary of Commerce to seize and operate the mills; he reported to Congress twice; Congress did nothing. Congress had rejected giving presidents seizure authority in Taft-Hartley (1947) and had provided other statutory mechanisms Truman did not use. Seizure held unconstitutional.',
-    tags: ['q2', 'facts'],
-  },
-  {
-    id: 'c-facts-katz',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Katz',
-    cite: 'Katz v. United States, 389 U.S. 347 (1967)',
-    front: 'What were the facts surrounding Katz?',
-    back: 'FBI agents taped an electronic listening device to the outside of a public telephone booth and recorded Charles Katz transmitting illegal wagering information. No physical entry. The booth was glass — anyone could see him standing in it. Still a search: he sought to exclude the uninvited ear.',
-    tags: ['q1', 'facts'],
-  },
-  {
-    id: 'c-facts-tuggle',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Tuggle',
-    cite: 'United States v. Tuggle, 4 F.4th 505 (7th Cir. 2021)',
-    front: 'What were the facts surrounding Tuggle?',
-    back: 'Meth conspiracy investigation in Illinois. Agents put three cameras on public utility poles around Travis Tuggle’s home (front of house, parking area, co-defendant’s shed). Recorded around the clock ~18 months; remote zoom/pan/tilt; stored at FBI; no infrared, no audio. Captured 100+ suspected drug deliveries. Held: not a search.',
-    tags: ['q1', 'facts'],
-  },
-  {
-    id: 'c-facts-tafoya',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Tafoya',
-    cite: 'People v. Tafoya, 494 P.3d 613 (Colo. 2021)',
-    front: 'What were the facts surrounding Tafoya?',
-    back: 'Informant tip: stash house. Colorado Springs police mounted a no-warrant pole camera that could pan/tilt/zoom and recorded continuously 3+ months with indefinite storage. Elevated angle captured a backyard enclosed by a six-foot wooden privacy fence with a gate. Footage of a spare-tire handoff led to $98,000 in cash. Held: warrantless search; convictions reversed.',
-    tags: ['q1', 'facts'],
-  },
-  {
-    id: 'c-facts-moore-bush',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Moore-Bush',
-    cite: 'United States v. Moore-Bush, 36 F.4th 320 (1st Cir. 2022)',
-    front: 'What were the facts surrounding Moore-Bush?',
-    back: 'ATF investigated Nia Moore-Bush for illegal firearms and heroin. After controlled buys and a stop recovering 921 bags of heroin, agents installed a pole camera outside 120 Hadley Street, Springfield. View: right side of house, attached garage, side door, driveway — not the front door; a tree often obstructed. Recorded eight months.',
-    tags: ['q1', 'facts'],
-  },
-  {
-    id: 'c-facts-kyllo',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Kyllo',
-    cite: 'Kyllo v. United States, 533 U.S. 27 (2001)',
-    front: 'What were the facts surrounding Kyllo?',
-    back: 'Agents suspected Danny Kyllo of growing marijuana indoors. From a car across the street they aimed a thermal imager at his triplex for a few minutes and saw that his garage wall and roof were unusually hot — consistent with high-intensity grow lamps. That reading supported a warrant. Held: a search.',
-    tags: ['q1', 'facts'],
-  },
-  {
-    id: 'c-facts-banyee',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Banyee',
-    cite: 'Banyee v. Garland, 115 F.4th 928 (8th Cir. 2024)',
-    front: 'What were the facts surrounding Banyee v. Garland — as far as the Bronner materials develop them?',
-    back: 'Prolonged immigration detention and when due process requires additional procedure (e.g., another bond hearing). The underlying case is not otherwise developed in the supplied files — use only how the Bronner majority and dissent characterize it. Analogy is about duration and process in immigration custody, not military detention at Guantanamo.',
-    tags: ['q2', 'facts'],
-  },
-  {
-    id: 'c-facts-ciraolo',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Ciraolo',
-    cite: 'California v. Ciraolo, 476 U.S. 207 (1986)',
-    front: 'What were the facts surrounding Ciraolo?',
-    back: 'Anonymous tip: marijuana in a backyard shielded from ground view by two fences. Officers trained in marijuana ID chartered a private plane, flew over at 1,000 feet, and identified the plants with the naked eye. A photograph went into the warrant application. Held: not a search.',
-    tags: ['q1', 'facts'],
-  },
-  {
-    id: 'c-facts-keith',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Keith',
-    cite: 'United States v. U.S. District Court (Keith), 407 U.S. 297 (1972)',
-    front: 'What were the facts surrounding Keith?',
-    back: 'Three defendants charged with conspiring to destroy government property; one with dynamiting a CIA office. Government admitted warrantless wiretaps, backed by an Attorney General affidavit that the taps gathered intelligence needed to protect against domestic organizations seeking to attack or subvert the government. It argued this was a reasonable exercise of presidential power.',
-    tags: ['q1', 'q2', 'facts'],
-  },
-  {
-    id: 'c-facts-mathews',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Mathews',
-    cite: 'Mathews v. Eldridge, 424 U.S. 319 (1976)',
-    front: 'What were the facts surrounding Mathews v. Eldridge?',
-    back: 'George Eldridge received Social Security disability benefits. A state agency reviewed his file, sent a questionnaire, got physician and psychiatric reports, and tentatively found his disability had ended. He got a written summary and could respond in writing; benefits terminated. A full evidentiary hearing was available afterward with retroactive relief if he won. Held: pre-termination hearing not required.',
-    tags: ['q2', 'facts'],
-  },
-  {
-    id: 'c-facts-prize',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Prize Cases',
-    cite: 'The Prize Cases, 67 U.S. (2 Black) 635 (1863)',
-    front: 'What were the facts surrounding The Prize Cases?',
-    back: 'After Fort Sumter — and before Congress acted — Lincoln proclaimed a blockade of Southern ports. Navy ships seized merchant vessels as prizes. Owners sued: no war because Congress had not declared one, so seizures were unlawful. Held: seizures lawful; a war forced upon the nation is a war whether or not declared.',
-    tags: ['q2', 'facts'],
-  },
-  {
-    id: 'c-facts-curtiss',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Curtiss-Wright',
-    cite: 'United States v. Curtiss-Wright, 299 U.S. 304 (1936)',
-    front: 'What were the facts surrounding Curtiss-Wright?',
-    back: 'Congress passed a joint resolution authorizing the President to prohibit arms sales to countries fighting in the Chaco War if he found it would help restore peace. Roosevelt issued the proclamation. Curtiss-Wright was indicted for conspiring to sell fifteen machine guns to Bolivia and argued unconstitutional delegation. Held: delegation valid.',
-    tags: ['q2', 'facts'],
-  },
-  {
-    id: 'c-facts-jones',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Facts · Jones',
-    cite: 'United States v. Jones, 565 U.S. 400 (2012)',
-    front: 'What were the facts surrounding United States v. Jones?',
-    back: 'Government got a warrant to install a GPS device on a vehicle registered to Antoine Jones’s wife — authorized for D.C. and within 10 days. Agents installed it on the 11th day in Maryland, so the warrant was worthless. They tracked the vehicle for 28 days. Held: a search (trespass theory).',
-    tags: ['q1', 'facts'],
-  },
-
-  // ─── Why did the court reason X ──────────────────────────────────────────
-  {
-    id: 'c-why-carpenter',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Reasoning · Carpenter',
-    cite: 'Carpenter v. United States, 585 U.S. 296 (2018)',
-    front: 'Why did the Court reason that obtaining Carpenter’s historical CSLI was a search?',
-    back: 'Two threads converge. From the Jones concurrences: people have a reasonable expectation of privacy in the whole of their physical movements, and a comprehensive chronicle of life is the harm. From the third-party cases: venturing into public does not surrender all Fourth Amendment protection. Long-term CSLI maps movements in a way that reveals the privacies of life.',
-    tags: ['q1', 'reasoning'],
-  },
-  {
-    id: 'c-why-costanzo',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Reasoning · Costanzo',
-    cite: 'Costanzo v. Tillinghast, 287 U.S. 341 (1932)',
-    front: 'Why did the Court reason that the five-year limit in Costanzo did not apply to his deportation clause?',
-    back: 'Three of the eleven following clauses had their own time references and seven had none, so the five-year limit plainly did not carry to all. Punctuation is not decisive; “we should not apply the rules of syntax to defeat the evident legislative intent.” A proviso applying the section “irrespective of the time of their entry” would have nothing to operate on under his reading. Legislative history confirmed it.',
-    tags: ['q2', 'reasoning'],
-  },
-  {
-    id: 'c-why-milligan',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Reasoning · Milligan',
-    cite: 'Ex parte Milligan, 71 U.S. (4 Wall.) 2 (1866)',
-    front: 'Why did the Court reason that Milligan’s military commission lacked jurisdiction?',
-    back: 'The commission was not a constitutional court, and Congress had not authorized it to try Milligan while Indiana’s civilian courts remained open. Martial rule may operate where war actually closes the courts, but necessity could not justify replacing functioning courts in Indiana. That open-courts limit is why Bronner’s Article III arraignment and bond release matter.',
-    tags: ['q2', 'reasoning'],
-  },
-  {
-    id: 'c-why-quirin',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Reasoning · Quirin',
-    cite: 'Ex parte Quirin, 317 U.S. 1 (1942)',
-    front: 'Why did the Court reason that the Quirin saboteurs could be tried by military commission?',
-    back: 'The law of war distinguishes lawful from unlawful belligerents. Lawful belligerents (uniformed forces) may be held as POWs. Unlawful belligerents — those who pass secretly through the lines in civilian dress to wage war by destruction — are also subject to trial and punishment by military tribunals for acts that make their belligerency unlawful. Classification rested on that proven conduct.',
-    tags: ['q2', 'reasoning'],
-  },
-  {
-    id: 'c-why-hamdi',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Reasoning · Hamdi',
-    cite: 'Hamdi v. Rumsfeld, 542 U.S. 507 (2004)',
-    front: 'Why did the Hamdi plurality both uphold detention authority and still require process?',
-    back: 'Detention of battlefield combatants for the duration of conflict is a “fundamental incident of waging war,” so it falls within AUMF “necessary and appropriate force.” But separation of powers does not bar judicial review. Applying Mathews, notice of the factual basis for the enemy-combatant label and a meaningful chance to answer before a neutral decisionmaker are required. War powers are not a blank check.',
-    tags: ['q2', 'reasoning'],
-  },
-  {
-    id: 'c-why-youngstown',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Reasoning · Youngstown',
-    cite: 'Youngstown Sheet & Tube Co. v. Sawyer, 343 U.S. 579 (1952)',
-    front: 'Why did the Court (and Jackson) reason that Truman’s steel seizure failed?',
-    back: 'The seizure could not be traced to a statute or to the commander-in-chief power as a basis for taking domestic private property. Congress had considered and refused seizure authority. Jackson’s method: measure the President against Congress’s position. Where Congress has legislated in a field and declined the power claimed, courts scrutinize with caution — Category 3 territory.',
-    tags: ['q2', 'reasoning'],
-  },
-  {
-    id: 'c-why-kyllo',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Reasoning · Kyllo',
-    cite: 'Kyllo v. United States, 533 U.S. 27 (2001)',
-    front: 'Why did Scalia reason that thermal imaging of Kyllo’s home was a search?',
-    back: 'Sense-enhancing technology let the government obtain, from outside, information about the interior that previously required physical intrusion. The Amendment must at least preserve the degree of privacy that existed when it was adopted. Two conditions do the work: interior of the home, and technology not in general public use.',
-    tags: ['q1', 'reasoning'],
-  },
-  {
-    id: 'c-why-ciraolo',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Reasoning · Ciraolo',
-    cite: 'California v. Ciraolo, 476 U.S. 207 (1986)',
-    front: 'Why did the Court reason that Ciraolo’s aerial observation was not a search?',
-    back: 'The yard was curtilage and the fences showed a subjective expectation — but that expectation was not one society recognizes as reasonable against observation from public navigable airspace. Taking measures to restrict some views does not preclude observation from a place the officer has a right to be, with the naked eye, where the activity is clearly visible.',
-    tags: ['q1', 'reasoning'],
-  },
-  {
-    id: 'c-why-tuggle',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Reasoning · Tuggle',
-    cite: 'United States v. Tuggle, 4 F.4th 505 (7th Cir. 2021)',
-    front: 'Why did the Seventh Circuit reason that Tuggle’s pole cameras were not a search?',
-    back: 'Cameras used technology in public use, from a place agents were lawfully entitled to be, to observe plainly visible happenings. The court traced the mosaic theory from Maynard through Jones concurrences to Carpenter, then held the Supreme Court has not yet required lower courts to apply it. Duration alone does not flip lawful observation into a search under current doctrine.',
-    tags: ['q1', 'reasoning'],
-  },
-  {
-    id: 'c-why-tafoya',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Reasoning · Tafoya',
-    cite: 'People v. Tafoya, 494 P.3d 613 (Colo. 2021)',
-    front: 'Why did the Colorado Supreme Court reason that Tafoya’s pole-camera surveillance was a search?',
-    back: 'Tafoya showed a subjective expectation by enclosing curtilage with a six-foot fence and closing the gate. The court then weighed duration, continuity, and technological capacity together: more than three months of recorded observation exposed information ordinary passersby could not collect. Visibility is not the whole inquiry when the technology aggregates domestic life over time.',
-    tags: ['q1', 'reasoning'],
-  },
-  {
-    id: 'c-why-keith',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Reasoning · Keith',
-    cite: 'United States v. U.S. District Court (Keith), 407 U.S. 297 (1972)',
-    front: 'Why did the Court reason that domestic-security surveillance in Keith needed a warrant?',
-    back: 'Institutional, not just factual: executive officers enforce, investigate, and prosecute — they are not neutral magistrates. Unreviewed executive discretion “may yield too readily to pressures to obtain incriminating evidence.” A statutory disclaimer of congressional intent is not a grant of presidential power.',
-    tags: ['q1', 'q2', 'reasoning'],
-  },
-  {
-    id: 'c-why-banyee-use',
-    kind: 'case_ref',
-    side: 'either',
-    label: 'Reasoning · Banyee in Bronner',
-    cite: 'Banyee v. Garland, 115 F.4th 928 (8th Cir. 2024)',
-    front: 'In Bronner’s context, what does Banyee stand for — and why is that reasoning limited?',
-    back: 'As characterized below: prolonged immigration detention does not automatically require a new bond hearing without a stronger showing that existing procedures are inadequate. Limited because (1) persuasive only, (2) immigration custody ≠ military Guantanamo detention, and (3) Hamdi’s notice-and-rebuttal rule speaks more directly to Bronner’s sealed-evidence problem than Banyee’s duration holding.',
-    tags: ['q2', 'reasoning'],
-  },
-
-  // ─── Holding / rule recall (still learning-style, not pin cites) ─────────
-  {
-    id: 'c-hold-youngstown-cats',
+    id: 'c-hold-youngstown-cats-drill',
     kind: 'case_ref',
     side: 'either',
     label: 'Holding · Youngstown categories',
@@ -534,7 +359,7 @@ export const SEED_CARDS = [
     tags: ['q2', 'holding'],
   },
   {
-    id: 'c-hold-katz-rule',
+    id: 'c-hold-katz-rule-drill',
     kind: 'case_ref',
     side: 'either',
     label: 'Holding · Katz rule',
@@ -553,15 +378,17 @@ export const SEED_CARDS = [
     back: '“…even in his own home or office, is not a subject of Fourth Amendment protection. But what he seeks to preserve as private, even in an area accessible to the public, may be constitutionally protected.”',
     tags: ['q1', 'quote'],
   },
+]
 
-  // ─── Judge Q&A (answer with substance + case name, not “list cites”) ─────
+const JUDGE_QA_CARDS = [
   {
     id: 'c-judge-carpenter-cameras',
     kind: 'judge_qa',
     side: 'respondent',
     label: 'Judge · Carpenter with cameras?',
     cite: '',
-    front: 'Judge (to respondent): “Isn’t this just Carpenter with cameras — 93 days of location data?” What’s your answer?',
+    front:
+      'Judge (to respondent): “Isn’t this just Carpenter with cameras — 93 days of location data?” What’s your answer?',
     back: 'Distinguish Carpenter: that was a warrantless demand for a phone company’s stored CSLI wherever the phone went — not observation of what was already exposed to public view from poles the government had a right to use. Answer with Ciraolo (public vantage), Tuggle (duration alone doesn’t flip it), and the majority’s stakeout analogy. Concede duration is real; argue exposure + vantage still control under Katz’s second prong.',
     tags: ['q1', 'oa', 'respondent'],
   },
@@ -571,7 +398,8 @@ export const SEED_CARDS = [
     side: 'petitioner',
     label: 'Judge · Milligan ends this?',
     cite: '',
-    front: 'Judge (to petitioner): “Courts were open — why doesn’t Milligan end this?” What’s your answer?',
+    front:
+      'Judge (to petitioner): “Courts were open — why doesn’t Milligan end this?” What’s your answer?',
     back: 'Lead with Milligan’s rule: martial process cannot replace civilian courts for a civilian where courts are open and working. Tie to Bronner’s Article III arraignment, not-guilty plea, and bond release before military transfer. Distinguish Quirin (proven saboteurs in wartime) and press Hamdi’s process rule even for battlefield detainees. Place the statutes in Youngstown Cat 3 (or contested Cat 2) given NDAA / ATA carve-outs for LPRs on U.S. soil.',
     tags: ['q2', 'oa', 'petitioner'],
   },
@@ -581,7 +409,8 @@ export const SEED_CARDS = [
     side: 'petitioner',
     label: 'Judge · Banyee on time',
     cite: '',
-    front: 'Judge (to petitioner): “Banyee says time alone doesn’t get you a new hearing — why are twelve months at Guantanamo different?”',
+    front:
+      'Judge (to petitioner): “Banyee says time alone doesn’t get you a new hearing — why are twelve months at Guantanamo different?”',
     back: 'Banyee is immigration detention under established removal procedures; Bronner is military custody on an untested belligerency label with sealed dirty-bomb evidence he has never seen. Distinguish the liberty interest and the Mathews error risk. Hamdi — not Banyee — is the process template: notice of the factual basis and a chance to rebut before a neutral decisionmaker.',
     tags: ['q2', 'oa', 'petitioner'],
   },
@@ -591,21 +420,226 @@ export const SEED_CARDS = [
     side: 'petitioner',
     label: 'Judge · Costanzo stretch',
     cite: '',
-    front: 'Judge (to petitioner): “The majority cites Costanzo for congressional acquiescence — what’s wrong with that?”',
+    front:
+      'Judge (to petitioner): “The majority cites Costanzo for congressional acquiescence — what’s wrong with that?”',
     back: 'Costanzo was statutory construction of an immigration-deportation clause, not a war-powers blank check. Even the majority concedes it “involved immigration administration.” Legislative inaction is not an affirmative grant — Youngstown itself says scrutinize with caution where Congress has legislated and declined the power claimed. Point to NDAA § 1022(b) carve-outs and ATA limits as deliberate withholding, not silence.',
     tags: ['q2', 'oa', 'petitioner'],
   },
-
-  // ─── Instant case (Bronner / AMCA) — page numbers matter here ───────────
   {
-    id: 'c-inst-crimes-page',
+    id: 'c-judge-tafoya-fence',
+    kind: 'judge_qa',
+    side: 'respondent',
+    label: 'Judge · Tafoya fence',
+    cite: '',
+    front:
+      'Judge (to respondent): “Tafoya suppressed three months of pole-camera footage — why shouldn’t we follow it?”',
+    back: 'Tafoya’s camera looked into a backyard behind a six-foot privacy fence with a closed gate — curtilage the public could not see. Bronner’s cameras faced porch, steps, driveway, and door visible from nearby streets. Use Tafoya’s duration/capacity reasoning only if you are petitioner; as respondent, concede the aggregation concern and plant the fight on public vantage + Ciraolo / Tuggle / Lynch’s Moore-Bush opinion.',
+    tags: ['q1', 'oa', 'respondent'],
+  },
+  {
+    id: 'c-judge-hamdi-citizen',
+    kind: 'judge_qa',
+    side: 'respondent',
+    label: 'Judge · Hamdi citizen / combat zone',
+    cite: '',
+    front:
+      'Judge (to respondent): “Hamdi was a citizen seized in a combat zone — Bronner is neither. How do you still win?”',
+    back: 'Authority half: AUMF / NDAA still authorize detention of persons who support enemy forces; Quirin shows citizenship and U.S. soil do not defeat military process for unlawful belligerents. Process half: Hamdi’s notice-and-rebuttal can be satisfied with adapted procedures; twelve months tied to hostilities is not a ruse under the majority’s reading. Be ready for the dissent’s Cat 3 frame if the carve-outs control.',
+    tags: ['q2', 'oa', 'respondent'],
+  },
+]
+
+/** Page-by-page Instant Case drills from the record map (PDF = R.). */
+const RECORD_PAGE_CARDS = [
+  {
+    id: 'c-inst-page-1',
     kind: 'instant',
     side: 'either',
-    label: 'Instant · crimes / search haul',
-    cite: 'R. 8 (PDF; printed p. 7)',
-    front: 'On what page does the instant case enumerate the fruits of the searches — Bronner’s fentanyl haul and the sealed dirty-bomb documents?',
-    back: 'R. 8 (PDF page; printed page 7). § II.F: fentanyl patches, lollipops, spray, sales log; four boxes of lozenges in the car; warehouse with no drugs but sealed dirty-bomb documents Bronner has never reviewed; then booking, arraignment, bond, and immediate re-arrest.',
+    label: 'Instant · R. 1',
+    cite: 'R. 1',
+    front: 'What is on R. 1 of the instant case?',
+    back: 'Cover: Order of the Court; the two questions presented; AMCA attribution note.',
     tags: ['instant', 'page'],
+  },
+  {
+    id: 'c-inst-page-2',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 2',
+    cite: 'R. 2',
+    front: 'What is on R. 2 — posture and panel?',
+    back: 'Caption and panel (Barnhart writes; Sotelo concurs; Cassady/Cassidy dissents); the two claims; district court suppressed and granted habeas; jurisdiction; facts stipulated; de novo; judgment reversed. Fourteenth Circuit reverses 2–1.',
+    tags: ['instant', 'page'],
+  },
+  {
+    id: 'c-inst-page-3',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 3 · NDAA in opinion',
+    cite: 'R. 3',
+    front: 'What does R. 3 say about the AUMF and NDAA § 1022 — and what trap is on this page?',
+    back: '§ II.A: AUMF § 2(a) text; NDAA enacted; § 1022 “shall hold” and waiver; § 1022(b)(1)–(2) carve-outs; failed Senate amendment; § 1021(d). Trap: attributes the “existing law” clause to § 1022(e) — that clause actually lives at § 1021(e) / App. III (R. 21).',
+    tags: ['instant', 'page', 'q2'],
+  },
+  {
+    id: 'c-inst-page-4',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 4 · ATA / EO',
+    cite: 'R. 4',
+    front: 'What is on R. 4 regarding the ATA and EO 15,000?',
+    back: 'Obama signing statement / prior presidents; ATA § 4(a)–(b) including the gap for lawful residents; no time limit, no dangerousness finding, no counsel, no judicial review in the ATA scheme as described; rejected 2025/2026 provisions; EO 15,000 issued and its directive.',
+    tags: ['instant', 'page', 'q2'],
+  },
+  {
+    id: 'c-inst-page-5',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 5 · bio + cameras',
+    cite: 'R. 5',
+    front: 'What does R. 5 cover about Bronner’s biography and the start of the camera surveillance?',
+    back: 'Signing-ceremony quote; Guantanamo named; Bronner bio (entry at 15, green card 2010, business, naturalization approved Feb. 17, 2025, good moral character, oath July 4); “Jersey” tip; four Ring cameras bought and installed Mar. 18 on public poles; Bello never entered the property. nn.1–2.',
+    tags: ['instant', 'page'],
+  },
+  {
+    id: 'c-inst-page-6',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 6 · camera specs',
+    cite: 'R. 6',
+    front: 'What camera capabilities and retention facts are on R. 6?',
+    back: 'Auto-record of entries/exits; remote pan; 10x optical zoom; infrared; time-stamped storage; no warrant; 93 consecutive days, 24 hours, motion-activated; what was street-visible (porch, steps, driveway, door). n.3 commercial availability; n.4 default 30/60-day storage customized to 180 days; audio capable but no intelligible statements; Search Party unused.',
+    tags: ['instant', 'page', 'q1'],
+  },
+  {
+    id: 'c-inst-page-7',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 7 · mosaic',
+    cite: 'R. 7',
+    front: 'What mosaic / pattern-of-life facts sit on R. 7?',
+    back: 'Zoom limits; blinds open → lights/movement; pizza, Sparklets Tuesdays, Blue Apron Thursdays, Chewy, Omaha Steaks, Costco, Geek Squad, HVAC, masseuse twice weekly, Girl Scout cookies; no known drug figures; May 4 Roper & Langbourne ID’d by optical zoom (~15 min inside); May 27 NSA / warrant path; stipulation of primary reliance on pole-camera footage. Dissent cites “R. at 7” for these facts.',
+    tags: ['instant', 'page', 'q1'],
+  },
+  {
+    id: 'c-inst-page-8',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 8 · haul / GTMO',
+    cite: 'R. 8',
+    front: 'On what page does the record enumerate the search haul (fentanyl / dirty-bomb docs), arraignment, “accused” classification, and Guantanamo transfer — and what does it say?',
+    back: 'R. 8. Fentanyl patches, lollipops, spray, sales log, lozenges in the car; warehouse sealed dirty-bomb documents Bronner has never reviewed; May 29–31 booking/arraignment/bond/immediate material-support re-arrest (n.7: 20-year felony); AG Comerford “criminal record because accused,” no prior convictions; July 7 military transfer to Guantanamo; 12 months without seeing the evidence.',
+    tags: ['instant', 'page', 'q2'],
+  },
+  {
+    id: 'c-inst-page-9',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 9 · preserved issues',
+    cite: 'R. 9 nn.8–9',
+    front: 'What do footnotes 8–9 on R. 9 remove from the case?',
+    back: 'n.8: no independent probable-cause claim; Bronner did not challenge the later warrants — neither preserved. n.9: no treaties/protocols; no speedy trial, bail, or innocence-evidence claims. Only the two legal questions are before the Court. Also: clinic learns of detention; petition filed; Judge Fair rules for Bronner.',
+    tags: ['instant', 'page'],
+  },
+  {
+    id: 'c-inst-page-10',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 10 · majority Q1 start',
+    cite: 'R. 10',
+    front: 'What Fourth Amendment moves does the majority make on R. 10?',
+    back: 'Katz two-part inquiry; Ciraolo; cameras on public property; only driveway/front steps/porch; “duration alone does not transform” citing Tuggle at 526; first impression; circuits vs. Tafoya (n.10); Kyllo and general public use.',
+    tags: ['instant', 'page', 'q1'],
+  },
+  {
+    id: 'c-inst-page-11',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 11 · exterior / Carpenter',
+    cite: 'R. 11',
+    front: 'What does the majority say on R. 11 about exterior observation and Carpenter?',
+    back: 'Cameras did not follow after entry/departure; no wall penetration; “enhanced observation of already-exposed activity”; cites Moore-Bush (Lynch); distinguishes Carpenter (93 days from fixed points vs. ~13,000 CSLI points; specialized cell phones; etc.).',
+    tags: ['instant', 'page', 'q1'],
+  },
+  {
+    id: 'c-inst-page-12',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 12 · stakeout',
+    cite: 'R. 12',
+    front: 'On what page does the majority call the cameras “similar to a stakeout” and hold this was not a search?',
+    back: 'R. 12. Highest-order government interests (drugs / domestic terror); four stationary cameras; “similar to a stakeout”; no physical intrusion, no audio, no interior surveillance; conclusion — not a search; district court erred.',
+    tags: ['instant', 'page', 'q1'],
+  },
+  {
+    id: 'c-inst-page-13',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 13 · Article II opens',
+    cite: 'R. 13',
+    front: 'What authorities does the majority open with on R. 13 for Article II?',
+    back: '§ IV Article II analysis; 10 U.S.C. § 948(a)(7); material-support framing; Prize Cases (“baptize it with a name”); Quirin (citizenship does not relieve an unlawful belligerent); Curtiss-Wright (“sole organ”).',
+    tags: ['instant', 'page', 'q2'],
+  },
+  {
+    id: 'c-inst-page-14',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 14 · Cat 1 / Costanzo',
+    cite: 'R. 14',
+    front: 'On what page does the majority place the President in Youngstown Category 1 and cite Costanzo?',
+    back: 'R. 14. Cat 1 via AUMF and NDAA § 1021; Youngstown categories quoted; Hamdi reading detention into the AUMF; congressional refusal to bar indefinite detention; Costanzo acquiescence (with immigration concession); Milligan distinguished.',
+    tags: ['instant', 'page', 'q2'],
+  },
+  {
+    id: 'c-inst-page-15',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 15 · Mathews / Banyee',
+    cite: 'R. 15',
+    front: 'What process cases appear on R. 15 in the majority’s Article II wrap-up?',
+    back: 'ATA “further illuminates” Cat 1; Mathews three factors; Hamdi notice-and-rebuttal; habeas available; 12 months “substantial” but tied to hostilities; no six-month ceiling; Banyee, 115 F.4th at 934; reversed.',
+    tags: ['instant', 'page', 'q2'],
+  },
+  {
+    id: 'c-inst-page-16',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 16 · dissent opens',
+    cite: 'R. 16',
+    front: 'How does the dissent open on R. 16?',
+    back: 'Judge Cassidy dissent; Kyllo’s “firm line at the entrance”; three criticisms of the majority; Carpenter “comprehensive chronicle”; dissent’s own “R. at 7” mosaic cite; Tuggle discussion of mosaic scholarship; 93 straight days reconstructing routines at the home.',
+    tags: ['instant', 'page', 'q1'],
+  },
+  {
+    id: 'c-inst-page-17',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 17 · rhythms',
+    cite: 'R. 17',
+    front: 'What “rhythms of the household” / aggregation points does the dissent make on R. 17?',
+    back: 'Kyllo applied too narrowly; commonplace tech can still reveal domestic life; four features in combination; “rhythms of the household”; Moore-Bush (Barron); Tafoya on duration/continuity/nature; “all details are intimate details”; passerby vs. continuous recording.',
+    tags: ['instant', 'page', 'q1'],
+  },
+  {
+    id: 'c-inst-page-18',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 18 · Cat 3',
+    cite: 'R. 18',
+    front: 'On what page does the dissent put Bronner in Youngstown Category 3 (or at best twilight) using § 1022?',
+    back: 'R. 18. Keith warrant-as-neutral-review; Hamdi “not a blank check” extended to LPRs; “at best” twilight, “more plausibly” third category; § 1022(b)(1)–(2) and § 1021(e); Congress deliberately declined; legislative inaction ≠ grant; § 1022 + ATA § 4(b)(2) → lowest ebb.',
+    tags: ['instant', 'page', 'q2'],
+  },
+  {
+    id: 'c-inst-page-19',
+    kind: 'instant',
+    side: 'either',
+    label: 'Instant · R. 19–20 · dissent close',
+    cite: 'R. 19–20',
+    front: 'How does the dissent finish the Article II analysis on R. 19–20?',
+    back: 'Quirin as declared-war saboteurs; Milligan / Hamdi combat-zone distinctions; Bronner living openly, civilian arrest, arraignment, courts functioning; Prize Cases as active civil war vs. never-ending “War on Terror”; Mathews factors (liberty at GTMO, error risk from bond release); Banyee on periodic review; would affirm the writ.',
+    tags: ['instant', 'page', 'q2'],
   },
   {
     id: 'c-inst-ndaa-1022-page',
@@ -613,8 +647,9 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Instant · NDAA § 1022 text',
     cite: 'App. IV (R. 22); discussed R. 2–3, 17–18',
-    front: 'On what page does the instant case set out NDAA § 1022 (military custody, waiver, citizen / LPR carve-outs)?',
-    back: 'Appendix IV at R. 22 (PDF; printed p. 21): § 1022(a)(1)–(2), (a)(4) waiver, (b)(1)–(2) citizen and lawful-resident carve-outs. Discussed in the opinion at R. 2–3 and again in the dissent at R. 17–18. Note: there is no § 1022(e) in the appendix.',
+    front:
+      'On what page does the instant case set out NDAA § 1022 (military custody, waiver, citizen / LPR carve-outs)?',
+    back: 'Appendix IV at R. 22 (PDF; printed p. 21): § 1022(a)(1)–(2), (a)(4) waiver, (b)(1)–(2) citizen and lawful-resident carve-outs. Discussed at R. 2–3 and in the dissent at R. 17–18. Note: there is no § 1022(e) in the appendix.',
     tags: ['instant', 'page', 'q2'],
   },
   {
@@ -623,8 +658,9 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Instant · NDAA § 1021 text',
     cite: 'App. III (R. 21)',
-    front: 'On what page is NDAA § 1021 — including the “existing law” clause — actually printed in the appendices?',
-    back: 'Appendix III at R. 21 (PDF; printed p. 20): § 1021(a), (b)(1)–(2), (c)(1), (d), (e). This is the authoritative location of the “existing law” clause. The opinion body at R. 3 wrongly attributes that clause to § 1022(e); the dissent at R. 18 correctly points to § 1021(e).',
+    front:
+      'On what page is NDAA § 1021 — including the “existing law” clause — actually printed in the appendices?',
+    back: 'Appendix III at R. 21: § 1021(a), (b)(1)–(2), (c)(1), (d), (e). Authoritative location of the “existing law” clause. Opinion body at R. 3 wrongly says § 1022(e); dissent at R. 18 correctly points to § 1021(e).',
     tags: ['instant', 'page', 'q2'],
   },
   {
@@ -634,37 +670,17 @@ export const SEED_CARDS = [
     label: 'Instant · AUMF appendix',
     cite: 'App. I (R. 20)',
     front: 'On what page is the AUMF text in the instant case appendices?',
-    back: 'Appendix I at R. 20 (PDF; printed p. 19): AUMF preamble and § 2(a). The opinion discusses it at R. 2 and R. 13.',
+    back: 'Appendix I at R. 20: AUMF preamble and § 2(a). Discussed at R. 2 and R. 13. Appendix II on the same leaf has 10 U.S.C. § 948(a)(7).',
     tags: ['instant', 'page', 'q2'],
   },
   {
-    id: 'c-inst-cameras-page',
+    id: 'c-inst-ata-page',
     kind: 'instant',
     side: 'either',
-    label: 'Instant · cameras installed',
-    cite: 'R. 5–6',
-    front: 'On what pages does the instant case describe the four Ring cameras, the tip, installation, and the 93-day surveillance?',
-    back: 'R. 5–6 (PDF). R. 5: “Jersey” tip; four Ring cameras bought from Willow Albano; installed Mar. 18 on four public utility poles; Bello never entered the property; naturalization / oath background. R. 6: capabilities (pan, 10x zoom, infrared, 180-day retention), no warrant, 93 consecutive days 24/7 motion-activated, what was street-visible.',
-    tags: ['instant', 'page', 'q1'],
-  },
-  {
-    id: 'c-inst-mosaic-page',
-    kind: 'instant',
-    side: 'either',
-    label: 'Instant · pattern of life',
-    cite: 'R. 7',
-    front: 'On what page are the mosaic / pattern-of-life facts (pizza, water jugs, masseuse, May 4 visitors)?',
-    back: 'R. 7 (PDF; printed p. 6). Pattern-of-life list: pizza, Sparklets Tuesdays, Blue Apron Thursdays, Chewy, Omaha Steaks, Costco, Geek Squad, HVAC, masseuse twice weekly, Girl Scout cookies; May 4 Roper and Langbourne identified by optical zoom. The dissent cites “R. at 7” for these mosaic facts.',
-    tags: ['instant', 'page', 'q1'],
-  },
-  {
-    id: 'c-inst-gtmo-page',
-    kind: 'instant',
-    side: 'either',
-    label: 'Instant · transfer / classification',
-    cite: 'R. 8',
-    front: 'On what page does the record cover arraignment, bond, AG Comerford’s “criminal record because accused” classification, and the July 7 Guantanamo transfer?',
-    back: 'R. 8 (PDF). May 29 booking; May 30 arraignment, not-guilty plea, bond, immediate material-support re-arrest (n.7: 20-year felony); May 31 AG classification “because he had been accused,” no prior convictions; DeNolf orders transfer; July 7 surrender and transport to Guantanamo; 12 months elapsed without seeing the sealed evidence.',
+    label: 'Instant · ATA appendix',
+    cite: 'App. V (R. 23–24)',
+    front: 'On what pages is the ATA printed?',
+    back: 'Appendix V: R. 23 (§§ 1–3 purpose/definitions/findings); R. 24 (§ 4 detention scheme, including § 4(b)(2) citizens-inside-only). Opinion discussion of the LPR gap: R. 4.',
     tags: ['instant', 'page', 'q2'],
   },
   {
@@ -674,88 +690,8 @@ export const SEED_CARDS = [
     label: 'Instant · EO 15,000 appendix',
     cite: 'App. VI (R. 25)',
     front: 'On what page is Executive Order 15,000 printed?',
-    back: 'Appendix VI at R. 25 (PDF; printed p. 24): recitals and asserted authorities, § 1 AG directive, § 2 Guantanamo and other sites, § 3 “consistent with applicable law.” The order’s issuance and directive are also narrated at R. 4.',
+    back: 'Appendix VI at R. 25: recitals and asserted authorities; § 1 AG directive; § 2 Guantanamo and other sites; § 3 “consistent with applicable law.” Issuance also narrated at R. 4.',
     tags: ['instant', 'page', 'q2'],
-  },
-  {
-    id: 'c-inst-ata-page',
-    kind: 'instant',
-    side: 'either',
-    label: 'Instant · ATA text',
-    cite: 'App. V (R. 23–24); discussed R. 4',
-    front: 'On what pages is the Anti-Terrorist Act (ATA) set out, and where does the opinion discuss the gap for lawful residents?',
-    back: 'Appendix V at R. 23–24 (PDF): §§ 1–3 definitions/findings on R. 23; § 4 detention scheme — including § 4(b)(2) citizens-inside-only — on R. 24. Opinion discussion of ATA and the gap for lawful residents: R. 4.',
-    tags: ['instant', 'page', 'q2'],
-  },
-  {
-    id: 'c-inst-questions-page',
-    kind: 'instant',
-    side: 'either',
-    label: 'Instant · questions presented',
-    cite: 'R. 1–2',
-    front: 'On what pages does the instant case state the two questions presented and the posture (who won where)?',
-    back: 'R. 1: cover — Order of the Court and the two questions presented. R. 2: caption/panel (Barnhart majority, Sotelo concurrence, Cassady/Cassidy dissent); district court suppressed and granted habeas; Fourteenth Circuit reversed 2–1; facts stipulated; de novo review.',
-    tags: ['instant', 'page'],
-  },
-  {
-    id: 'c-inst-bronner-bio-page',
-    kind: 'instant',
-    side: 'either',
-    label: 'Instant · Bronner biography',
-    cite: 'R. 5',
-    front: 'On what page does the record set out Bronner’s biography — entry at 15, green card, business, naturalization approval, July 4 oath?',
-    back: 'R. 5 (PDF; printed p. 4). § II.D: age, entry at 15 (1995), Knerr, green card 2010, business, taxes, two citizen children; naturalization approved Feb. 17, 2025 with good moral character; oath set for July 4. Footnote 1: Bobbi Bronner / Sommerland.',
-    tags: ['instant', 'page'],
-  },
-  {
-    id: 'c-inst-majority-stakeout',
-    kind: 'instant',
-    side: 'either',
-    label: 'Instant · stakeout / not a search',
-    cite: 'R. 11–12',
-    front: 'On what pages does the majority conclude the cameras were “similar to a stakeout” and not a search?',
-    back: 'R. 11–12 (PDF). R. 11: no following after entry/departure, no wall penetration, “enhanced observation of already-exposed activity,” Carpenter distinguished. R. 12: government interests of the highest order; “similar to a stakeout”; no physical intrusion, no audio, no interior surveillance; conclusion — not a search; district court erred.',
-    tags: ['instant', 'page', 'q1'],
-  },
-  {
-    id: 'c-inst-majority-youngstown',
-    kind: 'instant',
-    side: 'either',
-    label: 'Instant · majority Cat 1',
-    cite: 'R. 13–14',
-    front: 'On what pages does the majority place the President in Youngstown Category 1 and lean on Costanzo / Hamdi / Milligan distinctions?',
-    back: 'R. 13–14 (PDF). R. 13: Article II analysis opens; Prize Cases, Quirin, Curtiss-Wright. R. 14: Youngstown Cat 1 via AUMF and NDAA § 1021; Hamdi reading detention into the AUMF; Costanzo acquiescence (with the immigration concession); Milligan distinguished.',
-    tags: ['instant', 'page', 'q2'],
-  },
-  {
-    id: 'c-inst-dissent-mosaic',
-    kind: 'instant',
-    side: 'either',
-    label: 'Instant · dissent mosaic',
-    cite: 'R. 16–17',
-    front: 'On what pages does the dissent open its Fourth Amendment analysis and press Carpenter’s “comprehensive chronicle” / mosaic framing?',
-    back: 'R. 16–17 (PDF). R. 16: dissent opens (Judge Cassidy); Kyllo’s firm line; Carpenter “comprehensive chronicle”; cites “R. at 7” for mosaic facts; 93 straight days reconstructing routines. R. 17: Kyllo applied too narrowly; four features in combination; “rhythms of the household”; Barron’s Moore-Bush opinion; Tafoya on duration/continuity/nature.',
-    tags: ['instant', 'page', 'q1'],
-  },
-  {
-    id: 'c-inst-dissent-cat3',
-    kind: 'instant',
-    side: 'either',
-    label: 'Instant · dissent Cat 3',
-    cite: 'R. 18–19',
-    front: 'On what pages does the dissent place Bronner in Youngstown Category 3 (or at best twilight) using § 1022 and ATA § 4(b)(2)?',
-    back: 'R. 18–19 (PDF). R. 18: Hamdi not a blank check; § 1022(b)(1)–(2) and § 1021(e); Congress deliberately declined; § 1022 + ATA § 4(b)(2) → Cat 3. R. 19–20: Quirin/Milligan/Hamdi distinctions; Mathews factors; Banyee on periodic review; would affirm the writ.',
-    tags: ['instant', 'page', 'q2'],
-  },
-  {
-    id: 'c-inst-fn89',
-    kind: 'instant',
-    side: 'either',
-    label: 'Instant · footnotes 8–9',
-    cite: 'R. 9 nn.8–9',
-    front: 'On what page (and footnotes) does the instant case remove independent probable-cause, warrant, treaty, and speedy-trial issues from the case?',
-    back: 'R. 9, footnotes 8–9. n.8: government did not assert independent probable cause; Bronner did not challenge the later warrants — neither preserved. n.9: no treaties/protocols; no speedy trial, bail, or innocence-evidence claims preserved. Only the two legal questions are before the Court.',
-    tags: ['instant', 'page'],
   },
   {
     id: 'c-inst-page-numbering',
@@ -763,18 +699,9 @@ export const SEED_CARDS = [
     side: 'either',
     label: 'Instant · R. vs printed',
     cite: 'Guide convention · PDF = R.',
-    front: 'What does “R.” mean in this problem — PDF page or printed page — and why does it matter for the mosaic cite?',
-    back: 'This guide (and the dissent’s mosaic cite) uses PDF page numbers as R. Cover is unnumbered, so printed numbers run one lower than PDF (printed 6 = PDF/R. 7). The dissent’s “R. at 7” mosaic facts sit on PDF page 7. If you meant printed pages, that cite would point at the arrest section instead. Confirm with coach/AMCA rules before filing; hedge as “R. 7 (printed p. 6)” if needed.',
-    tags: ['instant', 'page'],
-  },
-  {
-    id: 'c-inst-wrinkle-93',
-    kind: 'instant',
-    side: 'either',
-    label: 'Instant · 93-day wrinkle',
-    cite: 'R. 5, 7',
-    front: 'What is the 93-day record wrinkle, and how should you treat it?',
-    back: 'Installation Mar. 18 to warrant May 27 is 70 days (R. 5, 7), but the record states 93 three separate times and both opinions accept it. Treat 93 as stipulated. One of four internal inconsistencies to know before a judge finds them.',
+    front:
+      'What does “R.” mean in this problem — PDF page or printed page — and why does it matter for the mosaic cite?',
+    back: 'This guide (and the dissent’s mosaic cite) uses PDF page numbers as R. Cover is unnumbered, so printed numbers run one lower than PDF (printed 6 = PDF/R. 7). The dissent’s “R. at 7” mosaic facts sit on PDF page 7. Confirm with coach/AMCA rules before filing; hedge as “R. 7 (printed p. 6)” if needed.',
     tags: ['instant', 'page'],
   },
   {
@@ -784,50 +711,52 @@ export const SEED_CARDS = [
     label: 'Instant · § 1022(e) trap',
     cite: 'R. 3 vs R. 18 vs App. III (R. 21)',
     front: 'Where does the record misplace the “existing law” clause — and where should you cite it?',
-    back: 'R. 3 attributes “nothing shall be construed to affect existing law” to § 1022(e). Dissent at R. 18 attributes it to § 1021(e). Appendix III places it at § 1021(e) (R. 21); Appendix IV (§ 1022) has no subsection (e). Cite Appendix III / § 1021(e).',
+    back: 'R. 3 attributes it to § 1022(e). Dissent at R. 18 attributes it to § 1021(e). Appendix III places it at § 1021(e) (R. 21); Appendix IV (§ 1022) has no subsection (e). Cite Appendix III / § 1021(e).',
     tags: ['instant', 'page', 'q2'],
   },
   {
-    id: 'c-inst-say-accused',
+    id: 'c-inst-wrinkle-93',
     kind: 'instant',
     side: 'either',
-    label: 'Instant · accused ≠ record',
-    cite: 'R. 8',
-    front: 'What does the instant case say about Bronner’s “criminal record,” and on what page?',
-    back: 'R. 8: Attorney General Comerford classified Bronner as having a criminal record because he had been accused of a crime. Bronner has no prior convictions — only pending charges. Critical for EO 15,000 / national-security classification and for Mathews error-risk.',
-    tags: ['instant', 'page', 'q2'],
+    label: 'Instant · 93-day wrinkle',
+    cite: 'R. 5, 7',
+    front: 'What is the 93-day record wrinkle, and how should you treat it?',
+    back: 'Installation Mar. 18 to warrant May 27 is 70 days (R. 5, 7), but the record states 93 three separate times and both opinions accept it. Treat 93 as stipulated.',
+    tags: ['instant', 'page'],
   },
   {
-    id: 'c-inst-say-retention',
+    id: 'c-inst-wrinkle-names',
     kind: 'instant',
     side: 'either',
-    label: 'Instant · 180-day retention',
-    cite: 'R. 6 n.4',
-    front: 'What does the instant case say about camera storage defaults versus what agents did here, and on what page?',
-    back: 'R. 6 n.4: Ring’s default storage is 30/60 days; agents customized retention to 180 days. Best record fact for the Tafoya / Sotomayor “stored and mineable” point.',
-    tags: ['instant', 'page', 'q1'],
-  },
-  {
-    id: 'c-inst-say-zoom-may4',
-    kind: 'instant',
-    side: 'either',
-    label: 'Instant · May 4 zoom ID',
-    cite: 'R. 7',
-    front: 'What does the instant case say happened on May 4 with the cameras, and on what page?',
-    back: 'R. 7: optical zoom identified Roper and Langbourne (foreign arms convictions; prior questioning about suspected ties); they spent ~15 minutes inside. Most footage relied on was otherwise street-observable. Supports both sides: enhancement vs. still-public vantage.',
-    tags: ['instant', 'page', 'q1'],
-  },
-  {
-    id: 'c-inst-948a7',
-    kind: 'instant',
-    side: 'either',
-    label: 'Instant · 10 U.S.C. § 948(a)(7)',
-    cite: 'App. II (R. 20); discussed R. 13',
-    front: 'On what page is 10 U.S.C. § 948(a)(7) (unprivileged enemy belligerent definition) printed?',
-    back: 'Appendix II at R. 20 (PDF; printed p. 19), alongside the end of the AUMF appendix. Majority discusses Bronner’s conduct as material support under that definition at R. 13.',
-    tags: ['instant', 'page', 'q2'],
+    label: 'Instant · name inconsistencies',
+    cite: 'R. 2, 9, 16',
+    front: 'What naming inconsistencies in the record should you know before a judge finds them?',
+    back: '(1) Dissenting judge: “Katie Cassady” on R. 2 vs “Judge Cassidy” on R. 16 — pick one, note both if asked. (2) District court: “District of Olympus” (R. 2, 8) vs “Central District of Olympus” (R. 9).',
+    tags: ['instant', 'page'],
   },
 ]
+
+function buildSeedCards() {
+  const byId = new Map()
+  const add = (card) => {
+    if (!card?.id) return
+    byId.set(card.id, card)
+  }
+
+  // Library coverage first (facts / holding / reasoning / Bronner use).
+  for (const card of cardsFromLibraryCases()) add(card)
+  // Specialty “which case says X” overlays.
+  for (const card of WHICH_CASE_CARDS) add(card)
+  for (const card of HOLDING_DRILL_CARDS) add(card)
+  for (const card of JUDGE_QA_CARDS) add(card)
+  // Instant Case: every structured fact + page map + statute pages.
+  for (const card of cardsFromGuideFacts()) add(card)
+  for (const card of RECORD_PAGE_CARDS) add(card)
+
+  return [...byId.values()]
+}
+
+export const SEED_CARDS = buildSeedCards()
 
 const SEED_BY_ID = new Map(SEED_CARDS.map((c) => [c.id, c]))
 const LEGACY_SEED_SET = new Set(LEGACY_SEED_CARD_IDS)

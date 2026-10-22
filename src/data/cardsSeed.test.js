@@ -51,14 +51,16 @@ describe('mergeSeedCards', () => {
     expect(merged).toHaveLength(SEED_CARDS.length + 1)
   })
 
-  it('puts page / R. drills on Instant Case cards, not case-law prompts', () => {
+  it('covers every library case with facts/holding/reasoning and Instant page drills', () => {
+    expect(SEED_CARDS.length).toBeGreaterThan(100)
+    expect(SEED_CARDS.some((c) => c.id === 'c-facts-banyee')).toBe(true)
+    expect(SEED_CARDS.some((c) => c.id === 'c-why-costanzo')).toBe(true)
+    expect(SEED_CARDS.some((c) => c.id === 'c-use-hamdi')).toBe(true)
     const instant = SEED_CARDS.filter((c) => c.kind === 'instant')
-    const caseLaw = SEED_CARDS.filter((c) => c.kind !== 'instant')
-    expect(instant.length).toBeGreaterThan(10)
-    expect(caseLaw.every((c) => !/\bon what page\b/i.test(c.front))).toBe(true)
-    expect(instant.some((c) => /on what page/i.test(c.front))).toBe(true)
+    expect(instant.length).toBeGreaterThan(30)
     expect(instant.some((c) => /1022/i.test(c.front) || /1022/i.test(c.back))).toBe(true)
-    expect(instant.some((c) => /fentanyl|dirty-bomb|crimes|search haul/i.test(c.front + c.back))).toBe(
+    expect(instant.some((c) => /fentanyl|dirty-bomb/i.test(c.front + c.back))).toBe(true)
+    expect(SEED_CARDS.filter((c) => c.kind !== 'instant').every((c) => !/\bon what page\b/i.test(c.front))).toBe(
       true
     )
   })
