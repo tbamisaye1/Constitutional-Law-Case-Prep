@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isLegacyCiteDrillCard,
   LEGACY_SEED_CARD_IDS,
   mergeSeedCards,
   SEED_CARDS,
@@ -73,5 +74,32 @@ describe('mergeSeedCards', () => {
     // Sheet facts should win over thinner guide text for Costanzo.
     const costanzo = SEED_CARDS.find((c) => c.id === 'c-facts-costanzo')
     expect(costanzo?.back?.toLowerCase()).toContain('section 19')
+  })
+
+  it('strips stacked legacy cite-drill cards so boards are not 498-deep', () => {
+    const legacy = {
+      id: 'c-old-banyee-where',
+      kind: 'quote',
+      side: 'either',
+      label: 'LEARN · BANYEE · QUOTE PURPOSE',
+      front: "Where is 'The why, in other words, is more important than how long'?",
+      back: 'Banyee at 932',
+      tags: ['learn'],
+    }
+    const custom = {
+      id: 'c-my-keep',
+      kind: 'judge_qa',
+      side: 'petitioner',
+      label: 'My drill',
+      front: 'How do I answer a Milligan hypo?',
+      back: 'Open courts…',
+      tags: [],
+    }
+    expect(isLegacyCiteDrillCard(legacy)).toBe(true)
+    expect(isLegacyCiteDrillCard(custom)).toBe(false)
+    const merged = mergeSeedCards([legacy, custom, ...SEED_CARDS.slice(0, 3)])
+    expect(merged.some((c) => c.id === 'c-old-banyee-where')).toBe(false)
+    expect(merged.some((c) => c.id === 'c-my-keep')).toBe(true)
+    expect(merged.length).toBe(SEED_CARDS.length + 1)
   })
 })

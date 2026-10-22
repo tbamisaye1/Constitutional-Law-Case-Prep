@@ -32,7 +32,7 @@ export const CARD_SIDES = [
  * Bump when seed Q/A text changes so boards refresh those ids once.
  * User-authored cards (ids not in SEED_CARDS) are kept.
  */
-export const SEED_CARDS_REVISION = 4
+export const SEED_CARDS_REVISION = 5
 
 /** Prior seed ids dropped by the learning rewrite — strip them on refresh. */
 export const LEGACY_SEED_CARD_IDS = [
@@ -43,6 +43,24 @@ export const LEGACY_SEED_CARD_IDS = [
   'c-judge-milligan-pet',
   'c-quote-katz',
 ]
+
+/**
+ * Old auto-generated cite drills still sitting in synced boards.
+ * Example label: "LEARN · BANYEE · QUOTE PURPOSE"
+ * Example front: "Where is 'The why…'?"
+ * Those are not Instant Case page drills and should not stack on the learning seed.
+ */
+export function isLegacyCiteDrillCard(card) {
+  if (!card || typeof card !== 'object') return false
+  const label = String(card.label || '')
+  const front = String(card.front || '').trim()
+  if (/LEARN\s*·/i.test(label) || /QUOTE PURPOSE/i.test(label)) return true
+  if (/^Where is\s+['‘’"“”]/i.test(front)) return true
+  if (/^Where (does|can you find)\b/i.test(front) && !/\bon what page\b/i.test(front)) {
+    return true
+  }
+  return false
+}
 
 const ISSUE_TAG = { 1: 'q1', 2: 'q2' }
 
@@ -946,8 +964,9 @@ const SEED_BY_ID = new Map(SEED_CARDS.map((c) => [c.id, c]))
 const LEGACY_SEED_SET = new Set(LEGACY_SEED_CARD_IDS)
 
 /**
- * Refresh bundled seed cards by id; keep user-authored cards.
- * Drops legacy seed ids that the learning rewrite replaced.
+ * Refresh bundled seed cards by id; keep real user-authored cards.
+ * Drops (1) replaced legacy seed ids and (2) old "Where is this quote?" cite drills
+ * that were stacking on top of the learning deck in synced workspaces.
  */
 export function mergeSeedCards(cards) {
   if (!Array.isArray(cards) || !cards.length) {
@@ -961,6 +980,7 @@ export function mergeSeedCards(cards) {
     if (!card || typeof card !== 'object') continue
     const id = card.id
     if (LEGACY_SEED_SET.has(id) && !SEED_BY_ID.has(id)) continue
+    if (isLegacyCiteDrillCard(card) && !SEED_BY_ID.has(id)) continue
     if (SEED_BY_ID.has(id)) {
       haveSeed.add(id)
       kept.push(structuredClone(SEED_BY_ID.get(id)))
